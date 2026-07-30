@@ -1,0 +1,14 @@
+{
+  "users": [
+    {
+      "username": "replace_admin",
+      "password": "replace_with_a_strong_password",
+      "role": "admin"
+    },
+    {
+      "username": "replace_operator",
+      "password": "replace_with_a_different_strong_password",
+      "role": "operator"
+    }
+  ]
+}

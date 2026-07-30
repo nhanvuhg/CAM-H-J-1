@@ -1,0 +1,480 @@
+servo_ips:
+  1: 172.16.11.35
+  2: 172.16.11.36
+  3: 172.16.11.38
+  4: 172.16.11.39
+  5: 172.16.11.40
+io_ip: 172.16.11.37
+io_ip_2: 172.16.11.41
+cylinder1_extend_channel: 4
+cylinder1_retract_channel: 5
+cylinder2_extend_channel: 0
+cylinder2_retract_channel: 1
+cyl3_present: true
+cylinder3_extend_channel: 6
+cylinder3_retract_channel: 7
+cylinder4_extend_channel: 2
+cylinder4_retract_channel: 3
+cylinder5_extend_channel: 4
+cylinder5_retract_channel: 5
+output_stack_present: true
+servo_limits:
+  1: 560.0
+  2: 1050.0
+  3: 860.0
+  4: 800.0
+  5: 1020.0
+homing_timeout: 120.0
+move_timeout: 100.0
+cylinder_timeout: 15.0
+modbus_timeout_ms: 3000
+control_loop_period_s: 0.02
+io_poll_period_s: 0.02
+# Chỉ dùng khi Servo3 đang đẩy khay và chờ S18; không tăng tải CPX liên tục.
+s18_fast_poll_period_s: 0.01
+sensor_on_latch_s: 0.1
+fas_position_velocity: 0.05
+jog_velocity: 0.05
+jog_velocity_max: 0.08
+inx_home: 0.0
+inx_safe: -60.0
+inx_target2: 502.5
+inx_output_stack: -295.0
+iny_home: 0.0
+iny_safe_zone: 90.0
+iny_push_clearance_mm: 5.0
+target_scaninp1: 970.0
+target_scanoutp1: 990.0
+iny_scan_vel: 100.0
+iny_row_vel: 60.0
+iny_scan_valid_min_mm: 70.0
+iny_scan_valid_max_mm: 980.0
+s1_scan_noise_retry_limit: 1
+inx_noise_recovery_mm: 10.0
+iny_input_zones:
+  1:
+  - 1000.0
+  - 895.0
+  - 1010.0
+  2:
+  - 880.0
+  - 791.0
+  - 920.0
+  3:
+  - 790.0
+  - 701.0
+  - 830.0
+  4:
+  - 700.0
+  - 611.0
+  - 740.0
+  5:
+  - 610.0
+  - 521.0
+  - 650.0
+  6:
+  - 520.0
+  - 431.0
+  - 560.0
+  7:
+  - 430.0
+  - 341.0
+  - 470.0
+  8:
+  - 340.0
+  - 251.0
+  - 380.0
+  9:
+  - 250.0
+  - 161.0
+  - 290.0
+  10:
+  - 160.0
+  - 70.0
+  - 200.0
+iny_output_zones:
+  1:
+  - 1000.0
+  - 930.0
+  - 1015.0
+  2:
+  - 924.0
+  - 840.0
+  - 925.0
+  3:
+  - 834.0
+  - 750.0
+  - 835.0
+  4:
+  - 744.0
+  - 660.0
+  - 745.0
+  5:
+  - 654.0
+  - 570.0
+  - 655.0
+  6:
+  - 564.0
+  - 480.0
+  - 565.0
+  7:
+  - 474.0
+  - 390.0
+  - 475.0
+  8:
+  - 384.0
+  - 300.0
+  - 385.0
+  9:
+  - 294.0
+  - 210.0
+  - 295.0
+  10:
+  - 204.0
+  - 170.0
+  - 205.0
+outy_output_zones:
+  1:
+  - 1010.0
+  - 950.0
+  - 1015.0
+  2:
+  - 900.0
+  - 800.0
+  - 923.0
+  3:
+  - 799.0
+  - 707.0
+  - 831.0
+  4:
+  - 706.0
+  - 615.0
+  - 739.0
+  5:
+  - 614.0
+  - 523.0
+  - 647.0
+  6:
+  - 522.0
+  - 431.0
+  - 555.0
+  7:
+  - 430.0
+  - 339.0
+  - 463.0
+  8:
+  - 338.0
+  - 246.0
+  - 371.0
+  9:
+  - 245.0
+  - 154.0
+  - 279.0
+  10:
+  - 153.0
+  - 60.0
+  - 188.0
+iny_target2: 87.0
+servo3_home: 0.0
+servo3_target2: 850.0
+servo3_jog_velocity: 25.0
+servo3_feed_velocity: 25.0
+outx_home: 0.0
+outx_target1: 15.0
+outx_target2: 552.0
+outx_target3: -280.0
+outy_home: 0.0
+outy_target1: 10.0
+outy_pick_pos: 157.0
+outy_safe_zone: 30.0
+outy_search_velocity: 80.0
+outy_slow_vel: 30.0
+target_scanoutp2: 1000.0
+outy_scan_arm_mm: 60.0
+outy_scan_valid_min_mm: 70.0
+outy_scan_valid_max_mm: 1000.0
+s4_scan_noise_retry_limit: 2
+s4_check_servo3_safe: false
+iny_search_velocity: 40.0
+iny_slow_velocity: 30.0
+position_tolerance: 2.0
+outx_safe_position_threshold: 100.0
+max_trays: 10
+max_slots_per_output_tray: 9
+num_sensors: 28
+sensor_type: PNP
+sensor_logic: 'NO'
+sensors:
+- id: 1
+  name: S1_BELT_START
+  gui_label: Belt start
+  cpx_ip: 172.16.11.37
+  cpx_channel: I1.0
+  desc: phát hiện khay ở đầu băng tải đầu vào
+  pos: pos1
+  role: conveyor
+  used_in:
+  - IDLE
+  active: true
+- id: 2
+  name: S2_BELT_MID
+  gui_label: Belt mid
+  cpx_ip: 172.16.11.37
+  cpx_channel: I1.1
+  desc: phát hiện khay đang di chuyển
+  pos: pos1
+  role: conveyor
+  used_in:
+  - IDLE
+  active: true
+- id: 3
+  name: S3_BELT_END
+  gui_label: Belt end
+  cpx_ip: 172.16.11.37
+  cpx_channel: I1.2
+  desc: xác nhận khay đã tới cuối băng tải
+  pos: pos1
+  role: conveyor
+  used_in:
+  - IDLE
+  active: true
+- id: 4
+  name: S4_SCAN_STACK_POS1
+  gui_label: Scan Stack Pos1
+  cpx_ip: 172.16.11.37
+  cpx_channel: I1.3
+  desc: phát hiện chồng khay kim loại
+  pos: pos1
+  role: stack_detect
+  used_in:
+  - S1_INY_SCAN
+  active: true
+- id: 5
+  name: S5_OUTPUT_DETECT
+  gui_label: Output det.
+  cpx_ip: 172.16.11.37
+  cpx_channel: I1.4
+  desc: xác nhận khay vào vị trí nạp
+  pos: pos1
+  role: tray_detect
+  used_in:
+  - S1_CHECK_S5
+  active: true
+- id: 6
+  name: S6_CHECK_TRAY_P1
+  gui_label: Check Tray OutP1
+  cpx_ip: 172.16.11.37
+  cpx_channel: I1.5
+  desc: snapshot có khay
+  pos: pos1
+  role: stack_detect
+  used_in:
+  - S2A_CHECK_INTERLOCK
+  active: true
+- id: 7
+  name: S7_TRAY_AT_ROBOT
+  gui_label: Khay tại Robot
+  cpx_ip: 172.16.11.37
+  cpx_channel: I1.6
+  desc: xác nhận khay đã lên vị trí robot
+  pos: pos1
+  role: tray_detect
+  used_in:
+  - IDLE
+  active: true
+- id: 8
+  name: S8_RESERVED
+  gui_label: '[Reserved]'
+  cpx_ip: 172.16.11.37
+  cpx_channel: I1.7
+  desc: chưa sử dụng
+  pos: pos1
+  role: unused
+  used_in: []
+  active: false
+- id: 9
+  name: S9_CYL1_RETRACTED
+  gui_label: Cyl1 Ret
+  cpx_ip: 172.16.11.37
+  cpx_channel: I2.0
+  desc: Cylinder 1 đã co lại hoàn toàn
+  pos: pos1
+  role: cyl_retracted
+  used_in: []
+  active: true
+- id: 10
+  name: S10_CYL1_EXTENDED
+  gui_label: Cyl1 Ext
+  cpx_ip: 172.16.11.37
+  cpx_channel: I2.1
+  desc: Cylinder 1 đã đẩy ra hoàn toàn
+  pos: pos1
+  role: cyl_extended
+  used_in: []
+  active: true
+- id: 11
+  name: S11_ATV_RUN
+  gui_label: ATV Run
+  cpx_ip: 172.16.11.37
+  cpx_channel: I2.2
+  desc: Đọc trạng thái ATV Run
+  pos: vfd
+  role: vfd_monitor
+  used_in: []
+  active: true
+- id: 12
+  name: S12_ATV_FAULT
+  gui_label: ATV Fault
+  cpx_ip: 172.16.11.37
+  cpx_channel: I2.3
+  desc: Đọc trạng thái ATV Fault
+  pos: vfd
+  role: vfd_monitor
+  used_in: []
+  active: true
+- id: 13
+  name: S13_OUT1_TRAYPOS1
+  gui_label: OUT1 Tray Pos1
+  cpx_ip: 172.16.11.37
+  cpx_channel: I2.4
+  desc: Công tắc hành trình OUT1 tại Tray Pos 1 (Omron D4C-1201, pin plunger, 1NO+1NC
+    SPDT, wired NO)
+  pos: pos1
+  role: limit
+  used_in: []
+  active: true
+- id: 14
+  name: S14_OUT2_TRAYPOS1
+  gui_label: OUT2 Tray Pos1
+  cpx_ip: 172.16.11.37
+  cpx_channel: I2.5
+  desc: Công tắc hành trình OUT2 tại Tray Pos 1 (Omron D4C-1201, pin plunger, 1NO+1NC
+    SPDT, wired NO)
+  pos: pos1
+  role: limit
+  used_in: []
+  active: true
+- id: 15
+  name: S15_CYL3_RETRACTED
+  gui_label: Cyl3 Retracted
+  cpx_ip: 172.16.11.37
+  cpx_channel: I2.6
+  desc: Feedback xác nhận Cyl3 đã rút về
+  pos: pos1
+  role: feedback
+  used_in: []
+  active: true
+- id: 16
+  name: S16_CYL3_EXTENDED
+  gui_label: Cyl3 Extended
+  cpx_ip: 172.16.11.37
+  cpx_channel: I2.7
+  desc: Feedback xác nhận Cyl3 đã đẩy ra
+  pos: pos1
+  role: feedback
+  used_in: []
+  active: true
+- id: 17
+  name: S17_PLATFORM
+  gui_label: Platform
+  cpx_ip: 172.16.11.41
+  cpx_channel: I3.0
+  desc: khay đã lên Platform
+  pos: pos2
+  role: tray_detect
+  used_in: []
+  active: true
+- id: 18
+  name: S18_FEED_OK
+  gui_label: Feed OK
+  cpx_ip: 172.16.11.41
+  cpx_channel: I3.1
+  desc: xác nhận cấp khay
+  pos: pos2
+  role: tray_detect
+  used_in: []
+  active: true
+- id: 19
+  name: S19_CHECK_TRAY_P2
+  gui_label: Check Tray OutP2
+  cpx_ip: 172.16.11.41
+  cpx_channel: I3.2
+  desc: xác nhận có khay
+  pos: pos2
+  role: stack_detect
+  used_in: []
+  active: true
+- id: 20
+  name: S20_SCAN_STACK_POS2
+  gui_label: Scan Stack Pos2
+  cpx_ip: 172.16.11.41
+  cpx_channel: I3.3
+  desc: OutY phát hiện cạnh
+  pos: pos2
+  role: stack_detect
+  used_in: []
+  active: true
+- id: 21
+  name: S21_CYL2_RETRACTED
+  gui_label: Cyl2 Ret
+  cpx_ip: 172.16.11.41
+  cpx_channel: I3.4
+  desc: Cylinder 2 co lại
+  pos: pos2
+  role: cyl_retracted
+  used_in: []
+  active: true
+- id: 22
+  name: S22_CYL2_EXTENDED
+  gui_label: Cyl2 Ext
+  cpx_ip: 172.16.11.41
+  cpx_channel: I3.5
+  desc: Cylinder 2 đẩy ra
+  pos: pos2
+  role: cyl_extended
+  used_in: []
+  active: true
+- id: 25
+  name: S25_CYL4_RETRACTED
+  gui_label: Cyl4 Ret
+  cpx_ip: 172.16.11.41
+  cpx_channel: I4.0
+  desc: Feedback xác nhận Cylinder 4 đã co lại
+  pos: pos2
+  role: cyl_retracted
+  used_in:
+  - STATE3
+  active: true
+- id: 26
+  name: S26_CYL4_EXTENDED
+  gui_label: Cyl4 Ext
+  cpx_ip: 172.16.11.41
+  cpx_channel: I4.1
+  desc: Feedback xác nhận Cylinder 4 đã đẩy ra giữ khay trên platform
+  pos: pos2
+  role: cyl_extended
+  used_in:
+  - STATE3
+  active: true
+- id: 27
+  name: S27_CYL5_RETRACTED
+  gui_label: Cyl5 Ret
+  cpx_ip: 172.16.11.41
+  cpx_channel: I4.2
+  desc: Feedback xác nhận Cylinder 5 đã co lại
+  pos: pos2
+  role: cyl_retracted
+  used_in:
+  - STATE4
+  active: true
+- id: 28
+  name: S28_CYL5_EXTENDED
+  gui_label: Cyl5 Ext
+  cpx_ip: 172.16.11.41
+  cpx_channel: I4.3
+  desc: Feedback xác nhận Cylinder 5 đã đẩy ra khi S19 phát hiện khay
+  pos: pos2
+  role: cyl_extended
+  used_in:
+  - STATE4
+  active: true

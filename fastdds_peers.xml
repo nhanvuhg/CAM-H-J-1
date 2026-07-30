@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Cross-host discovery profile cho Jetson/Pi 5 ↔ RevPi A.
+
+  Switch của user KHÔNG forward multicast 239.255.0.1 → metatraffic
+  discovery dùng InitialPeersList (unicast UDP) thay vì multicast group.
+
+  Domain 22 → unicast metatraffic ports = PB(7400) + DG(250)*22 + d1(10)
+  + PG(2)*participantId = 12910, 12912, 12914, 12916, 12918, ...
+
+  Port = 0 trong locator → FastDDS auto-scan participant 0..maxInitialPeersRange
+  → đủ cover.
+
+  IPs:
+    172.16.11.11 = Jetson Orin Nano
+    172.16.11.30 = Raspberry Pi 5
+    172.16.11.31 = RevPi A
+
+  ⚠ IP RevPi A phải khớp $REVPI_A_HOST trong ros2_env.sh.
+     FastDDS không support env-var trong <address>, nên hãy chạy
+     /home/pi/Desktop/update_revpi_ip.sh mỗi khi RevPi A đổi IP.
+     Sanity check: bash scripts/check_revpi_ip_sync.sh
+-->
+<dds>
+    <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+        <transport_descriptors>
+            <transport_descriptor>
+                <transport_id>udp_transport</transport_id>
+                <type>UDPv4</type>
+            </transport_descriptor>
+        </transport_descriptors>
+
+        <participant profile_name="xhost_unicast" is_default_profile="true">
+            <rtps>
+                <userTransports>
+                    <transport_id>udp_transport</transport_id>
+                </userTransports>
+                <useBuiltinTransports>false</useBuiltinTransports>
+                <builtin>
+                    <initialPeersList>
+                        <!-- Jetson local participants (camera, CLI, GUI, etc.). -->
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12910</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12912</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12914</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12916</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12918</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12920</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12922</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12924</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12926</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12928</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12930</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.30</address>
+                                <port>12910</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.30</address>
+                                <port>12912</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.30</address>
+                                <port>12914</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.30</address>
+                                <port>12916</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.30</address>
+                                <port>12918</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.30</address>
+                                <port>12920</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.31</address>
+                                <port>12910</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.31</address>
+                                <port>12912</port>
+                            </udpv4>
+                        </locator>
+                    </initialPeersList>
+                </builtin>
+            </rtps>
+        </participant>
+    </profiles>
+</dds>

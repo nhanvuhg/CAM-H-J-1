@@ -1,0 +1,47 @@
+🖥️  Display: DISPLAY=:0  XAUTHORITY=/home/pi/.Xauthority
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 Full System — Cartridge + Robot Launcher
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  WARNING: Found 6 existing process(es)! Tự động dọn dẹp...
+🔍 Killing old processes...
+✅ Clean slate
+
+  [1/7] 🔧 Cartridge Provide System Node...
+        PID=117122  Log: /home/pi/ros2_ws/logs/cartridge_node.log
+  [2/7] 🤖 Dobot Bringup (Nova5)...
+        PID=117146  Log: /home/pi/ros2_ws/logs/dobot_bringup.log
+  [3/8] 🧠 Robot Logic Node...
+        PID=117183  Log: /home/pi/ros2_ws/logs/robot_logic_node.log
+  [3.5/8] ⚙️  Motion Executor Node...
+        PID=117184  Log: /home/pi/ros2_ws/logs/motion_executor.log
+  [4/7] 🦾 Gripper Festo Node...
+        PID=117226  Log: /home/pi/ros2_ws/logs/gripper_festo_node.log
+  [5/7] 📷 Dual Camera System (CSI + YOLO)...
+        PID=117242  Log: /home/pi/ros2_ws/logs/dual_camera_system.log
+  [6/7] ⏭️  Web GUI skipped (thêm --web để bật)
+  [7/7] 🖥️  QML GUI (DISPLAY=:0)...
+        PID=117293  Log: /home/pi/ros2_ws/logs/unified_gui.log
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ All processes started! (7 components)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 Logs:
+  tail -f /home/pi/ros2_ws/logs/cartridge_node.log        # Cartridge feeder
+  tail -f /home/pi/ros2_ws/logs/dobot_bringup.log          # Dobot driver
+  tail -f /home/pi/ros2_ws/logs/robot_logic_node.log          # Robot logic
+  tail -f /home/pi/ros2_ws/logs/gripper_festo_node.log        # Gripper
+  tail -f /home/pi/ros2_ws/logs/dual_camera_system.log         # Camera + YOLO
+  tail -f /home/pi/ros2_ws/logs/unified_gui.log             # QML GUI
+
+🌐 Web GUI: bash start_all.sh --web
+
+Press Ctrl+C to stop all
+
+
+🛑 Shutting down...
+/home/pi/ros2_ws/src/unified_control_gui/scripts/start_all.sh: line 147: 117184 Killed                  ros2 run robot_control_main motion_executor --ros-args --params-file "$WS/src/robot_control_main/config/joint_pose_params.yaml" > "$LOG_MOTION" 2>&1
+/home/pi/ros2_ws/src/unified_control_gui/scripts/start_all.sh: line 147: 117293 Killed                  "$QML_BIN" > "$LOG_QML" 2>&1
+✅ All processes stopped.
+[GUI] Closed — dừng hệ thống

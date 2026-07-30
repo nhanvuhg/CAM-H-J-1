@@ -1,0 +1,424 @@
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Changelog for package camera_info_manager
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+7.0.3 (2026-07-17)
+------------------
+* camera_info_manager: Use string_view in URL parsing (`#427 <https://github.com/ros-perception/image_common/issues/427>`_)
+* Added rosdoc2 documentation to camera_info_manager_py (`#404 <https://github.com/ros-perception/image_common/issues/404>`_)
+* Compile with cpp20 (`#424 <https://github.com/ros-perception/image_common/issues/424>`_)
+* Added rosdoc2 documentation to camera info manager (`#402 <https://github.com/ros-perception/image_common/issues/402>`_)
+* Prevent executor race condition (`#421 <https://github.com/ros-perception/image_common/issues/421>`_)
+* Contributors: Alejandro Hernández Cordero, Michael Carroll
+
+7.0.2 (2026-06-05)
+------------------
+* Cleanups and removed unused files (`#406 <https://github.com/ros-perception/image_common/issues/406>`_)
+* Contributors: Alejandro Hernández Cordero
+
+7.0.1 (2026-05-29)
+------------------
+* Removed deprecated API (`#413 <https://github.com/ros-perception/image_common/issues/413>`_)
+* Added version.h (`#415 <https://github.com/ros-perception/image_common/issues/415>`_)
+* Contributors: Alejandro Hernández Cordero, Martin Pecka
+
+7.0.0 (2026-05-06)
+------------------
+* Fix camera_info_manager flakiness and Windows crashes (`#405 <https://github.com/ros-perception/image_common/issues/405>`_)
+* Contributors: Michael Carroll
+
+6.4.7 (2026-04-01)
+------------------
+
+6.4.6 (2026-03-24)
+------------------
+* Use new ROSIDL aggregate CMake target (`#396 <https://github.com/ros-perception/image_common/issues/396>`_)
+* Added camera info manager unit test (`#358 <https://github.com/ros-perception/image_common/issues/358>`_)
+* Contributors: Alejandro Hernández Cordero, Emerson Knapp
+
+6.4.5 (2026-02-25)
+------------------
+* Use get_package_share_path (`#391 <https://github.com/ros-perception/image_common/issues/391>`_)
+* Update BSD licenses to SPDX identifier (`#389 <https://github.com/ros-perception/image_common/issues/389>`_)
+  Co-authored-by: Alejandro Hernandez Cordero <ahcorde@gmail.com>
+* Contributors: Alejandro Hernández Cordero, Garrett Brown
+
+6.4.4 (2025-12-23)
+------------------
+* Updated deprecated ament_index_cpp API (`#388 <https://github.com/ros-perception/image_common/issues/388>`_)
+* Contributors: Alejandro Hernández Cordero
+
+6.4.3 (2025-11-24)
+------------------
+
+6.4.2 (2025-10-16)
+------------------
+
+6.4.1 (2025-08-25)
+------------------
+
+6.4.0 (2025-08-22)
+------------------
+* Fix compilation error with clang (`#372 <https://github.com/ros-perception/image_common/issues/372>`_)
+* Support lifecycle node - NodeInterfaces (`#352 <https://github.com/ros-perception/image_common/issues/352>`_)
+* Contributors: Alejandro Hernández Cordero
+
+6.3.0 (2025-07-25)
+------------------
+* Deprecated rmw_qos_profile_t in favour of rclcpp::QoS (`#364 <https://github.com/ros-perception/image_common/issues/364>`_)
+* Fix cmake deprecation (`#367 <https://github.com/ros-perception/image_common/issues/367>`_)
+* Contributors: Alejandro Hernández Cordero, mosfet80
+
+6.2.2 (2025-07-01)
+------------------
+
+6.2.1 (2025-06-12)
+------------------
+
+6.2.0 (2025-04-28)
+------------------
+
+6.1.1 (2025-04-28)
+------------------
+
+6.1.0 (2024-12-20)
+------------------
+
+6.0.3 (2024-11-25)
+------------------
+
+6.0.2 (2024-11-25)
+------------------
+
+6.0.1 (2024-10-10)
+------------------
+
+6.0.0 (2024-10-03)
+------------------
+* Add optional namespace to /set_camera_info service in CameraInfoManager (`#324 <https://github.com/ros-perception/image_common/issues/324>`_)
+* Contributors: Jan Hernas
+
+5.3.2 (2024-07-29)
+------------------
+
+5.3.1 (2024-07-19)
+------------------
+* Added common test to camera info manager (`#318 <https://github.com/ros-perception/image_common/issues/318>`_)
+* Contributors: Alejandro Hernández Cordero
+
+5.3.0 (2024-06-17)
+------------------
+
+5.2.1 (2024-05-24)
+------------------
+
+5.2.0 (2024-04-26)
+------------------
+
+5.1.2 (2024-04-16)
+------------------
+
+5.1.1 (2024-03-26)
+------------------
+* Switch from rcpputils::fs to std::filesystem (`#300 <https://github.com/ros-perception/image_common/issues/300>`_)
+* Contributors: Christophe Bedard
+
+5.1.0 (2024-01-24)
+------------------
+
+5.0.0 (2023-11-06)
+------------------
+* Removed C headers: camera_info_manager camera_calibration_parsers (`#290 <https://github.com/ros-perception/image_common/issues/290>`_)
+* Contributors: Alejandro Hernández Cordero
+
+4.5.1 (2023-09-07)
+------------------
+
+4.5.0 (2023-08-21)
+------------------
+
+4.3.0 (2023-04-28)
+------------------
+
+4.2.0 (2023-02-14)
+------------------
+* Update image_common to C++17. (`#267 <https://github.com/ros-perception/image_common/issues/267>`_)
+* Contributors: Chris Lalancette
+
+4.1.1 (2022-11-16)
+------------------
+* Add alias library targets for all libraries (`#259 <https://github.com/ros-perception/image_common/issues/259>`_)
+* Contributors: RFRIEDM-Trimble
+
+4.1.0 (2022-11-02)
+------------------
+* Add lifecycle node compatibility to camera_info_manager (`#190 <https://github.com/ros-perception/image_common/issues/190>`_)
+* Contributors: Ramon Wijnands
+
+4.0.0 (2022-08-11)
+------------------
+
+3.2.1 (2022-07-12)
+------------------
+
+3.2.0 (2022-05-10)
+------------------
+
+3.1.4 (2022-03-25)
+------------------
+
+3.1.3 (2022-03-01)
+------------------
+
+3.1.2 (2022-01-14)
+------------------
+* Export a modern CMake target instead of variables and install includes to include/${PROJECT_NAME} (`#218 <https://github.com/ros-perception/image_common/issues/218>`_)
+* Contributors: Shane Loretz
+
+3.1.0 (2021-06-29)
+------------------
+
+3.0.0 (2021-05-26)
+------------------
+* Update maintainers (`#173 <https://github.com/ros-perception/image_common/issues/173>`_)
+* Contributors: Alejandro Hernández Cordero
+
+2.3.0 (2020-05-27)
+------------------
+* Fix formatting and include paths for linters (`#157 <https://github.com/ros-perception/image_common/issues/157>`_)
+* Enable Windows build. (`#159 <https://github.com/ros-perception/image_common/issues/159>`_)
+* Contributors: Martin Idel, Sean Yen
+
+2.2.1 (2019-10-23)
+------------------
+* Fix abort criteria for setCameraInfoService callback (`#132 <https://github.com/ros-perception/image_common/issues/132>`_)
+* Contributors: Joseph Schornak
+
+2.2.0 (2019-09-27)
+------------------
+
+2.1.1 (2019-05-30)
+------------------
+
+2.1.0 (2019-05-09)
+------------------
+
+2.0.0 (2018-12-05)
+------------------
+* camera_info_manager ROS2 port (`#94 <https://github.com/ros-perception/image_common/issues/94>`_)
+* Image Transport ROS2 port (`#84 <https://github.com/ros-perception/image_common/issues/84>`_)
+* Contributors: Michael Carroll
+
+1.11.13 (2017-11-05)
+--------------------
+* Fix the find_package(catkin) redundancy
+* Add a dependency between the test and the test executable
+* Add camera_calibration_parsers dependency to camera_info_manager
+* Contributors: Max Schettler, Vincent Rabaud
+
+1.11.12 (2017-01-29)
+--------------------
+* 1.11.11
+* update changelogs
+* Return empty CameraInfo when !ros::ok()
+* Contributors: Enrique Fernandez, Vincent Rabaud
+
+1.11.11 (2016-09-24)
+--------------------
+* Return empty CameraInfo when !ros::ok()
+* Contributors: Enrique Fernandez
+
+1.11.10 (2016-01-19)
+--------------------
+
+1.11.9 (2016-01-17)
+-------------------
+
+1.11.8 (2015-11-29)
+-------------------
+* fix compilation on Fedora, fixes `#42 <https://github.com/ros-perception/image_common/issues/42>`_
+* Contributors: Vincent Rabaud
+
+1.11.7 (2015-07-28)
+-------------------
+
+1.11.6 (2015-07-16)
+-------------------
+* simplify target_link_libraries
+  That should fix `#35 <https://github.com/ros-perception/image_common/issues/35>`_
+* Contributors: Vincent Rabaud
+
+1.11.5 (2015-05-14)
+-------------------
+
+1.11.4 (2014-09-21)
+-------------------
+
+1.11.3 (2014-05-19)
+-------------------
+* Add public member function to manually set camera info (`#19
+  <https://github.com/ros-perception/image_common/issues/19>`_)
+* make rostest in CMakeLists optional (`ros/rosdistro#3010
+  <https://github.com/ros/rosdistro/issues/3010>`_)
+* Contributors: Jack O'Quin, Jonathan Bohren, Lukas Bulwahn
+
+1.11.2 (2014-02-13)
+-------------------
+
+1.11.1 (2014-01-26 02:33)
+-------------------------
+* check for CATKIN_ENABLE_TESTING
+* Contributors: Lukas Bulwahn
+
+1.11.0 (2013-07-20 12:23)
+-------------------------
+
+1.10.5 (2014-01-26 02:34)
+-------------------------
+
+1.10.4 (2013-07-20 11:42)
+-------------------------
+* add Jack as maintainer
+* Contributors: Vincent Rabaud
+
+1.10.3 (2013-02-21 05:33)
+-------------------------
+* add gtest libraries linkage
+* Contributors: Vincent Rabaud
+
+1.10.2 (2013-02-21 04:48)
+-------------------------
+* fix the rostest dependency
+* Contributors: Vincent Rabaud
+
+1.10.1 (2013-02-21 04:16)
+-------------------------
+* fix catkin gtest and rostest problem
+* fix unit test dependencies
+* Removed duplicated test dependancy
+  Test dependencies should never duplicate build or run dependencies.
+* Contributors: Aaron Blasdel, Jack O'Quin
+
+1.10.0 (2013-01-13)
+-------------------
+* fix the urls
+* Contributors: Vincent Rabaud
+
+1.9.22 (2012-12-16)
+-------------------
+
+1.9.21 (2012-12-14)
+-------------------
+* Updated package.xml file(s) to handle new catkin buildtool_depend
+  requirement
+* Contributors: mirzashah
+
+1.9.20 (2012-12-04)
+-------------------
+
+1.9.19 (2012-11-08)
+-------------------
+
+1.9.18 (2012-11-06)
+-------------------
+* remove the brief attribute
+* Contributors: Vincent Rabaud
+
+1.9.17 (2012-10-30 19:32)
+-------------------------
+
+1.9.16 (2012-10-30 09:10)
+-------------------------
+
+1.9.15 (2012-10-13 08:43)
+-------------------------
+* fix bad folder/libraries
+* Contributors: Vincent Rabaud
+
+1.9.14 (2012-10-13 01:07)
+-------------------------
+
+1.9.13 (2012-10-06)
+-------------------
+
+1.9.12 (2012-10-04)
+-------------------
+
+1.9.11 (2012-10-02 02:56)
+-------------------------
+* add missing rostest dependency
+* Contributors: Vincent Rabaud
+
+1.9.10 (2012-10-02 02:42)
+-------------------------
+* fix bad dependency
+* Contributors: Vincent Rabaud
+
+1.9.9 (2012-10-01)
+------------------
+* fix dependencies
+* Contributors: Vincent Rabaud
+
+1.9.8 (2012-09-30)
+------------------
+* add catkin as a dependency
+* comply to the catkin API
+* Contributors: Vincent Rabaud
+
+1.9.7 (2012-09-18 11:39)
+------------------------
+* add missing linkage
+* Contributors: Vincent Rabaud
+
+1.9.6 (2012-09-18 11:07)
+------------------------
+
+1.9.5 (2012-09-13)
+------------------
+* install the include directories
+* Contributors: Vincent Rabaud
+
+1.9.4 (2012-09-12 23:37)
+------------------------
+
+1.9.3 (2012-09-12 20:44)
+------------------------
+
+1.9.2 (2012-09-10)
+------------------
+* fix build issues
+* Contributors: Vincent Rabaud
+
+1.9.1 (2012-09-07 15:33)
+------------------------
+* make the libraries public
+* Contributors: Vincent Rabaud
+
+1.9.0 (2012-09-07 13:03)
+------------------------
+* API documentation review update
+* suppress misleading camera_info_manager error messages [`#5273
+  <https://github.com/ros-perception/image_common/issues/5273>`_]
+* remove deprecated global CameraInfoManager symbol for Fuerte (`#4971
+  <https://github.com/ros-perception/image_common/issues/4971>`_)
+* Revert to using boost::mutex, not boost::recursive_mutex.
+* Hack saveCalibrationFile() to stat() the containing directory and
+  attempt to create it if necessary.  Test for this case.
+* Reload camera info when camera name changes.
+* Implement most new Electric API changes, with test cases.
+* Add ${ROS_HOME} expansion, with unit test cases.
+  Do not use "$$" for a single '$', look for "${" instead.
+* Use case-insensitive comparisons for parsing URL tags (`#4761
+  <https://github.com/ros-perception/image_common/issues/4761>`_).
+  Add unit test cases to cover this.  Add unit test case for camera
+  name containing video mode.
+* add test for resolving an empty URL
+* Deprecate use of global CameraInfoManager symbol in E-turtle (`#4786
+  <https://github.com/ros-perception/image_common/issues/4786>`_).
+  Modify unit tests accordingly.
+* provide camera_info_manager namespace, fixes `#4760
+  <https://github.com/ros-perception/image_common/issues/4760>`_
+* Add support for "package://" URLs.
+* Fixed tests to work with new CameraInfo.
+* Moved image_common from camera_drivers.
+* Contributors: Vincent Rabaud, blaise, Jack O'Quin, mihelich

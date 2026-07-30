@@ -1,0 +1,142 @@
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Changelog for package camera_info_manager_py
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+7.0.3 (2026-07-17)
+------------------
+* Type annotations for camenra_info_manager_py (`#426 <https://github.com/ros-perception/image_common/issues/426>`_)
+* Python3 modernization (`#425 <https://github.com/ros-perception/image_common/issues/425>`_)
+* Added rosdoc2 documentation to camera_info_manager_py (`#404 <https://github.com/ros-perception/image_common/issues/404>`_)
+* Contributors: Alejandro Hernández Cordero
+
+7.0.2 (2026-06-05)
+------------------
+* Zoom Camera Info manager properly ported to ROS 2 (`#407 <https://github.com/ros-perception/image_common/issues/407>`_)
+* Cleanups and removed unused files (`#406 <https://github.com/ros-perception/image_common/issues/406>`_)
+* Contributors: Alejandro Hernández Cordero
+
+7.0.1 (2026-05-29)
+------------------
+
+7.0.0 (2026-05-06)
+------------------
+
+6.4.7 (2026-04-01)
+------------------
+
+6.4.6 (2026-03-24)
+------------------
+
+6.4.5 (2026-02-25)
+------------------
+* Update BSD licenses to SPDX identifier (`#389 <https://github.com/ros-perception/image_common/issues/389>`_)
+  Co-authored-by: Alejandro Hernandez Cordero <ahcorde@gmail.com>
+* Contributors: Garrett Brown
+
+6.4.4 (2025-12-23)
+------------------
+
+6.4.3 (2025-11-24)
+------------------
+* Cleanup mislabeled BSD license (`#382 <https://github.com/ros-perception/image_common/issues/382>`_)
+* Contributors: Alejandro Hernández Cordero
+
+6.4.2 (2025-10-16)
+------------------
+
+6.4.1 (2025-08-25)
+------------------
+
+6.4.0 (2025-08-22)
+------------------
+
+6.3.0 (2025-07-25)
+------------------
+* fix setuptools deprecation (`#366 <https://github.com/ros-perception/image_common/issues/366>`_)
+* Contributors: mosfet80
+
+6.2.2 (2025-07-01)
+------------------
+
+6.2.1 (2025-06-12)
+------------------
+* Fix CameraInfo distortion coefficients and logger (`#360 <https://github.com/ros-perception/image_common/issues/360>`_)
+* Contributors: Rick-v-E
+
+6.2.0 (2025-04-28)
+------------------
+
+6.1.1 (2025-04-28)
+------------------
+
+6.1.0 (2024-12-20)
+------------------
+* Cleanup of camera_info_manager_py. (`#340 <https://github.com/ros-perception/image_common/issues/340>`_)
+* Contributors: Chris Lalancette
+
+6.0.3 (2024-11-25)
+------------------
+* Add `camera_info_manager_py` (`#335 <https://github.com/ros-perception/image_common/issues/335>`_)
+* Contributors: Alejandro Hernández Cordero
+
+6.0.1 (2024-11-22)
+------------------
+* Bump package version to synchronize with image_common
+* Contributors: Chris Iverach-Brereton
+
+1.0.0 (2024-05-16)
+------------------
+* Ros2 (`#2 <https://github.com/clearpathrobotics/camera_info_manager_py/issues/2>`_)
+  * Run magic converter
+  * Ament_python package
+  * Fix some imports
+  * Remove references to cpp camera info manager.
+  Disable tests
+  * Linting
+  * Fully Remove old tests
+  * Add lint tests
+  * Final tests
+  * Remove pep257 from depends
+* Contributors: Michael Hosmar
+
+0.3.1 (2021-11-18)
+------------------
+* changelog
+* Contributors: José Mastrangelo
+
+0.3.0 (2021-11-18)
+------------------
+* added CPR maintainer
+* Release to Melodic and Noetic
+* Contributors: Jack O'Quin, José Mastrangelo, Lucas Walter, Martin Pecka
+
+0.2.3 (2014-05-13)
+------------------
+* Only use rostest when testing enabled, thanks to Lukas Bulwahn.
+* Move repository to ros-perception.
+* Contributors: Jack O'Quin, Lukas Bulwahn
+
+0.2.2 (2013-07-25)
+------------------
+* Add namespace parameter to constructor, so a driver can handle multiple cameras. Enhancement thanks to Martin Llofriu.
+* Make unit tests conditional on ``CATKIN_ENABLE_TESTING``.
+* Release to Groovy and Hydro.
+* Contributors: Jack O'Quin, mllofriu
+
+0.2.1 (2013-04-14)
+------------------
+* Set null calibration even when URL invalid (#7).
+* Release to Groovy and Hydro.
+* Contributors: Jack O'Quin
+
+0.2.0 (2013-03-28)
+------------------
+* Convert to catkin.
+* Remove roslib dependency.
+* Release to Groovy and Hydro.
+* Contributors: Jack O'Quin
+
+0.1.0 (2012-12-05)
+------------------
+* Initial Python camera_info_manager release to Fuerte.
+* Contributors: Jack O'Quin

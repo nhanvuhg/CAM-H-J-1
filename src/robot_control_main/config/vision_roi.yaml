@@ -1,0 +1,42 @@
+# ROI cho vision_decision_node — cham boi user 15/7/2026 bang roi_pick.py
+# tren anh /camXHP/image_raw 640x480 (dung he toa do bbox YOLO publish).
+#
+# ref_width/ref_height = kich thuoc anh luc cham. Node scale ROI tu day sang
+# image_width/image_height (param cua node). Binh thuong hai he trung nhau
+# (scale 1.0) — neu doi output size camera thi chi can doi param, ROI tu gian.
+#
+# Cham lai: python3 ros2_ws/scripts/camera_tools/grab_roi_frames.py
+#           python3 ros2_ws/scripts/camera_tools/roi_pick.py --cam camX
+#           python3 ros2_ws/scripts/camera_tools/roi_preview.py --cam camX
+# roi dan ket qua vao day, restart node (khong can build).
+#
+# Moi ROI = 4 goc [x, y] theo vong quanh (khong bat cheo).
+# Thu tu slot1..slot10 = thu tu robot dat hang (khop pose index 14-23 trong
+# joint_pose_params.yaml va nut O1-O10 tren GUI).
+
+ref_width: 640
+ref_height: 480
+
+# cam0 — khay input, 1 outer (tray presence) + 5 row (R1-R5)
+input_tray:
+  outer: [[133, 365], [162, 112], [498, 111], [530, 360]]
+  rows:
+    - [[157, 346], [180, 131], [237, 133], [226, 346]]   # row1
+    - [[234, 345], [242, 132], [295, 131], [293, 347]]   # row2
+    - [[300, 345], [300, 131], [353, 131], [361, 344]]   # row3
+    - [[367, 344], [359, 131], [410, 132], [428, 344]]   # row4
+    - [[433, 343], [415, 132], [466, 132], [496, 343]]   # row5
+
+# cam1 — khay output, 10 slot
+output_tray:
+  slots:
+    - [[513, 335], [498, 225], [440, 225], [452, 333]]   # slot1
+    - [[495, 220], [484, 125], [428, 125], [438, 218]]   # slot2
+    - [[444, 334], [432, 227], [380, 226], [389, 334]]   # slot3
+    - [[429, 219], [420, 124], [372, 124], [378, 219]]   # slot4
+    - [[376, 335], [368, 228], [314, 226], [316, 335]]   # slot5
+    - [[368, 221], [364, 124], [314, 122], [314, 221]]   # slot6
+    - [[302, 336], [301, 232], [242, 227], [237, 337]]   # slot7
+    - [[301, 225], [300, 124], [248, 123], [244, 221]]   # slot8
+    - [[227, 338], [231, 230], [163, 226], [155, 338]]   # slot9
+    - [[232, 225], [241, 126], [181, 125], [165, 220]]   # slot10

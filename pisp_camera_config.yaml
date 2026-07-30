@@ -1,0 +1,10 @@
+{
+        "version": 1.0,
+        "target": "pisp",
+
+        "pipeline_handler":
+        {
+                "camera_timeout_value_ms": 30000,
+                "num_cfe_config_stats_buffers": 12
+        }
+}

@@ -1,0 +1,24 @@
+[Unit]
+Description=Cartridge Loading System 24/7 Service
+After=network.target graphical.target
+
+[Service]
+Type=simple
+User=pi
+Environment="DISPLAY=:0"
+Environment="XAUTHORITY=/home/pi/.Xauthority"
+WorkingDirectory=/home/pi/ros2_ws
+
+# Chuỗi lệnh khởi động chuẩn ROS 2
+ExecStart=/bin/bash -c "source /opt/ros/jazzy/setup.bash && source /home/pi/ros2_ws/install/setup.bash && ros2 launch system_feed_cartridge cartridge_production.launch.py"
+
+# Tự động khởi động lại sau 5s nếu bị sập
+Restart=always
+RestartSec=5
+
+# Giới hạn ghi log tránh đầy bộ nhớ
+StandardOutput=append:/tmp/robot_system.log
+StandardError=inherit
+
+[Install]
+WantedBy=graphical.target

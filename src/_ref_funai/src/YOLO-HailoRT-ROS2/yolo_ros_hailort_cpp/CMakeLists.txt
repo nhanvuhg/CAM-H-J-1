@@ -1,0 +1,99 @@
+# cmake_minimum_required(VERSION 3.8)
+# project(yolo_ros_hailort_cpp)
+
+# if(NOT CMAKE_CXX_STANDARD)
+#   set(CMAKE_CXX_STANDARD 17)
+#   set(CMAKE_CXX_STANDARD_REQUIRED ON)
+#   set(CMAKE_CXX_EXTENSIONS OFF)
+# endif()
+
+# if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+#   add_compile_options(-Wall -Wextra -Wpedantic)
+# endif()
+
+# find_package(ament_cmake_auto REQUIRED)
+# ament_auto_find_build_dependencies()
+
+# find_package(Threads)
+# find_package(HailoRT REQUIRED)
+
+# ament_auto_add_library(yolo_ros_hailort_cpp SHARED
+#   src/yolo_ros_hailort_cpp.cpp
+# )
+# target_link_libraries(yolo_ros_hailort_cpp
+#     Threads::Threads
+#     HailoRT::libhailort
+#     ${OpenCV_LIBRARIES}
+# )
+# rclcpp_components_register_node(
+#   yolo_ros_hailort_cpp
+#   PLUGIN "yolo_ros_hailort_cpp::YoloNode"
+#   EXECUTABLE yolo_ros_hailort_cpp_node
+# )
+
+# if(BUILD_TESTING)
+#   find_package(ament_lint_auto REQUIRED)
+#   ament_lint_auto_find_test_dependencies()
+# endif()
+
+# ament_auto_package(
+#   INSTALL_TO_SHARE
+#   launch
+# )
+
+cmake_minimum_required(VERSION 3.8)
+project(yolo_ros_hailort_cpp)
+
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  set(CMAKE_CXX_EXTENSIONS OFF)
+endif()
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+find_package(ament_cmake_auto REQUIRED)
+ament_auto_find_build_dependencies()
+
+find_package(Threads REQUIRED)
+find_package(HailoRT REQUIRED)
+find_package(OpenCV REQUIRED)          # +++
+find_package(cv_bridge REQUIRED)       # +++
+find_package(rclcpp REQUIRED)          # +++
+find_package(rclcpp_components REQUIRED)  # +++
+find_package(sensor_msgs REQUIRED)     # +++
+find_package(vision_msgs REQUIRED)     # +++
+
+ament_auto_add_library(yolo_ros_hailort_cpp SHARED
+  src/yolo_ros_hailort_cpp.cpp
+)
+
+# Quan trọng: kéo include + link từ các dependency vào target
+ament_target_dependencies(yolo_ros_hailort_cpp
+  rclcpp
+  rclcpp_components
+  sensor_msgs
+  cv_bridge
+  vision_msgs
+)
+
+target_link_libraries(yolo_ros_hailort_cpp
+  Threads::Threads
+  HailoRT::libhailort
+  ${OpenCV_LIBS}
+)
+
+rclcpp_components_register_node(
+  yolo_ros_hailort_cpp
+  PLUGIN "yolo_ros_hailort_cpp::YoloNode"
+  EXECUTABLE yolo_ros_hailort_cpp_node
+)
+
+ament_auto_package(
+  INSTALL_TO_SHARE
+  launch
+)
+
+# ... phần testing & ament_auto_package giữ nguyên ...

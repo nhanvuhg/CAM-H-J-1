@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>bbox_drawer_cpp</name>
+  <version>0.0.6</version>
+  <description>Draw YOLO bounding boxes for multi-camera using C++ and OpenCV (supports yuv422/yuyv)</description>
+  <maintainer email="user@example.com">user</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>vision_msgs</depend>
+  <depend>image_transport</depend>
+  <depend>message_filters</depend>
+  <depend>OpenCV</depend>
+</package>

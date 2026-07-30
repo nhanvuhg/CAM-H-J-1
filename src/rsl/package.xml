@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>rsl</name>
+  <version>1.3.0</version>
+  <description>ROS Support Library</description>
+  <author email="maybe@tylerjw.dev">Tyler Weaver</author>
+  <author email="chrisjthrasher@gmail.com">Chris Thrasher</author>
+  <maintainer email="bence.magyar.robotics@gmail.com">bmagyar</maintainer>
+  <maintainer email="christoph.froehlich@ait.ac.at">christophfroehlich</maintainer>
+  <maintainer email="nathanbrooks@picknik.ai">Nathan Brooks</maintainer>
+  <maintainer email="shaurya.kumar@picknik.ai">Shaurya Kumar</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>doxygen</buildtool_depend>
+
+  <depend>eigen</depend>
+  <depend>fmt</depend>
+  <depend>rclcpp</depend>
+  <depend>tcb_span</depend>
+  <depend>libexpected-dev</depend>
+
+  <test_depend>ament_cmake_ros</test_depend>
+  <test_depend>clang-tidy</test_depend>
+  <test_depend>git</test_depend>
+  <test_depend>range-v3</test_depend>
+
+  <export>
+    <build_type>cmake</build_type>
+  </export>
+</package>

@@ -1,0 +1,78 @@
+
+# ROS2 build artifacts
+
+build/
+
+install/
+
+log/
+
+logs/
+
+# Machine-local runtime configuration and credentials
+src/unified_control_gui/fill_hp_users.json
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local snapshots are superseded by Git commits/tags and may contain
+# machine-specific configuration.
+backups/
+backups_pre_revert/
+revpi_backup/
+
+# Python
+
+__pycache__/
+
+*.py[cod]
+
+venv*/
+
+*.pyc
+
+# Log files
+
+*.log
+
+# Backup files
+
+*.bak
+
+*.backup
+
+*.old
+
+*_backup_*
+
+backup_*/
+
+*.cpp.bk
+
+*.cpp.bak_*
+
+*.bk
+
+*.bk2
+
+# IDE
+
+.vscode/
+
+.idea/
+
+# Large binary files - models & videos
+*.mp4
+*.avi
+*.mkv
+*.hef
+*.onnx
+*.pt
+*.engine
+*.tar.gz
+src/YOLO-HailoRT-ROS2/weights/
+
+# ROS 1 backup files
+*.ros1_backup

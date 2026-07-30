@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Camera ROI Capture
+Comment=Chụp ảnh 1280x720 production scale cho ROI calibration
+Exec=bash -c 'bash /home/pi/Desktop/camera_roi.sh; echo ""; echo "=== Script kết thúc. Nhấn Enter để đóng ==="; read'
+Icon=camera-photo
+Terminal=true
+Categories=Utility;
+StartupNotify=false

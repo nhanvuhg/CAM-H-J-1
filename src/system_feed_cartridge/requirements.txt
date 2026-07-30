@@ -1,0 +1,2 @@
+festo-edcon==0.15.0
+festo-cpx-io==0.11.0

@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>robot_control_main</name>
+  <version>0.0.1</version>
+  <description>Robot logic using function pointer for Nova5</description>
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>dobot_msgs_v3</depend>
+  <depend>vision_msgs</depend>
+  <depend>plc_msg</depend>
+  <depend>snap7_driver</depend>
+   <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -1,0 +1,20 @@
+# =======================
+# Goal
+# =======================
+string command        # INPUT_TRAY_CHAMBER | SCALE_OUTPUT | ...
+int32 slot            # Slot index (0 nếu không dùng)
+bool allow_rollback   # Cho phép rollback khi fail/cancel
+
+---
+# =======================
+# Result
+# =======================
+bool success
+string message        # COMPLETED | FAILED | ROLLED_BACK | CANCELLED
+
+---
+# =======================
+# Feedback
+# =======================
+string state          # RUNNING | SYNCING | ROLLBACK
+float32 progress      # 0.0 → 1.0
