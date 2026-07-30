@@ -13,6 +13,7 @@
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QCoreApplication>
+#include <QStandardPaths>
 #include <cmath>
 #include <sstream>
 #include <thread>
@@ -367,7 +368,7 @@ void RobotController::callServiceAsync(rclcpp::Client<std_srvs::srv::SetBool>::S
 
 QString RobotController::captureScreenshot()
 {
-    const QString outputDir = "/home/pi/PicturesGUI";
+    const QString outputDir = QDir::home().filePath("PicturesGUI");
     if (!QDir().mkpath(outputDir)) {
         const QString message = "Cannot create screenshot directory: " + outputDir;
         qWarning() << message;
@@ -384,7 +385,11 @@ QString RobotController::captureScreenshot()
         env.insert("DISPLAY", ":0");
     }
     if (!env.contains("XAUTHORITY") || env.value("XAUTHORITY").isEmpty()) {
-        env.insert("XAUTHORITY", "/home/pi/.Xauthority");
+        const QString runtimeAuth = QDir(
+            QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation))
+            .filePath("gdm/Xauthority");
+        const QString homeAuth = QDir::home().filePath(".Xauthority");
+        env.insert("XAUTHORITY", QFile::exists(runtimeAuth) ? runtimeAuth : homeAuth);
     }
     process.setProcessEnvironment(env);
     process.start("/usr/bin/scrot", QStringList() << outputPath);
