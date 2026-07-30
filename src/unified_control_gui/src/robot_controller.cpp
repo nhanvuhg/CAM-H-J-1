@@ -392,7 +392,23 @@ QString RobotController::captureScreenshot()
         env.insert("XAUTHORITY", QFile::exists(runtimeAuth) ? runtimeAuth : homeAuth);
     }
     process.setProcessEnvironment(env);
-    process.start("/usr/bin/scrot", QStringList() << outputPath);
+
+    QString captureProgram;
+    QStringList captureArguments;
+    if (QFile::exists("/usr/bin/gnome-screenshot")) {
+        captureProgram = "/usr/bin/gnome-screenshot";
+        captureArguments << "-f" << outputPath;
+    } else if (QFile::exists("/usr/bin/scrot")) {
+        captureProgram = "/usr/bin/scrot";
+        captureArguments << outputPath;
+    } else {
+        const QString message =
+            "Screenshot failed: gnome-screenshot/scrot is not installed";
+        qWarning() << message;
+        emit serviceCallResult(false, message);
+        return QString();
+    }
+    process.start(captureProgram, captureArguments);
 
     if (!process.waitForStarted(1000)) {
         const QString message = "Cannot start scrot";
