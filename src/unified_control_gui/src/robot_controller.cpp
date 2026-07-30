@@ -14,6 +14,7 @@
 #include <QProcessEnvironment>
 #include <QCoreApplication>
 #include <QStandardPaths>
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 #include <thread>
@@ -1320,10 +1321,9 @@ void RobotController::moveLinear(double x, double y, double z, double rx, double
 // MAINTAINER NOTE: Do not "simplify" this back to one native MovL/JointMovJ
 // request. Tests on the deployed Nova controller showed that those targets
 // remain queued after button release and can resume after STOP or ENABLE.
-// Pause also retains the target by design. The 33 ms Servo stream below is
-// intentional: stopping the timer is the only reliable hold-to-run behavior
-// with this firmware/ROS bridge while preserving linear Cartesian and
-// coordinated joint interpolation.
+// Pause also retains the target by design. Stopping the Servo stream is the
+// only reliable hold-to-run behavior with this firmware/ROS bridge while
+// preserving linear Cartesian and coordinated joint interpolation.
 // ═══════════════════════════════════════════════════════════════
 void RobotController::startSendMoveL(double x, double y, double z, double rx, double ry, double rz)
 {
@@ -1349,11 +1349,16 @@ void RobotController::startSendMoveL(double x, double y, double z, double rx, do
     send_motion_kind_ = 1;
     send_button_held_ = true;
     send_point_motion_active_ = true;
+    send_linear_ramp_ = 0.0;
+    send_step_clock_.restart();
     if (!send_timer_) {
         send_timer_ = new QTimer(this);
+        send_timer_->setTimerType(Qt::PreciseTimer);
         connect(send_timer_, &QTimer::timeout, this, &RobotController::sendHoldStep);
     }
-    send_timer_->start(33);
+    // 40 Hz gives ServoP smaller Cartesian increments than the legacy 30 Hz
+    // stream without pushing the Python ROS service bridge excessively hard.
+    send_timer_->start(25);
     qDebug() << "[SEND-L] ServoP linear target →" << x << y << z << rx << ry << rz;
     sendHoldStep();
 }
@@ -1384,6 +1389,7 @@ void RobotController::startSendMoveJ(double j1, double j2, double j3, double j4,
     send_point_motion_active_ = true;
     if (!send_timer_) {
         send_timer_ = new QTimer(this);
+        send_timer_->setTimerType(Qt::PreciseTimer);
         connect(send_timer_, &QTimer::timeout, this, &RobotController::sendHoldStep);
     }
     send_timer_->start(33);
@@ -1399,12 +1405,44 @@ void RobotController::sendHoldStep()
         return;
     }
 
+    if (send_motion_kind_ == 1 &&
+        (!servo_p_client_ || !servo_p_client_->service_is_ready())) {
+        return;
+    }
+    if (send_motion_kind_ == 2 &&
+        (!servo_j_client_ || !servo_j_client_->service_is_ready())) {
+        return;
+    }
+
     const double speedScale = std::max(0.05, speed_ratio_ / 100.0);
+    double timingScale = 1.0;
+    if (send_motion_kind_ == 1) {
+        // Compensate for GUI/render scheduling jitter. Clamp long stalls so a
+        // delayed frame can never create a large Cartesian catch-up jump.
+        constexpr double legacyPeriodSeconds = 0.033;
+        constexpr double nominalPeriodSeconds = 0.025;
+        constexpr double maxSafePeriodSeconds = 0.040;
+        const double measuredSeconds = send_step_clock_.isValid()
+            ? send_step_clock_.nsecsElapsed() * 1.0e-9
+            : nominalPeriodSeconds;
+        send_step_clock_.restart();
+        const double stepSeconds = std::clamp(
+            measuredSeconds, nominalPeriodSeconds * 0.5, maxSafePeriodSeconds);
+
+        // Short smooth-start ramp removes the initial velocity step while
+        // reaching the exact legacy top speed after roughly 180 ms.
+        send_linear_ramp_ = std::min(1.0, send_linear_ramp_ + stepSeconds / 0.18);
+        const double smoothRamp =
+            send_linear_ramp_ * send_linear_ramp_ * (3.0 - 2.0 * send_linear_ramp_);
+        timingScale = (stepSeconds / legacyPeriodSeconds) *
+                      (0.30 + 0.70 * smoothRamp);
+    }
+
     double ticksRemaining = 1.0;
     for (int i = 0; i < 6; ++i) {
         const double step = send_motion_kind_ == 2
                                 ? 0.6 * speedScale
-                                : (i < 3 ? 0.8 : 0.4) * speedScale;
+                                : (i < 3 ? 0.8 : 0.4) * speedScale * timingScale;
         ticksRemaining =
             std::max(ticksRemaining, std::abs(send_target_[i] - send_current_[i]) / step);
     }
@@ -1415,14 +1453,12 @@ void RobotController::sendHoldStep()
     }
 
     if (send_motion_kind_ == 1) {
-        if (!servo_p_client_ || !servo_p_client_->service_is_ready()) return;
         auto req = std::make_shared<dobot_msgs_v3::srv::ServoP::Request>();
         req->x = send_current_[0]; req->y = send_current_[1];
         req->z = send_current_[2]; req->rx = send_current_[3];
         req->ry = send_current_[4]; req->rz = send_current_[5];
         servo_p_client_->async_send_request(req);
     } else {
-        if (!servo_j_client_ || !servo_j_client_->service_is_ready()) return;
         auto req = std::make_shared<dobot_msgs_v3::srv::ServoJ::Request>();
         req->j1 = send_current_[0]; req->j2 = send_current_[1];
         req->j3 = send_current_[2]; req->j4 = send_current_[3];
@@ -1444,6 +1480,7 @@ void RobotController::stopSendMove()
     send_button_held_ = false;
     send_point_motion_active_ = false;
     send_motion_kind_ = 0;
+    send_linear_ramp_ = 0.0;
     if (send_timer_) send_timer_->stop();
     qDebug() << "[SEND] released; Servo stream stopped";
 }

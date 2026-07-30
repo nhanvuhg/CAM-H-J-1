@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QVariantList>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <chrono>
 #include "rclcpp/rclcpp.hpp"
 #include "std_srvs/srv/set_bool.hpp"
@@ -304,6 +305,8 @@ private:
     int send_motion_kind_{0};  // 0=none, 1=Cartesian ServoP, 2=joint ServoJ
     double send_current_[6]{0};
     double send_target_[6]{0};
+    QElapsedTimer send_step_clock_;
+    double send_linear_ramp_{0.0};
 
     void callServiceAsync(rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr client, bool value);
     void pollRobotState();
