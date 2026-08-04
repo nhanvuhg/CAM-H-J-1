@@ -33,6 +33,48 @@ class _NotConnected:
         return _stub
 
 
+class _RetryingDobotProxy:
+    """Serialize dashboard calls and turn transport failures into reconnects.
+
+    ROS service callbacks may run concurrently.  The Dobot dashboard protocol
+    is a single request/reply TCP stream, so all calls must share one lock.
+    When a send/receive fails (or the peer closes without a reply), the caller
+    gets the normal ``res=-1`` response while the node swaps back to the
+    _NotConnected stub.  The existing background loop then reconnects without
+    restarting this node, robot logic, or the GUI.
+    """
+
+    def __init__(self, api, on_disconnect):
+        self._api = api
+        self._on_disconnect = on_disconnect
+        self._call_lock = threading.Lock()
+
+    def __getattr__(self, name):
+        target = getattr(self._api, name)
+        if not callable(target):
+            return target
+
+        def _guarded(*args, **kwargs):
+            with self._call_lock:
+                try:
+                    result = target(*args, **kwargs)
+                    if not isinstance(result, str) or not result.strip():
+                        raise ConnectionError(
+                            f"empty/invalid Dobot reply for {name}"
+                        )
+                    return result
+                except Exception as error:
+                    self._on_disconnect(self, name, error)
+                    return f"-1,{{}},{name}();"
+        return _guarded
+
+    def close(self):
+        try:
+            self._api.close()
+        except Exception:
+            pass
+
+
 class adderServer(Node):
     def __init__(self, name):
         super().__init__(name)   
@@ -114,21 +156,40 @@ class adderServer(Node):
         self.srv = self.create_service(Pause, self.get_name() + '/Pause',self.Pause)
         # self.srv = self.create_service(Wait, self.get_name() + '/',self.Wait)
         # Init với stub — services ready ngay, không crash khi Dobot offline.
+        self._connection_lock = threading.Lock()
         self.dashboard = _NotConnected()
         self.move = _NotConnected()
         # Background reconnect: thử mỗi 5s tới khi connect được.
         threading.Thread(target=self._connect_loop, daemon=True, name="dobot_reconnect").start()
+
+    def _mark_disconnected(self, connection, command, error):
+        """Atomically retire only the connection that actually failed."""
+        retired = False
+        with self._connection_lock:
+            if self.dashboard is connection:
+                self.dashboard = _NotConnected()
+                self.move = _NotConnected()
+                retired = True
+        if retired:
+            connection.close()
+            self.get_logger().warn(
+                f"⚠️ Dobot command channel lost during {command}: {error}; "
+                "background reconnect active"
+            )
 
     def _connect_loop(self):
         """Background loop — connect Dobot khi online, retry mỗi 5s khi offline.
         Khi connect thành công, swap self.dashboard + self.move từ stub sang
         instance thật → tất cả service handler tự động hoạt động không cần sửa."""
         while rclpy.ok():
-            if not isinstance(self.dashboard, _NotConnected):
-                # Đã connect → idle, để service handler tự dùng. Chu kỳ này
-                # không ping vì DobotApi không có lightweight heartbeat;
-                # disconnect sẽ được phát hiện khi service call fail.
-                time.sleep(10)
+            with self._connection_lock:
+                current = self.dashboard
+            if isinstance(current, _RetryingDobotProxy):
+                # Lightweight heartbeat also detects a cable/controller loss
+                # while the production state machine is idle.  Proxy locking
+                # prevents it from interleaving with a ROS service request.
+                current.RobotMode()
+                time.sleep(5)
                 continue
             try:
                 self.get_logger().info(f"⏳ Dobot connect attempt: {self.IP}:29999")
@@ -138,22 +199,32 @@ class adderServer(Node):
                 time.sleep(5)
                 continue
 
-            # Connected — Stop → ClearError → EnableRobot.
-            for label, fn in (
-                ("Stop", lambda: d.sendRecvMsg("Stop()")),
-                ("ClearError", d.ClearError),
-                ("EnableRobot", d.EnableRobot),
-                ("RobotMode", d.RobotMode),
-            ):
-                try:
+            try:
+                # Connected — Stop → ClearError → EnableRobot.  A late
+                # connection always starts from a known stopped state; retry
+                # never resumes old motion implicitly.
+                for label, fn in (
+                    ("Stop", lambda: d.sendRecvMsg("Stop()")),
+                    ("ClearError", d.ClearError),
+                    ("EnableRobot", d.EnableRobot),
+                    ("RobotMode", d.RobotMode),
+                ):
                     self.get_logger().info(f"{label}: {fn()}")
                     if label in ("Stop", "EnableRobot"):
                         time.sleep(1 if label == "Stop" else 2)
-                except Exception as e:
-                    self.get_logger().warn(f"⚠️ {label} failed: {e}")
+            except Exception as e:
+                d.close()
+                self.get_logger().warn(
+                    f"⏳ Dobot handshake failed, retry 5s: {e}"
+                )
+                time.sleep(5)
+                continue
 
-            self.dashboard = d
-            self.move = d  # new firmware: motion shares dashboard port 29999
+            connection = _RetryingDobotProxy(d, self._mark_disconnected)
+            with self._connection_lock:
+                self.dashboard = connection
+                # New firmware: motion shares dashboard port 29999.
+                self.move = connection
             self.get_logger().info(f"✅ Dobot {self.IP} connected (29999)")
 
     def _parse_error_code(self, return_t):

@@ -108,8 +108,14 @@ class fankuis():
     
     def feed(self):
         try:
-            self.socket_feedback.setblocking(True)
+            # Keep the 1s timeout configured in __init__.  setblocking(True)
+            # used to remove it, so a silent feedback port could freeze the
+            # ROS timer forever and never reach the reconnect threshold.
+            self.socket_feedback.settimeout(1.0)
             self.all = self.socket_feedback.recv(10240)
+            if not self.all:
+                print("Feedback socket closed by peer")
+                return ["NG"]
             if len(self.all) < 1440:
                 print("Received packet too short:", len(self.all))
                 return ["NG"]

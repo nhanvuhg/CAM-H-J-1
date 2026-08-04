@@ -13,16 +13,22 @@ class DobotApi:
             self.socket_dobot = existing_socket
         elif self.port == 29999:
             self.socket_dobot = socket.socket()
+            # Keep an offline controller from pinning the background reconnect
+            # thread in connect()/recv() for minutes.  sendRecvMsg() preserves
+            # this timeout after flushing stale bytes.
+            self.socket_dobot.settimeout(3.0)
             self.socket_dobot.connect((self.ip, self.port))
         else:
             print(f"Connect to server need use port 29999! (got {self.port})")
 
     def send_data(self, string):
         print(string)
-        self.socket_dobot.send(str.encode(string, 'utf-8'))
+        self.socket_dobot.sendall(str.encode(string, 'utf-8'))
 
     def wait_reply(self):
         data = self.socket_dobot.recv(1024)
+        if not data:
+            raise ConnectionError("Dobot command socket closed by peer")
         data_str = str(data, encoding="utf-8")
         return data_str
 
@@ -35,13 +41,17 @@ class DobotApi:
 
     def sendRecvMsg(self, string):
         # Flush any stale data in receive buffer before sending
+        previous_timeout = self.socket_dobot.gettimeout()
         self.socket_dobot.setblocking(False)
         try:
             while True:
                 self.socket_dobot.recv(1024)
-        except:
+        except (BlockingIOError, socket.timeout):
             pass
-        self.socket_dobot.setblocking(True)
+        finally:
+            # setblocking(True) used to silently remove the socket timeout,
+            # making a disconnected controller hang a ROS service forever.
+            self.socket_dobot.settimeout(previous_timeout)
         self.send_data(string)
         return self.wait_reply()
 

@@ -82,6 +82,7 @@ sys.modules['cpx_io.cpx_system.cpx_ap.cpx_ap'] = _cpx_driver
 # Now we can safely import our modules
 from config import SystemConfig
 from cartridge_providesystem_py_node import (
+    CartridgeSystem,
     SystemState,
     S1_BELT_START, S2_BELT_MID, S3_BELT_END,
     S7_TRAY_AT_ROBOT, S9_CYL1_RETRACTED, S10_CYL1_EXTENDED,
@@ -89,6 +90,41 @@ from cartridge_providesystem_py_node import (
     S25_CYL4_RETRACTED, S26_CYL4_EXTENDED,
     S27_CYL5_RETRACTED, S28_CYL5_EXTENDED,
 )
+
+
+class TestHardwareReconnectSupervisors:
+    """Offline-at-startup drivers must be retried without rebuilding a node."""
+
+    def test_io_supervisor_retries_until_module_appears(self, monkeypatch):
+        node = CartridgeSystem.__new__(CartridgeSystem)
+        node.io_module = None
+        node.io_module_2 = None
+        node._io_bg_lock = threading.Lock()
+        node._pos_thread_stop = False
+        node.get_logger = MagicMock(return_value=MagicMock())
+
+        calls = []
+
+        def connect_once(idx, ip, attempts=1):
+            calls.append((idx, ip, attempts))
+            if len(calls) == 2:
+                node.io_module = object()
+                return True
+            return False
+
+        node._connect_io = connect_once
+        # Two supervisor iterations: first offline, second connected.
+        _rclpy_mock.ok.side_effect = [True, True, False]
+        monkeypatch.setattr(time, 'sleep', lambda _seconds: None)
+
+        node._io_supervisor_one(1, '172.16.11.37')
+
+        assert calls == [
+            (1, '172.16.11.37', 1),
+            (1, '172.16.11.37', 1),
+        ]
+        assert node.io_module is not None
+        _rclpy_mock.ok.side_effect = None
 
 
 # ══════════════════════════════════════════════════════════════════

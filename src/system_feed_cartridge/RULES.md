@@ -50,21 +50,21 @@ Tất cả sub-state trong S1, S2A, S3, S4 có pattern `elif self._arrived(...)`
 Trong `_connect_hardware()`:
 
 ```python
-threads = []
 for sid, ip in self.config.servo_ips.items():
-    t = threading.Thread(target=self._connect_servo, ...)
-    threads.append(t)
-threads.append(threading.Thread(target=self._connect_io, args=(1, ...)))
-threads.append(threading.Thread(target=self._connect_io, args=(2, ...)))
-for t in threads: t.start()
-for t in threads: t.join(timeout=15)
+    threading.Thread(target=self._connect_servo, ...).start()
+threading.Thread(target=self._io_supervisor_one, args=(1, ...)).start()
+threading.Thread(target=self._io_supervisor_one, args=(2, ...)).start()
 ```
 
-Tất cả 5 servo + 2 IO module connect đồng thời. Tổng thời gian = thời gian thiết bị chậm nhất (~3s nếu offline, <1s nếu online).
+Tất cả 5 servo + 2 IO module connect đồng thời và **không join** vào ROS
+control loop. Mỗi servo có monitor riêng; mỗi IO có supervisor riêng retry vô
+hạn với backoff. Thiết bị bật nguồn sau `start_all.sh` phải tự xuất hiện mà
+không restart node/GUI.
 
 ### RỦI RO
 - Quay về tuần tự → GUI chậm, người dùng nhấn restart nhiều lần → race condition với `_servo_reconnect_loop`.
-- Quên `join(timeout=15)` → main thread chạy trước khi tất cả thiết bị connect → motion command đầu fail.
+- Join các thread connect → phần cứng offline làm chậm control loop/GUI.
+- Chỉ retry hữu hạn lúc startup → thiết bị bật trễ không bao giờ được nhận lại.
 
 ---
 
@@ -443,7 +443,9 @@ Lắp đặt thực tế tuần tự: Pos1 chạy production trước, Pos2 lắ
 - 2 nhánh try/except riêng cho module 1 và 2
 - Cache riêng: `_io_sensor_cache` vs `_io_sensor_cache_2`
 - Ready flag riêng: `_io_ready` vs `_io_ready_2`
-- Reconnect thread độc lập: `_reconnect_io1()` / `_reconnect_io2()`
+- Supervisor độc lập chạy suốt đời node: `_io_supervisor_one(1, ...)` /
+  `_io_supervisor_one(2, ...)`; `_io_bg_loop` chỉ đánh dấu module lỗi về `None`
+  để đúng supervisor kết nối lại.
 
 Sensor lookup `_sensor_raw` chia theo sid:
 - sid 1-16 → module 1

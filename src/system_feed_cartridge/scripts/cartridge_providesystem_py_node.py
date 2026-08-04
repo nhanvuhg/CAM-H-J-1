@@ -601,14 +601,17 @@ class CartridgeSystem(Node):
             self.get_logger().warn("Simulation mode (edcon not installed)")
 
         if CPXAP_AVAILABLE:
+            # One permanent supervisor per module.  Unlike the previous
+            # three-shot startup connect, these loops keep retrying when a CPX
+            # is powered after start_all.sh and also recover runtime drops.
             threading.Thread(
-                target=self._connect_io, args=(1, self.config.io_ip),
-                daemon=True, name="connect_io1",
+                target=self._io_supervisor_one, args=(1, self.config.io_ip),
+                daemon=True, name="io_supervisor_1",
             ).start()
             io2_ip = getattr(self.config, 'io_ip_2', "172.16.11.41")
             threading.Thread(
-                target=self._connect_io, args=(2, io2_ip),
-                daemon=True, name="connect_io2",
+                target=self._io_supervisor_one, args=(2, io2_ip),
+                daemon=True, name="io_supervisor_2",
             ).start()
             # Start IO read loop unconditionally — it no-ops while io_module
             # is None and picks up automatically once a connect thread succeeds.
@@ -619,9 +622,13 @@ class CartridgeSystem(Node):
                 "valve and sensor reads are disabled"
             )
 
-    def _connect_io(self, idx: int, ip: str):
+    def _connect_io(self, idx: int, ip: str, attempts: int = 1) -> bool:
         """
-        Kết nối đến IO Module Festo CPX-AP qua EtherNet/IP (tối đa 3 lần thử).
+        Thử kết nối IO Module Festo CPX-AP qua EtherNet/IP.
+
+        Hàm này chỉ thực hiện số lần hữu hạn để không giữ thread quá lâu.
+        `_io_supervisor_one()` là vòng retry vô hạn, có backoff và độc lập cho
+        từng module.
         idx=1 → Module chính (S1–S16, valve cylinder 1/3, gripper, picker)
         idx=2 → Module phụ output side (S17–S28, valve cylinder 2/4/5)
         Khi kết nối Module 1 thành công:
@@ -629,7 +636,8 @@ class CartridgeSystem(Node):
           2. Smart init Cyl3 theo sensor thực tế S6/S15/S16 (nếu cyl3_present=true).
           Cyl1/Cyl2 GIỮ NGUYÊN state (không reset — RULE 16 chốt workflow Pos1).
         """
-        for attempt in range(1, 4):
+        attempts = max(1, int(attempts))
+        for attempt in range(1, attempts + 1):
             try:
                 # cycle_time=None → tắt IOThread background của CpxAp (mặc định
                 # refresh diagnosis_status mỗi 10ms). Chúng ta không dùng diagnosis
@@ -637,33 +645,73 @@ class CartridgeSystem(Node):
                 # _io_bg_loop read_channels và state machine write_channels.
                 mod = CpxAp(ip_address=ip, cycle_time=None)
                 if idx == 1:
-                    self.io_module = mod
-                    valve = self._io1_valve_module_locked()
+                    valve = self._valve_module_from_cpx(mod)
                     valve_desc = (f"{getattr(valve, 'name', '?')}@"
                                   f"{getattr(valve, 'position', '?')}") if valve else 'NONE'
+                    with self._io_bg_lock:
+                        self.io_module = mod
                     self.get_logger().info(
                         f"Connected CPX IO Module 1. VALVE={valve_desc}. "
                         "Keeping valve states unchanged (only read)."
                     )
                 else:
-                    self.io_module_2 = mod
                     di_desc = [
                         f"{getattr(m, 'name', '?')}@{getattr(m, 'position', '?')}"
-                        for m in self._io2_di_modules_locked()
+                        for m in self._io2_di_modules_from_cpx(mod)
                     ]
-                    valve = self._io2_valve_module_locked()
+                    valve = self._valve_module_from_cpx(mod)
                     valve_desc = (f"{getattr(valve, 'name', '?')}@"
                                   f"{getattr(valve, 'position', '?')}") if valve else 'NONE'
+                    with self._io_bg_lock:
+                        self.io_module_2 = mod
                     self.get_logger().info(
                         f"IO 2 mapping: DI={di_desc} | VALVE={valve_desc}"
                     )
                 self.get_logger().info(f"IO {idx} {ip} OK")
-                return
+                return True
             except Exception as e:
-                self.get_logger().warn(f"IO {idx} attempt {attempt}/3: {e}")
-                if attempt < 3:
+                with self._io_bg_lock:
+                    if idx == 1:
+                        self.io_module = None
+                        self._io_ready = False
+                    else:
+                        self.io_module_2 = None
+                        self._io_ready_2 = False
+                self.get_logger().warn(
+                    f"IO {idx} {ip} attempt {attempt}/{attempts}: {e}"
+                )
+                if attempt < attempts:
                     time.sleep(3.0)
-        self.get_logger().error(f"IO {idx} module failed — sensor reads will be False")
+        return False
+
+    def _io_supervisor_one(self, idx: int, ip: str):
+        """Retry one CPX forever without blocking the other devices or ROS.
+
+        Backoff is capped at 15s so a module powered on later is discovered
+        promptly, while an intentionally absent optional module does not flood
+        logs.  Reconnection only restores the driver/cache; it never writes a
+        valve or resumes motion automatically.
+        """
+        retry_delay = 5.0
+        while rclpy.ok() and not getattr(self, '_pos_thread_stop', False):
+            with self._io_bg_lock:
+                module = self.io_module if idx == 1 else self.io_module_2
+            if module is None:
+                if self._connect_io(idx, ip, attempts=1):
+                    retry_delay = 5.0
+                    self.get_logger().info(
+                        f"IO {idx} supervisor: connected; background monitoring active"
+                    )
+                else:
+                    self.get_logger().warn(
+                        f"IO {idx} {ip} offline — retry in {retry_delay:.0f}s"
+                    )
+                    time.sleep(retry_delay)
+                    retry_delay = min(15.0, retry_delay * 2.0)
+                    continue
+            else:
+                retry_delay = 5.0
+            time.sleep(1.0)
 
     def _init_cyl3_state(self):
         """
@@ -995,9 +1043,8 @@ class CartridgeSystem(Node):
                         if fail1 >= 3:
                             with self._io_bg_lock:
                                 self._io_ready = False
-                            self.io_module = None
+                                self.io_module = None
                             self.get_logger().warn(f"[IO-bg 1] reconnecting: {e}")
-                            threading.Thread(target=self._reconnect_io1, daemon=True).start()
 
                 elif module_idx == 2 and self.io_module_2 is not None:
                     try:
@@ -1012,22 +1059,26 @@ class CartridgeSystem(Node):
                         if fail2 >= 3:
                             with self._io_bg_lock:
                                 self._io_ready_2 = False
-                            self.io_module_2 = None
+                                self.io_module_2 = None
                             self.get_logger().warn(f"[IO-bg 2] reconnecting: {e}")
-                            threading.Thread(target=self._reconnect_io2, daemon=True).start()
 
             time.sleep(fast_s18_period if s18_critical else poll_period)
 
-    def _io2_di_modules_locked(self) -> list:
-        """Return CPX41 8DI modules in physical rack-position order."""
-        if self.io_module_2 is None:
+    @staticmethod
+    def _io2_di_modules_from_cpx(cpx) -> list:
+        """Return a CPX41's 8DI modules in physical rack-position order."""
+        if cpx is None:
             return []
         modules = []
-        for mod in self.io_module_2.modules:
+        for mod in cpx.modules:
             name = str(getattr(mod, 'name', '')).lower()
             if mod.is_function_supported("read_channels") and "8di" in name:
                 modules.append(mod)
         return sorted(modules, key=lambda mod: int(getattr(mod, 'position', 999)))
+
+    def _io2_di_modules_locked(self) -> list:
+        """Return CPX41 8DI modules in physical rack-position order."""
+        return self._io2_di_modules_from_cpx(self.io_module_2)
 
     @staticmethod
     def _valve_module_from_cpx(cpx):
@@ -1089,20 +1140,6 @@ class CartridgeSystem(Node):
         if now is None:
             now = time.time()
         return now <= self._sensor_latch_until.get(sid, 0.0)
-
-    def _reconnect_io1(self):
-        """Reconnect IO Module 1 sau 5s delay (tránh flood nếu lỗi liên tục)."""
-        time.sleep(5.0)
-        try:
-            self.io_module = CpxAp(ip_address=self.config.io_ip, cycle_time=None)
-        except Exception: pass
-
-    def _reconnect_io2(self):
-        """Reconnect IO Module 2 sau 5s delay."""
-        time.sleep(5.0)
-        try:
-            self.io_module_2 = CpxAp(ip_address=getattr(self.config, 'io_ip_2', "172.16.11.41"), cycle_time=None)
-        except Exception: pass
 
     # ── Sensor read ───────────────────────────────────────────────
 
