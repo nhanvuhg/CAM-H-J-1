@@ -15,6 +15,10 @@ Item {
     property string pendingStartMode: ""
     property string pendingStartUiMode: ""
     property bool pauseLatched: false
+    // Continuous shimmer forces the software-rendered Qt scene graph to draw
+    // at display refresh rate. Keep production bars static; their values and
+    // colors still update normally.
+    property bool decorativeAnimationsEnabled: false
 
     readonly property color cPanel:       "#990d1e32"
     readonly property color cPanel2:      "#8806101d"
@@ -1495,12 +1499,9 @@ Item {
                         GradientStop { position: 1.0; color: pressureFillEnd(cls) }
                     }
 
-                    onWidthChanged: {
-                        pcShimmerAnim.restart()
-                    }
-
                     Rectangle {
                         id: pcBarShimmer
+                        visible: cameraPageRoot.decorativeAnimationsEnabled
                         height: parent.height
                         width: 160
                         gradient: Gradient {
@@ -1519,7 +1520,8 @@ Item {
                             to: pcFilledBar.width
                             duration: 2600 + cardIndex * 300
                             loops: Animation.Infinite
-                            running: pcFilledBar.width > 0
+                            running: cameraPageRoot.decorativeAnimationsEnabled
+                                     && pcFilledBar.width > 0
                         }
                     }
                 }
@@ -1619,12 +1621,9 @@ Item {
                         GradientStop { position: 1.0; color: pressureFillEnd(cls) }
                     }
 
-                    onWidthChanged: {
-                        cartShimmerAnim.restart()
-                    }
-
                     Rectangle {
                         id: cartBarShimmer
+                        visible: cameraPageRoot.decorativeAnimationsEnabled
                         height: parent.height
                         width: 160
                         gradient: Gradient {
@@ -1643,7 +1642,8 @@ Item {
                             to: cartFilledBar.width
                             duration: 2600 + cartIndex * 300
                             loops: Animation.Infinite
-                            running: cartFilledBar.width > 0
+                            running: cameraPageRoot.decorativeAnimationsEnabled
+                                     && cartFilledBar.width > 0
                         }
                     }
                 }

@@ -7,8 +7,10 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <QVariantList>
 #include <QStringList>
+#include <array>
 #include <thread>
 #include <atomic>
+#include <cstdint>
 #include "cam_provider.hpp"
 
 class CamNode : public QObject, public rclcpp::Node {
@@ -34,6 +36,7 @@ signals:
     void availableTopicsChanged(QStringList topics);  // emitted async from bg thread
 
 private:
+    bool shouldProcessFrame(std::size_t cameraIndex);
     void saveTopicsToFile();
     std::vector<std::string> loadTopicsFromFile();
 
@@ -45,6 +48,8 @@ private:
     QVariantList cameraList_;
     QQmlApplicationEngine *engine_;
     int maxCameras_ = 4;
+    int displayFps_ = 10;
+    std::array<std::atomic<std::int64_t>, 4> lastDisplayFrameNs_{};
     std::string configFilePath_ = "";
     std::atomic<bool> fetchingTopics_{false};  // prevent concurrent fetches
     std::thread discoveryThread_;              // joined in dtor — không detach

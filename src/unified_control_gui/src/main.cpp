@@ -3,6 +3,7 @@
 #include <QQmlContext>
 #include <QDir>
 #include <QFileInfo>
+#include <QTimer>
 #include "unified_control_gui/cam_node.hpp"
 #include "unified_control_gui/robot_controller.hpp"
 #include "unified_control_gui/cartridge_controller.hpp"
@@ -66,6 +67,17 @@ int main(int argc, char *argv[])
     std::thread hpRosThread([=]() {
         rclcpp::spin(hpNode);
     });
+
+    // rclcpp catches SIGINT/SIGTERM and marks its context as stopped, but that
+    // alone does not end Qt's event loop. Poll from the GUI thread so service
+    // managers and the launcher can stop the GUI gracefully without SIGKILL.
+    QTimer rosShutdownTimer;
+    QObject::connect(&rosShutdownTimer, &QTimer::timeout, &app, [&app]() {
+        if (!rclcpp::ok()) {
+            app.quit();
+        }
+    });
+    rosShutdownTimer.start(200);
 
     // Shutdown ordering:
     //   1. app.exec() returns khi QML window đóng.

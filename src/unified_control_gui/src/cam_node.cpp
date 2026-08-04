@@ -4,7 +4,9 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/image_encodings.hpp>
+#include <chrono>
 #include <fstream>
+#include <stdexcept>
 #include <sys/stat.h>
 
 namespace
@@ -24,6 +26,11 @@ QString cameraDisplayName(const QString &topic, int fallbackIndex)
 
 CamNode::CamNode(QQmlApplicationEngine &engine)
     : QObject(), rclcpp::Node("qml_cam_node_hp"), engine_(&engine) {
+    displayFps_ = declare_parameter<int>("display_fps", 10);
+    if (displayFps_ < 1 || displayFps_ > 30) {
+        throw std::invalid_argument("display_fps must be in range 1..30");
+    }
+
     // Set config file path
     const char* home = std::getenv("HOME");
     if (home) {
@@ -44,6 +51,11 @@ CamNode::CamNode(QQmlApplicationEngine &engine)
         engine_->addImageProvider(providerId, provider);  // engine TAKES OWNERSHIP
         providers_.push_back(provider);
     }
+
+    RCLCPP_INFO(
+        this->get_logger(),
+        "Camera display processing limited to %d FPS per feed",
+        displayFps_);
 }
 
 CamNode::~CamNode()
@@ -67,6 +79,10 @@ void CamNode::setup(const std::vector<std::string> &topics)
 
     cameraList_.clear();
 
+    for (auto &timestamp : lastDisplayFrameNs_) {
+        timestamp.store(0, std::memory_order_relaxed);
+    }
+
     for (size_t i = 0; i < limitedTopics.size(); ++i)
     {
         QString providerId = QString("cam_%1").arg(i);
@@ -76,11 +92,14 @@ void CamNode::setup(const std::vector<std::string> &topics)
         // race: nếu vector bị resize (về sau), index có thể trỏ sai. Pointer thì stable.
         auto sub = this->create_subscription<sensor_msgs::msg::Image>(
             limitedTopics[i], rclcpp::SensorDataQoS().keep_last(1),
-            [this, provider](const std::shared_ptr<const sensor_msgs::msg::Image> &msg)
+            [this, provider, i](const std::shared_ptr<const sensor_msgs::msg::Image> &msg)
             {
+                if (!shouldProcessFrame(i)) {
+                    return;
+                }
                 try
                 {
-                    auto cvimg = cv_bridge::toCvCopy(msg, "bgr8")->image;
+                    const auto cvimg = cv_bridge::toCvShare(msg, "bgr8")->image;
                     QImage qimg(cvimg.data, cvimg.cols, cvimg.rows, cvimg.step, QImage::Format_BGR888);
                     provider->setImage(qimg.copy());
                 }
@@ -101,6 +120,24 @@ void CamNode::setup(const std::vector<std::string> &topics)
     }
 
     emit cameraListChanged();
+}
+
+bool CamNode::shouldProcessFrame(std::size_t cameraIndex)
+{
+    if (cameraIndex >= lastDisplayFrameNs_.size()) {
+        return false;
+    }
+
+    const auto nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    const std::int64_t minimumIntervalNs = 1000000000LL / displayFps_;
+    auto previousNs = lastDisplayFrameNs_[cameraIndex].load(std::memory_order_relaxed);
+    if (nowNs - previousNs < minimumIntervalNs) {
+        return false;
+    }
+
+    lastDisplayFrameNs_[cameraIndex].store(nowNs, std::memory_order_relaxed);
+    return true;
 }
 
 QStringList CamNode::getAvailableImageTopics()
@@ -165,15 +202,20 @@ void CamNode::updateCameraTopic(int index, const QString &newTopic)
     }
 
     subs_[index].reset();
+    lastDisplayFrameNs_[static_cast<std::size_t>(index)].store(
+        0, std::memory_order_relaxed);
 
     CamProvider *provider = providers_[index];  // pointer stable
     auto sub = this->create_subscription<sensor_msgs::msg::Image>(
         newTopic.toStdString(), rclcpp::SensorDataQoS().keep_last(1),
-        [this, provider](const std::shared_ptr<const sensor_msgs::msg::Image> &msg)
+        [this, provider, index](const std::shared_ptr<const sensor_msgs::msg::Image> &msg)
         {
+            if (!shouldProcessFrame(static_cast<std::size_t>(index))) {
+                return;
+            }
             try
             {
-                auto cvimg = cv_bridge::toCvCopy(msg, "bgr8")->image;
+                const auto cvimg = cv_bridge::toCvShare(msg, "bgr8")->image;
                 QImage qimg(cvimg.data, cvimg.cols, cvimg.rows, cvimg.step, QImage::Format_BGR888);
                 provider->setImage(qimg.copy());
             }
