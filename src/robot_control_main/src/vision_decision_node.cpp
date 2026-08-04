@@ -442,6 +442,7 @@ private:
     // ========================================================================
     // OUTPUT TRAY STATE
     // ========================================================================
+    ROIQuad output_tray_outer_roi_;
     std::array<ROIQuad, N_OUTPUT_SLOTS> output_tray_rois_;
     std::array<SlotStableState, N_OUTPUT_SLOTS> slot_stable_state_;
     std::array<int, N_OUTPUT_SLOTS> slot_empty_streak_;
@@ -499,12 +500,10 @@ private:
     // ========================================================================
     // INITIALIZATION
     // ========================================================================
-    // ROIs live in config/vision_roi.yaml, picked on the raw camera image
-    // (640x480 — the exact space YOLO bboxes are published in). The file
-    // records ref_width/ref_height; we scale to image_width/image_height so a
-    // future camera output change is one param edit instead of a re-pick gone
-    // silently stale. The 2026-06 regression came from ROIs hardcoded at
-    // 1280x720 outliving a camera switch to 640x480.
+    // ROIs live in config/vision_roi.yaml and retain the original 640x480
+    // picking coordinates. The file records ref_width/ref_height; we scale
+    // them to the current 640x360 camera/bbox space so the 16:9 output does
+    // not require manually picking every ROI again.
     ROIQuad quadFromYaml(const YAML::Node& n, double sx, double sy) {
         if (!n.IsSequence() || n.size() != 4)
             throw std::runtime_error("ROI phai co dung 4 goc");
@@ -523,7 +522,7 @@ private:
             + "/config/vision_roi.yaml";
         const std::string path = declare_parameter<std::string>("roi_config", default_path);
         const int img_w = declare_parameter<int>("image_width", 640);
-        const int img_h = declare_parameter<int>("image_height", 480);
+        const int img_h = declare_parameter<int>("image_height", 360);
 
         slot_stable_state_.fill(SlotStableState::EMPTY);
         slot_empty_streak_.fill(0);
@@ -547,6 +546,8 @@ private:
             for (const auto& row : cfg["input_tray"]["rows"])
                 input_tray_rois_.push_back(quadFromYaml(row, sx, sy));
 
+            output_tray_outer_roi_ =
+                quadFromYaml(cfg["output_tray"]["outer"], sx, sy);
             size_t n_slots = 0;
             for (const auto& slot : cfg["output_tray"]["slots"]) {
                 if (n_slots >= N_OUTPUT_SLOTS) break;
@@ -570,7 +571,7 @@ private:
             }
 
             RCLCPP_INFO(get_logger(),
-                "[VISION] ROI loaded: outer + %zu rows + %zu/%zu slots tu %s",
+                "[VISION] ROI loaded: 2 outer + %zu rows + %zu/%zu slots tu %s",
                 input_tray_rois_.size(), n_slots, N_OUTPUT_SLOTS, path.c_str());
         } catch (const std::exception& e) {
             // Fail-safe on trung tinh: khong row -> khong bao gio chon row;
@@ -581,6 +582,7 @@ private:
                 path.c_str(), e.what());
             input_tray_rois_.clear();
             input_tray_outer_roi_ = ROIQuad{};
+            output_tray_outer_roi_ = ROIQuad{};
             slot_stable_state_.fill(SlotStableState::OCC_OK);
             addRoiError(std::string("KHONG load duoc — vision bi khoa: ") + e.what());
         }
@@ -832,13 +834,23 @@ private:
         // Layer 1: model cam1 co 3 class, class 0 la toan bo output tray.
         // Khong co tray thi TUYET DOI khong duoc suy ra "10 slot trong" tu
         // viec khong thay cartridge — robot se dat vao khoang trong khong co khay.
+        // Tam class-0 phai nam trong outer ROI; model thinh thoang nhan nham
+        // ong/tui toi mau o mep phai thanh tray voi confidence > 0.60.
         bool raw_tray_present = false;
         for (const auto& det : msg->detections) {
             if (det.results.empty()) continue;
             const auto& h = det.results[0].hypothesis;
             if (h.class_id == "0" && h.score >= DETECTION_SCORE_THRESH) {
-                raw_tray_present = true;
-                break;
+                const float cx =
+                    static_cast<float>(det.bbox.center.position.x);
+                const float cy =
+                    static_cast<float>(det.bbox.center.position.y);
+                if (output_tray_outer_roi_.bbox_contains(cx, cy) &&
+                    output_tray_outer_roi_.contains(cx, cy))
+                {
+                    raw_tray_present = true;
+                    break;
+                }
             }
         }
 

@@ -1148,7 +1148,7 @@ private:
         if (!wait(0.2)) return false;
         if (!moveToIndex(32)) return false;
         if (!setDigitalOutput(6, false)) return false; //2 kẹp cartridge
-        if (!wait(2.5)) return false;
+        if (!wait(3.3)) return false;
         if (!setDigitalOutput(6, true)) return false;  //3 nhả cartridge
         if (!moveToIndex(12)) return false; 
         if (!moveR(0, 0, -59.5,5)) return false;

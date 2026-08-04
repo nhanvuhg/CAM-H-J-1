@@ -7,6 +7,21 @@
 #include <fstream>
 #include <sys/stat.h>
 
+namespace
+{
+QString cameraDisplayName(const QString &topic, int fallbackIndex)
+{
+    // Camera roles are tied to their ROS namespaces, not to the order in which
+    // topics happen to be discovered or selected in the settings page.
+    if (topic.contains(QStringLiteral("/cam0HP/")))
+        return QStringLiteral("CAM0 - INPUT");
+    if (topic.contains(QStringLiteral("/cam1HP/")))
+        return QStringLiteral("CAM1 - OUTPUT");
+
+    return QString("Camera %1").arg(fallbackIndex + 1);
+}
+}  // namespace
+
 CamNode::CamNode(QQmlApplicationEngine &engine)
     : QObject(), rclcpp::Node("qml_cam_node_hp"), engine_(&engine) {
     // Set config file path
@@ -60,7 +75,7 @@ void CamNode::setup(const std::vector<std::string> &topics)
         // Capture provider POINTER trực tiếp (không capture i rồi tra vector) — tránh
         // race: nếu vector bị resize (về sau), index có thể trỏ sai. Pointer thì stable.
         auto sub = this->create_subscription<sensor_msgs::msg::Image>(
-            limitedTopics[i], 10,
+            limitedTopics[i], rclcpp::SensorDataQoS().keep_last(1),
             [this, provider](const std::shared_ptr<const sensor_msgs::msg::Image> &msg)
             {
                 try
@@ -77,9 +92,10 @@ void CamNode::setup(const std::vector<std::string> &topics)
 
         subs_.push_back(sub);
 
+        const QString topic = QString::fromStdString(limitedTopics[i]);
         QVariantMap cam;
-        cam["name"] = QString("Camera %1").arg(i + 1);
-        cam["topic"] = QString::fromStdString(limitedTopics[i]);
+        cam["name"] = cameraDisplayName(topic, static_cast<int>(i));
+        cam["topic"] = topic;
         cam["providerId"] = providerId;
         cameraList_.append(cam);
     }
@@ -152,7 +168,7 @@ void CamNode::updateCameraTopic(int index, const QString &newTopic)
 
     CamProvider *provider = providers_[index];  // pointer stable
     auto sub = this->create_subscription<sensor_msgs::msg::Image>(
-        newTopic.toStdString(), 10,
+        newTopic.toStdString(), rclcpp::SensorDataQoS().keep_last(1),
         [this, provider](const std::shared_ptr<const sensor_msgs::msg::Image> &msg)
         {
             try
@@ -170,6 +186,7 @@ void CamNode::updateCameraTopic(int index, const QString &newTopic)
     subs_[index] = sub;
 
     QVariantMap cam = cameraList_[index].toMap();
+    cam["name"] = cameraDisplayName(newTopic, index);
     cam["topic"] = newTopic;
     cameraList_[index] = cam;
 
@@ -268,12 +285,12 @@ void CamNode::loadTopicSelections()
         RCLCPP_INFO(this->get_logger(), "Restored camera topics from config");
     } else {
         // This production system always has two fixed Jetson CSI feeds.
-        // DDS discovery can still be incomplete while Argus is starting, so
-        // auto-discovery here used to bind only one camera intermittently.
-        setup({"/cam0HP/image_raw", "/cam1HP/image_raw"});
+        // Keep the two production topics fixed while DDS discovery settles;
+        // auto-discovery used to bind only one camera intermittently.
+        setup({"/cam0HP/image_overlay", "/cam1HP/image_overlay"});
         saveTopicsToFile();
         RCLCPP_INFO(
             this->get_logger(),
-            "Using fixed Jetson camera topics: /cam0HP/image_raw, /cam1HP/image_raw");
+            "Using fixed Jetson AI topics: /cam0HP/image_overlay, /cam1HP/image_overlay");
     }
 }

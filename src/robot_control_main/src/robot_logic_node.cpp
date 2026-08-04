@@ -1849,10 +1849,21 @@ void RobotLogicNode::resetStateCallback(
     current_state_  = SystemState::IDLE;
     is_first_batch_ = true;
 
-    // Row tracking and Tray flags are INTENTIONALLY PRESERVED during a soft reset.
-    // This allows the operator to STOP and START without losing the current row
-    // and without the robot falsely assuming the hardware trays were removed.
-    // If the operator wishes to change rows, they can do so via the GUI while stopped.
+    // STOP is a new row-selection boundary.  The GUI already clears its local
+    // highlight, so clear the authoritative backend state as well; otherwise
+    // current_auto_row_ / operator_explicitly_set_row_ can silently reuse the
+    // row chosen before STOP on the next START or new-tray event.
+    {
+        std::lock_guard<std::mutex> lock(row_selection_mutex_);
+        selected_input_row_ = ROW_UNSET;
+        current_auto_row_ = ROW_UNSET;
+        operator_explicitly_set_row_ = false;
+    }
+    if (selected_row_pub_) {
+        auto row_msg = std_msgs::msg::Int32();
+        row_msg.data = ROW_UNSET;
+        selected_row_pub_->publish(row_msg);
+    }
 
     // Output slot tracking is also preserved so it doesn't overwrite completed slots.
 

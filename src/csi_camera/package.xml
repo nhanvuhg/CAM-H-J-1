@@ -3,7 +3,7 @@
 <package format="3">
   <name>csi_camera</name>
   <version>1.0.0</version>
-  <description>Dual IMX477 CSI camera node for NVIDIA Jetson Argus/GStreamer</description>
+  <description>Dual IMX477 CSI camera node for NVIDIA Jetson V4L2</description>
   <maintainer email="nhan@example.com">nhan</maintainer>
   <license>MIT</license>
 
@@ -13,6 +13,9 @@
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>libopencv-dev</depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
 
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>

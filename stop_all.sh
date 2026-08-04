@@ -46,12 +46,11 @@ pkill -9 -f "dual_csi_camera_node" 2>/dev/null
 pkill -9 -f "csi_camera_node" 2>/dev/null
 pkill -9 -f "libcamera_dual_node" 2>/dev/null
 pkill -9 -f "dual_camera_system.launch" 2>/dev/null
-pkill -9 -f "yolo_ros_hailort_cpp" 2>/dev/null
+pkill -9 -f "yolo_tensorrt_node" 2>/dev/null
 pkill -9 -f "component_container" 2>/dev/null
 pkill -9 -f "overlay_bboxes_node" 2>/dev/null
 pkill -9 -f "ros2_qml_gui1" 2>/dev/null
 pkill -9 -f "run_gui_with_restart" 2>/dev/null
-pkill -9 -f "system_csi_dual_model" 2>/dev/null
 
 # Wait for processes to terminate
 sleep 1

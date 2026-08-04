@@ -5,8 +5,10 @@ import QtQuick.Layouts 1.15
 Item {
     id: root
     Layout.fillWidth: true
-    // Calculate precise height perfectly to hold 16:9 image + 40px text/padding
-    height: width * 9 / 16 + 45
+    // Natural card height; the containing camera stack may override it to
+    // divide the available screen height evenly between both cameras.
+    implicitHeight: width * 9 / 16 + 45
+    height: implicitHeight
 
     property string cameraName: "Camera"
     property string topic: "/camera/image_raw"
@@ -45,8 +47,11 @@ Item {
 
                 Item {
                     id: aspectContainer
-                    width: previewBox.width
-                    height: previewBox.width * 9 / 16
+                    // Fit a true 16:9 viewport inside both available axes.
+                    // Width-only sizing could overflow vertically and clip the
+                    // second camera on displays with a shorter usable height.
+                    width: Math.min(previewBox.width, previewBox.height * 16 / 9)
+                    height: width * 9 / 16
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.verticalCenter: parent.verticalCenter
                     clip: true

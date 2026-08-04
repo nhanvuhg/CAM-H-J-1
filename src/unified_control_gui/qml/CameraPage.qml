@@ -588,6 +588,13 @@ Item {
                                 topic: modelData.topic
                                 providerId: modelData.providerId
                                 width: parent.width
+                                // Two production cameras share the available
+                                // height equally; their internal viewport then
+                                // fits a centered 16:9 rectangle without crop.
+                                height: (parent.height
+                                         - parent.spacing * Math.max(
+                                             0, camNode.cameraList.length - 1))
+                                        / Math.max(1, camNode.cameraList.length)
                             }
                         }
                     }

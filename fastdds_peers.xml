@@ -8,8 +8,9 @@
   Domain 22 → unicast metatraffic ports = PB(7400) + DG(250)*22 + d1(10)
   + PG(2)*participantId = 12910, 12912, 12914, 12916, 12918, ...
 
-  Port = 0 trong locator → FastDDS auto-scan participant 0..maxInitialPeersRange
-  → đủ cover.
+  Jetson runs many local participants in parallel. Its explicit locator list
+  therefore covers participant IDs 0..27 (ports 12910..12964), including
+  camera/AI, GUI and the ROS CLI daemon.
 
   IPs:
     172.16.11.11 = Jetson Orin Nano
@@ -24,6 +25,20 @@
 <dds>
     <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
         <transport_descriptors>
+            <!--
+              Camera Image samples stay on shared memory when publisher and
+              subscriber are both on the Jetson. UDP remains enabled for
+              RevPi/Pi traffic. 640x360 BGR frames are below 1 MiB; a 16 MiB
+              segment is sufficient and avoids reserving 64 MiB per participant.
+              start_all removes only segments that no process still has open.
+            -->
+            <transport_descriptor>
+                <transport_id>shm_transport</transport_id>
+                <type>SHM</type>
+                <segment_size>16777216</segment_size>
+                <port_queue_capacity>64</port_queue_capacity>
+                <healthy_check_timeout_ms>1000</healthy_check_timeout_ms>
+            </transport_descriptor>
             <transport_descriptor>
                 <transport_id>udp_transport</transport_id>
                 <type>UDPv4</type>
@@ -33,6 +48,7 @@
         <participant profile_name="xhost_unicast" is_default_profile="true">
             <rtps>
                 <userTransports>
+                    <transport_id>shm_transport</transport_id>
                     <transport_id>udp_transport</transport_id>
                 </userTransports>
                 <useBuiltinTransports>false</useBuiltinTransports>
@@ -103,6 +119,116 @@
                             <udpv4>
                                 <address>172.16.11.11</address>
                                 <port>12930</port>
+                            </udpv4>
+                        </locator>
+                        <!--
+                          start_all launches more than 11 local DDS
+                          participants (hardware, camera/AI, GUI and daemon).
+                          Keep the local peer table wide enough for late
+                          participants such as unified_control_gui; otherwise
+                          they bind above 12930 and become invisible to the
+                          already-running camera publishers.
+                        -->
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12932</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12934</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12936</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12938</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12940</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12942</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12944</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12946</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12948</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12950</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12952</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12954</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12956</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12958</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12960</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12962</port>
+                            </udpv4>
+                        </locator>
+                        <locator>
+                            <udpv4>
+                                <address>172.16.11.11</address>
+                                <port>12964</port>
                             </udpv4>
                         </locator>
                         <locator>

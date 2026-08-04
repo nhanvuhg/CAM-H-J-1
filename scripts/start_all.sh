@@ -10,7 +10,7 @@ set -uo pipefail
 #   3. dobot_bringup_v3            — Dobot Nova5 driver
 #   4. robot_logic + motion_exec   — Robot pick-and-place logic
 #   5. gripper_festo_node          — Festo gripper (venv)
-#   6. dual_camera_system          — 2× Jetson CSI camera (GStreamer)
+#   6. dual_camera_system          — 2× V4L2 CUDA camera + 2× TensorRT YOLO
 #   7. cartridge_gui.py            — HTML GUI (port 8080, optional)
 #   8. unified_control_gui         — QML GUI (HDMI)
 #   9. rs485_bus_node              — RevPi A (remote via SSH)
@@ -23,6 +23,8 @@ set -uo pipefail
 WS="$HOME/ros2_ws"
 export DISPLAY=${DISPLAY:-:0}
 export FILL_HP_USERS_FILE="${FILL_HP_USERS_FILE:-$WS/src/unified_control_gui/fill_hp_users.json}"
+CAM0_AI_MODEL="${CAM0_AI_MODEL:-$HOME/models/data_input_hp1.engine}"
+CAM1_AI_MODEL="${CAM1_AI_MODEL:-$HOME/models/data_output_hp1.engine}"
 
 # Keep Qt geometry identical to the RevPi reference display. Jetson's X server
 # reports 92x91 DPI while the RevPi reports 96x96; explicit 1:1 scaling avoids
@@ -64,6 +66,16 @@ if [ ! -f "$WS/install/unified_control_gui/lib/unified_control_gui/unified_contr
     echo "❌ unified_control_gui binary not found. Chạy: cd ~/ros2_ws && colcon build --packages-select unified_control_gui"
     exit 1
 fi
+if [ ! -x "$WS/install/yolo_tensorrt_ros2/lib/yolo_tensorrt_ros2/yolo_tensorrt_node" ]; then
+    echo "❌ TensorRT YOLO node not found. Chạy: cd ~/ros2_ws && colcon build --packages-select yolo_tensorrt_ros2 csi_camera"
+    exit 1
+fi
+for ai_model in "$CAM0_AI_MODEL" "$CAM1_AI_MODEL"; do
+    if [ ! -r "$ai_model" ]; then
+        echo "❌ TensorRT model not found/readable: $ai_model"
+        exit 1
+    fi
+done
 
 LOG_DIR="$WS/logs"
 mkdir -p "$LOG_DIR"
@@ -96,32 +108,72 @@ NODE_PATTERNS=(
     "gripper_festo_node"
     "dual_csi_camera"
     "csi_camera_node"
+    "v4l2_dual_camera_cuda_node"
+    "v4l2_dual_camera_node"
     "dual_camera_system"
     # KHÔNG thêm "rpicam-vid" vào broad pkill -9 — sẽ tạo CFE zombie state
     # (kernel không kịp release /dev/media0). Graceful kill xử lý riêng bên dưới.
     "overlay_bboxes_node"
     "vision_decision_node"
-    "yolo_ros_hailort"
+    "yolo_tensorrt_node"
     "component_container"
     "vfd_logic_node"
 )
 
 stop_jetson_camera_nodes() {
     local camera_pids=""
-    camera_pids=$(pgrep -x "csi_camera_node" 2>/dev/null || true)
+    for camera_name in csi_camera_node v4l2_dual_camera_cuda_node v4l2_dual_camera_node; do
+        local matching_pids
+        matching_pids=$(pgrep -x "$camera_name" 2>/dev/null || true)
+        [ -n "$matching_pids" ] && camera_pids="$camera_pids $matching_pids"
+    done
     [ -z "$camera_pids" ] && return
 
-    echo "📷 Stopping Jetson CSI camera nodes gracefully..."
+    echo "📷 Stopping V4L2 camera nodes gracefully..."
     kill -TERM $camera_pids 2>/dev/null || true
     local camera_wait=0
-    while pgrep -x "csi_camera_node" >/dev/null 2>&1; do
+    while pgrep -x "csi_camera_node" >/dev/null 2>&1 || \
+          pgrep -x "v4l2_dual_camera_cuda_node" >/dev/null 2>&1 || \
+          pgrep -x "v4l2_dual_camera_node" >/dev/null 2>&1; do
         if [ "$camera_wait" -ge 6 ]; then
             pkill -KILL -x "csi_camera_node" 2>/dev/null || true
+            pkill -KILL -x "v4l2_dual_camera_cuda_node" 2>/dev/null || true
+            pkill -KILL -x "v4l2_dual_camera_node" 2>/dev/null || true
             break
         fi
         sleep 1
         camera_wait=$((camera_wait + 1))
     done
+}
+
+cleanup_fastdds_shm() {
+    # SHM segments are created per FastDDS participant. They are safe to remove
+    # only when no local ROS participant still has the file open.
+    for participant in cartridge_providesystem_py vfd_logic_node.py \
+        unified_control_gui dobot_bringup robot_logic_node motion_executor \
+        v4l2_dual_camera_cuda_node v4l2_dual_camera_node yolo_tensorrt_node \
+        overlay_bboxes_node vision_decision_node; do
+        if pgrep -f "$participant" >/dev/null 2>&1; then
+            echo "🧹 FastDDS cleanup skipped: participant still running ($participant)"
+            return
+        fi
+    done
+
+    ros2 daemon stop 2>/dev/null || true
+    local removed=0
+    local segment
+    shopt -s nullglob
+    for segment in /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_*; do
+        if fuser "$segment" >/dev/null 2>&1; then
+            echo "🧹 Keeping active FastDDS segment: $segment"
+            continue
+        fi
+        if unlink -- "$segment" 2>/dev/null; then
+            removed=$((removed + 1))
+        fi
+    done
+    shopt -u nullglob
+    echo "🧹 Removed $removed stale FastDDS SHM segments"
 }
 
 NEED_CLEANUP=0
@@ -152,18 +204,6 @@ if [ "$NEED_CLEANUP" -eq 1 ]; then
     pkill -9 -f "192.168.27" 2>/dev/null || true
     fuser -k 29999/tcp 2>/dev/null || true
 
-    # Graceful kill rpicam-vid: TERM, đợi V4L2 unmap buffer, chỉ KILL nếu còn sống.
-    # Why: pkill -9 rpicam-vid trong lúc kernel release /dev/media0 → CFE driver
-    # vào zombie state, không recover được nếu không reboot/modprobe.
-    # FUNAI dual_csi_camera_node.cpp kill_cam_process() làm pattern này (line 93-110).
-    if pgrep -x "rpicam-vid" >/dev/null 2>&1; then
-        pkill -TERM -x "rpicam-vid" 2>/dev/null || true
-        sleep 2   # V4L2 unmap buffer (FUNAI [FIX-DEADLOCK])
-        pkill -KILL -x "rpicam-vid" 2>/dev/null || true
-    fi
-
-    # Release kernel handle Hailo (camera đã graceful kill ở trên).
-    [ -e /dev/hailo0 ] && fuser -k /dev/hailo0 2>/dev/null || true
     sleep 1
 
     # Đợi process chính chết (giảm 12s → 4s — pkill -9 thường < 1s)
@@ -188,15 +228,11 @@ if [ "$NEED_CLEANUP" -eq 1 ]; then
         _wait=$((_wait + 1))
     done
 
-    # Clean up stale FastDDS Shared Memory segment and lock files
-    echo "🧹 Cleaning up stale FastDDS Shared Memory segment and lock files..."
-    ros2 daemon stop 2>/dev/null || true
-    rm -f /dev/shm/fastrtps_* /dev/shm/sem.fastrtps_* 2>/dev/null || true
-
     echo "✅ Clean slate"
 else
     echo "✅ No old processes — skip cleanup"
 fi
+cleanup_fastdds_shm
 echo ""
 
 # ── PIDs ──
@@ -208,6 +244,7 @@ PID_GRIPPER=""
 PID_CAMERA=""
 PID_WEB_GUI=""
 PID_QML_GUI=""
+CAMERA_SUPERVISOR_STATUS="/tmp/camera_stack_supervisor.status"
 
 _CLEANUP_DONE=0
 cleanup() {
@@ -237,15 +274,8 @@ cleanup() {
     pkill -9 -f "dual_camera_system" 2>/dev/null || true
     pkill -9 -f "overlay_bboxes_node" 2>/dev/null || true
     pkill -9 -f "vision_decision_node" 2>/dev/null || true
-    pkill -9 -f "yolo_ros_hailort" 2>/dev/null || true
+    pkill -9 -f "yolo_tensorrt_node" 2>/dev/null || true
     pkill -9 -f "component_container" 2>/dev/null || true
-    # Graceful kill rpicam-vid (tránh CFE zombie — xem comment block trên).
-    if pgrep -x "rpicam-vid" >/dev/null 2>&1; then
-        pkill -TERM -x "rpicam-vid" 2>/dev/null || true
-        sleep 2
-        pkill -KILL -x "rpicam-vid" 2>/dev/null || true
-    fi
-    [ -e /dev/hailo0 ] && fuser -k /dev/hailo0 2>/dev/null || true
     echo "✅ All processes stopped."
 }
 trap cleanup EXIT INT TERM HUP QUIT
@@ -304,16 +334,74 @@ LOG_GRIPPER="$LOG_DIR/gripper_festo_node.log"
 # echo "$PID_GRIPPER" >> "$PIDFILE"
 echo "  [5] ⏭️  Gripper Node OFF (tích hợp trong Cartridge Node)"
 
-# ── [6] Dual Jetson CSI Camera System ──
-# Camera-only is the default because this Jetson has no Hailo accelerator.
-# To restore the optional legacy inference stack, launch manually with
-# enable_inference:=true after installing HailoRT and the HEF models.
+# ── [6] Dual Jetson CSI Camera + TensorRT YOLO System ──
 LOG_CAMERA="$LOG_DIR/dual_camera_system.log"
-echo "  [6] 📷 Dual Jetson CSI Camera System..."
+echo "  [6] 📷 Dual CSI + TensorRT YOLO (input/output models)..."
 
-ros2 launch csi_camera dual_camera_system.launch.py > "$LOG_CAMERA" 2>&1 &
+# One broken V4L2 stream can leave the paired V3Link receiver in an invalid
+# state. The camera node reports the error and exits; this supervisor then
+# stops both streams and restarts the pair with backoff. A stable five-minute
+# run clears the failure counter.
+camera_stack_supervisor() {
+    local camera_launch_pid=""
+    local consecutive_failures=0
+    local run_started=0
+    local run_seconds=0
+    local retry_delay=3
+
+    _stop_camera_child() {
+        if [ -n "$camera_launch_pid" ] && kill -0 "$camera_launch_pid" 2>/dev/null; then
+            kill -INT "$camera_launch_pid" 2>/dev/null || true
+            wait "$camera_launch_pid" 2>/dev/null || true
+        fi
+        exit 0
+    }
+    trap _stop_camera_child TERM INT HUP
+
+    while true; do
+        stop_jetson_camera_nodes
+
+        echo "STARTING failures=$consecutive_failures" > "$CAMERA_SUPERVISOR_STATUS"
+        echo "[$(date --iso-8601=seconds)] Starting paired camera stack"
+        run_started=$(date +%s)
+        ros2 launch csi_camera dual_camera_system.launch.py \
+            enable_inference:=true \
+            cam0_model:="$CAM0_AI_MODEL" \
+            cam1_model:="$CAM1_AI_MODEL" &
+        camera_launch_pid=$!
+        echo "RUNNING launch_pid=$camera_launch_pid failures=$consecutive_failures" \
+            > "$CAMERA_SUPERVISOR_STATUS"
+
+        wait "$camera_launch_pid"
+        local launch_rc=$?
+        camera_launch_pid=""
+        run_seconds=$(( $(date +%s) - run_started ))
+
+        if [ "$run_seconds" -ge 300 ]; then
+            consecutive_failures=0
+        else
+            consecutive_failures=$((consecutive_failures + 1))
+        fi
+
+        case "$consecutive_failures" in
+            0|1) retry_delay=3 ;;
+            2) retry_delay=10 ;;
+            3) retry_delay=30 ;;
+            *) retry_delay=60 ;;
+        esac
+
+        echo "RECOVERING rc=$launch_rc runtime_s=$run_seconds failures=$consecutive_failures retry_s=$retry_delay" \
+            > "$CAMERA_SUPERVISOR_STATUS"
+        echo "[$(date --iso-8601=seconds)] Camera stack exited rc=$launch_rc after ${run_seconds}s; paired recovery in ${retry_delay}s"
+        stop_jetson_camera_nodes
+        sleep "$retry_delay"
+    done
+}
+
+: > "$LOG_CAMERA"
+camera_stack_supervisor >> "$LOG_CAMERA" 2>&1 &
 PID_CAMERA=$!
-echo "        PID=$PID_CAMERA  Log: $LOG_CAMERA"
+echo "        Supervisor PID=$PID_CAMERA  Log: $LOG_CAMERA"
 echo "$PID_CAMERA" >> "$PIDFILE"
 
 # Brief settle window so the GUI subscribers see publishers ready on first
@@ -417,7 +505,7 @@ echo "  tail -f $LOG_PROVIDE        # Cartridge feeder"
 echo "  tail -f $LOG_DOBOT          # Dobot driver"
 echo "  tail -f $LOG_ROBOT          # Robot logic"
 echo "  tail -f $LOG_GRIPPER        # Gripper"
-echo "  tail -f $LOG_CAMERA         # 2x Jetson CSI camera"
+echo "  tail -f $LOG_CAMERA         # 2x CSI camera + TensorRT YOLO"
 [ -n "${PID_QML_GUI:-}" ] && echo "  tail -f $LOG_QML             # QML GUI"
 echo "  ssh pi@${REVPI_A_HOST} cat /tmp/loadcell_node.log  # Loadcell"
 echo ""
@@ -429,7 +517,7 @@ echo ""
 # Monitor — GUI exit thường → dừng toàn bộ hệ thống.
 # GUI exit code 42 hoặc restart flag → chỉ restart lại QML GUI, giữ node khác.
 # Bỏ auto-restart crash: user yêu cầu khi tắt file không retry/reconnect lại
-# GUI; tránh "zombie restart" che lỗi cứng (Hailo oops, OOM, segfault...).
+# GUI; tránh "zombie restart" che lỗi cứng (CUDA OOM, TensorRT, segfault...).
 while true; do
     if [ -n "${PID_QML_GUI:-}" ]; then
         wait "$PID_QML_GUI" 2>/dev/null

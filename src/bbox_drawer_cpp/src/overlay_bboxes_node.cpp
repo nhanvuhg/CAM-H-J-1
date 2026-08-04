@@ -103,13 +103,13 @@ public:
         // 80 ms, leaving image_overlay advertised but completely silent. Keep
         // the latest detections and render every incoming image instead.
         boxes_sub_ = create_subscription<BoxesMsg>(
-            boxes_topic_, rclcpp::QoS(2),
+            boxes_topic_, rclcpp::SensorDataQoS().keep_last(1),
             [this](BoxesMsg::ConstSharedPtr msg) {
                 std::lock_guard<std::mutex> lock(boxes_mutex_);
                 latest_boxes_ = std::move(msg);
             });
         image_sub_ = create_subscription<ImageMsg>(
-            image_topic_, rclcpp::QoS(2),
+            image_topic_, rclcpp::SensorDataQoS().keep_last(1),
             std::bind(&OverlayForOneCam::image_callback, this, std::placeholders::_1));
 
         pub_ = image_transport::create_publisher(this, output_topic_);
@@ -125,9 +125,20 @@ private:
             return;
         }
         cv::Mat resized;
-        cv::resize(bgr, resized, cv::Size(out_w_, out_h_));
-        double sx = static_cast<double>(out_w_) / bgr.cols;
-        double sy = static_cast<double>(out_h_) / bgr.rows;
+        double sx = 1.0;
+        double sy = 1.0;
+        if (bgr.cols == out_w_ && bgr.rows == out_h_) {
+            // Production camera is already 640x360 (16:9). Reuse the owned clone
+            // instead of doing another full-frame resize/copy at 30 FPS.
+            // Do not read bgr.cols/rows after this move: OpenCV leaves the
+            // moved-from Mat empty, which previously made sx/sy infinite and
+            // stretched every detection to the full image.
+            resized = std::move(bgr);
+        } else {
+            sx = static_cast<double>(out_w_) / bgr.cols;
+            sy = static_cast<double>(out_h_) / bgr.rows;
+            cv::resize(bgr, resized, cv::Size(out_w_, out_h_));
+        }
         BoxesMsg::ConstSharedPtr boxes_msg;
         {
             std::lock_guard<std::mutex> lock(boxes_mutex_);
@@ -141,7 +152,7 @@ private:
     }
 
     std::string ns_, image_topic_, boxes_topic_, output_topic_;
-    int out_w_{960}, out_h_{540};
+    int out_w_{640}, out_h_{360};
     rclcpp::Subscription<ImageMsg>::SharedPtr image_sub_;
     rclcpp::Subscription<BoxesMsg>::SharedPtr boxes_sub_;
     BoxesMsg::ConstSharedPtr latest_boxes_;
@@ -155,6 +166,7 @@ public:
     : Node("overlay_two_cams", opts)
     {
         rclcpp::NodeOptions child_opts;
+        child_opts.use_global_arguments(false);
         cam0_ = std::make_shared<OverlayForOneCam>("cam0HP", child_opts);
         cam1_ = std::make_shared<OverlayForOneCam>("cam1HP", child_opts);
         exec_ = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();

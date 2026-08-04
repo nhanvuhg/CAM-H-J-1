@@ -1,5 +1,5 @@
 # 🗺️ SYSTEM NODES & TOPICS — Cartridge Filling Machine
-> Cập nhật: 2026-03-17 | ROS 2 Humble | RPi5
+> Cập nhật: 2026-07-31 | ROS 2 Humble | NVIDIA Jetson Orin
 
 ---
 
@@ -11,8 +11,8 @@
 | `robot_logic_nova5` | `robot_control_main/src/robot_logic_node.cpp` | C++ | State machine chính của robot Nova5 |
 | `vision_decision_node` | `robot_control_main/src/vision_decision_node.cpp` | C++ | Xử lý kết quả AI → quyết định row/slot |
 | `motion_executor` | `robot_control_main/src/motion_executor.cpp` | C++ | Thực thi lệnh chuyển động Dobot |
-| `picamera2_dual_node` | `csi_camera/scripts/picamera2_dual_node.py` | Python | Stream dual CSI camera (Picamera2) |
-| `yolo_ros_hailort_cpp` | `YOLO-HailoRT-ROS2/yolo_ros_hailort_cpp/` | C++ | Inference YOLO trên Hailo-8L NPU |
+| `cam0_csi_camera`, `cam1_csi_camera` | `csi_camera/src/csi_camera_node.cpp` | C++ | Hai camera CSI IMX477 qua NVIDIA Argus |
+| `yolo_cam0`, `yolo_cam1` | `yolo_tensorrt_ros2/` | C++ | Hai model YOLOv8 TensorRT trên GPU Jetson |
 | `dobot_bringup` | `DOBOT_6Axis_ROS2_V3/dobot_bringup_v3/` | C++ | Driver Dobot Nova5 (services) |
 | `nova5_gui` / `unified_control_gui` | `nova5_gui/` / `unified_control_gui/` | C++/QML | GUI điều khiển Qt/QML |
 
@@ -177,19 +177,21 @@
 
 ---
 
-### 🧠 YOLO / AI NODE (`yolo_ros_hailort_cpp`)
+### 🧠 YOLO / AI NODE (`yolo_tensorrt_ros2`)
 
 #### 📥 Subscribe
 | Topic | Type | Mô tả |
 |-------|------|-------|
-| `/camera/cam0/image_raw` | `Image` | Frame cam0 |
-| `/camera/cam1/image_raw` | `Image` | Frame cam1 |
+| `/cam0HP/image_raw` | `Image` | Frame camera input tray |
+| `/cam1HP/image_raw` | `Image` | Frame camera output tray |
 
 #### 📤 Publish
 | Topic | Type | Mô tả |
 |-------|------|-------|
-| `/camera/cam0/detections` | `Detection2DArray` | Bounding boxes cam0 |
-| `/camera/cam1/detections` | `Detection2DArray` | Bounding boxes cam1 |
+| `/cam0HP/yolo/bounding_boxes` | `Detection2DArray` | Bounding boxes input tray |
+| `/cam1HP/yolo/bounding_boxes` | `Detection2DArray` | Bounding boxes output tray |
+| `/camera/cam0/ai_health` | `String` | Trạng thái TensorRT model input |
+| `/camera/cam1/ai_health` | `String` | Trạng thái TensorRT model output |
 
 ---
 
@@ -202,8 +204,8 @@ graph LR
     ROBOT["🤖 robot_logic_nova5\n(Robot Node)"]
     MOTION["⚙️ motion_executor"]
     VISION["👁️ vision_decision_node"]
-    CAMERA["📷 picamera2_dual_node"]
-    YOLO["🧠 YOLO/Hailo"]
+    CAMERA["📷 2× CSI IMX477/Argus"]
+    YOLO["🧠 2× YOLO/TensorRT"]
     DOBOT["🦾 dobot_bringup\n(Nova5 Driver)"]
     SCALE["⚖️ Cân"]
     REVPI["📡 RevPi/HW"]

@@ -1,139 +1,100 @@
 #!/usr/bin/env python3
-"""
-dual_camera_system.launch.py
-
-Dual IMX477 camera system for NVIDIA Jetson Orin Nano.
-
-Camera capture is available by default.  The legacy Hailo inference stack is
-optional because this Jetson does not have a Hailo device/runtime installed.
-
-Both cameras run in parallel, no switching required.
-"""
+"""Production dual-camera launch: direct V4L2 + CUDA tone/debayer + YOLO."""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, TimerAction
-from launch.conditions import IfCondition
+from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node, ComposableNodeContainer
-from launch_ros.descriptions import ComposableNode
+from launch_ros.actions import Node
 
 def generate_launch_description():
     cam0_model = LaunchConfiguration('cam0_model')
     cam1_model = LaunchConfiguration('cam1_model')
     enable_inference = LaunchConfiguration('enable_inference')
-    
-    # ================================================================
-    # 1. DUAL CSI CAMERA NODE (NVIDIA Argus + nvvidconv)
-    # ================================================================
-    # Match the known-good V3Link configuration in camera-2x.desktop:
-    # IMX477 sensor-mode 2, 1920x1080@30, edge enhancement disabled and ISP
-    # digital gain locked to 1.0. nvvidconv resizes to 640x480 before host copy.
-    # Publishes:
-    #   - /cam0HP/image_raw (Camera 0 - Input Tray)
-    #   - /cam1HP/image_raw (Camera 1 - Output Tray)
-    
-    common_camera_parameters = {
-        'sensor_mode': 2,
-        'capture_width': 1920,
-        'capture_height': 1080,
-        'capture_fps': 30,
-        'publish_fps': 10,
-        'output_width': 640,
-        'output_height': 480,
-        'ee_mode': 0,
-        'isp_digital_gain_min': 1.0,
-        'isp_digital_gain_max': 1.0,
-        'reconnect_delay_ms': 2000,
+    use_cuda_camera = LaunchConfiguration('use_cuda_camera')
+    # The camera node owns both V4L2 devices and performs the validated CUDA
+    # debayer/tone path. It publishes BGR8 640x360 with depth=1 semantics.
+    camera_topic_parameters = {
+        'cam0_topic': '/cam0HP/image_raw',
+        'cam1_topic': '/cam1HP/image_raw',
+        'cam0_health_topic': '/camera/cam0/health',
+        'cam1_health_topic': '/camera/cam1/health',
+        # Small extra luma-edge lift after the 1920x1080 -> 640x360
+        # reduction; chroma denoise and edge threshold stay unchanged.
+        'cam0_clarity': 0.45,
+        'cam1_clarity': 0.60,
     }
 
-    # Each camera is a separate OS process. Start cam1 first (same order as the
-    # known-good camera-2x.desktop), then open cam0 after Argus has completed the
-    # first session setup. Both remain active in parallel after startup.
-    cam1_camera_node = Node(
+    cuda_camera_node = Node(
         package='csi_camera',
-        executable='csi_camera_node',
-        name='cam1_csi_camera',
+        executable='v4l2_dual_camera_cuda_node',
+        name='v4l2_dual_camera',
         output='screen',
-        parameters=[common_camera_parameters, {
-            'sensor_id': 1,
-            'image_topic': '/cam1HP/image_raw',
-            'health_topic': '/camera/cam1/health',
-            'frame_id': 'cam1_optical_frame',
+        parameters=[{
+            **camera_topic_parameters,
+            'capture_fps': 30,
+            'exposure': 32000,
         }],
-        respawn=True,
-        respawn_delay=5.0,
+        condition=IfCondition(use_cuda_camera),
+        respawn=False,
     )
 
-    cam0_camera_node = Node(
+    # V4L2 CPU path is retained only as a diagnostic rollback. It uses the
+    # same direct sensor access and never changes the production default.
+    cpu_camera_node = Node(
         package='csi_camera',
-        executable='csi_camera_node',
-        name='cam0_csi_camera',
+        executable='v4l2_dual_camera_node',
+        name='v4l2_dual_camera',
         output='screen',
-        parameters=[common_camera_parameters, {
-            'sensor_id': 0,
-            'image_topic': '/cam0HP/image_raw',
-            'health_topic': '/camera/cam0/health',
-            'frame_id': 'cam0_optical_frame',
-        }],
-        respawn=True,
-        respawn_delay=5.0,
+        parameters=[camera_topic_parameters],
+        condition=UnlessCondition(use_cuda_camera),
+        respawn=False,
     )
     
     # ================================================================
-    # 2. YOLO CONTAINER WITH 2 MODELS
+    # 2. TWO TENSORRT YOLO NODES
     # ================================================================
-    # Both YOLO nodes run simultaneously, processing their respective camera feeds
-    
-    yolo_container = ComposableNodeContainer(
-        name='yolo_container',
-        namespace='',
-        package='rclcpp_components',
-        executable='component_container_mt',  # multi-threaded: allows cam0/cam1 inference overlap
-        composable_node_descriptions=[
-            # YOLO for Camera 0 (Input Tray Detection)
-            ComposableNode(
-                package='yolo_ros_hailort_cpp',
-                plugin='yolo_ros_hailort_cpp::YoloNode',
-                name='yolo_cam0',
-                parameters=[{
-                    'model_path': cam0_model,
-                    'nms_output_name': 'yolov8s/yolov8_nms_postprocess',
-                    'src_image_topic_name': '/cam0HP/image_raw',
-                    'publish_boundingbox_topic_name': '/cam0HP/yolo/bounding_boxes',
-                    'publish_image_topic_name': '/cam0HP/yolo/image_raw',
-                    'conf': 0.60,
-                    'publish_resized_image': False,
-                    # Camera 640x480 (4:3), HEF 640x640. Letterbox giu nguyen
-                    # hinh dang cartridge va mapping bbox ve anh goc.
-                    'letterbox': True,
-                }]
-            ),
-            # YOLO for Camera 1 (Output Tray Detection)
-            ComposableNode(
-                package='yolo_ros_hailort_cpp',
-                plugin='yolo_ros_hailort_cpp::YoloNode',
-                name='yolo_cam1',
-                parameters=[{
-                    'model_path': cam1_model,
-                    'nms_output_name': 'yolov8s/yolov8_nms_postprocess',
-                    'src_image_topic_name': '/cam1HP/image_raw',
-                    'publish_boundingbox_topic_name': '/cam1HP/yolo/bounding_boxes',
-                    'publish_image_topic_name': '/cam1HP/yolo/image_raw',
-                    'conf': 0.30,
-                    'publish_resized_image': False,
-                    # Camera is 640x480 (4:3) but this HEF takes 640x640. Stretching
-                    # squashes cartridges enough to drop them below conf: measured
-                    # 0.25 stretched vs 0.82 letterboxed on the same frame.
-                    'letterbox': True,
-                }]
-            ),
-        ],
+    # Separate processes give each camera its own TensorRT execution context and
+    # CUDA stream. SensorDataQoS depth=1 drops stale frames instead of building
+    # latency when the GPU is temporarily busy.
+    yolo_cam0_node = Node(
+        package='yolo_tensorrt_ros2',
+        executable='yolo_tensorrt_node',
+        name='yolo_cam0',
         output='screen',
         respawn=True,
         respawn_delay=3.0,
         condition=IfCondition(enable_inference),
+        parameters=[{
+            'engine_path': cam0_model,
+            'image_topic': '/cam0HP/image_raw',
+            'detections_topic': '/cam0HP/yolo/bounding_boxes',
+            'health_topic': '/camera/cam0/ai_health',
+            'class_names': ['tray', 'cartridge'],
+            'confidence_threshold': 0.60,
+            'nms_threshold': 0.45,
+        }],
     )
-    
+
+    yolo_cam1_node = Node(
+        package='yolo_tensorrt_ros2',
+        executable='yolo_tensorrt_node',
+        name='yolo_cam1',
+        output='screen',
+        respawn=True,
+        respawn_delay=3.0,
+        condition=IfCondition(enable_inference),
+        parameters=[{
+            'engine_path': cam1_model,
+            'image_topic': '/cam1HP/image_raw',
+            'detections_topic': '/cam1HP/yolo/bounding_boxes',
+            'health_topic': '/camera/cam1/ai_health',
+            'class_names': ['tray', 'cartridge', 'cartridgefall'],
+            'confidence_threshold': 0.30,
+            'nms_threshold': 0.45,
+        }],
+    )
+
     # ================================================================
     # 3. BBOX DRAWER (Visualization)
     # ================================================================
@@ -144,21 +105,6 @@ def generate_launch_description():
         executable='overlay_bboxes_node',
         name='overlay_dual_cam',
         output='screen',
-        parameters=[{
-            # Camera 0 (Input Tray)
-            'cam0.image_topic': '/cam0HP/image_raw',
-            'cam0.boxes_topic': '/cam0HP/yolo/bounding_boxes',
-            'cam0.output_topic': '/cam0HP/image_overlay',
-            'cam0.output_width': 640,
-            'cam0.output_height': 480,
-            
-            # Camera 1 (Output Tray)
-            'cam1.image_topic': '/cam1HP/image_raw',
-            'cam1.boxes_topic': '/cam1HP/yolo/bounding_boxes',
-            'cam1.output_topic': '/cam1HP/image_overlay',
-            'cam1.output_width': 640,
-            'cam1.output_height': 480,
-        }],
         respawn=True,
         respawn_delay=2.0,
         condition=IfCondition(enable_inference),
@@ -187,7 +133,7 @@ def generate_launch_description():
             # ROI trong vision_roi.yaml duoc scale tu ref_* cua no sang day;
             # doi output size camera thi PHAI doi cap so nay theo.
             'image_width': 640,
-            'image_height': 480,
+            'image_height': 360,
             # Cam0 chi hop le khi truc InX da ve vi tri nhan khay cua robot.
             'inx_camera_position_mm': -60.0,
             'inx_camera_tolerance_mm': 2.0,
@@ -201,22 +147,28 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             'enable_inference',
-            default_value='false',
-            description='Start the optional Hailo YOLO/overlay/vision stack',
+            default_value='true',
+            description='Start the Jetson TensorRT YOLO/overlay/vision stack',
+        ),
+        DeclareLaunchArgument(
+            'use_cuda_camera',
+            default_value='true',
+            description='Use the production V4L2 CUDA camera; false selects V4L2 CPU diagnostics',
         ),
         DeclareLaunchArgument(
             'cam0_model',
-            default_value='/home/nhan/models/DataTrayInputHP_2.hef',
-            description='HEF model used by camera 0 input-tray inference',
+            default_value='/home/nhan/models/data_input_hp1.engine',
+            description='TensorRT engine used by camera 0 input-tray inference',
         ),
         DeclareLaunchArgument(
             'cam1_model',
-            default_value='/home/nhan/models/DataTrayProdutionHP_1.hef',
-            description='HEF model used by camera 1 output-tray inference',
+            default_value='/home/nhan/models/data_output_hp1.engine',
+            description='TensorRT engine used by camera 1 output-tray inference',
         ),
-        cam1_camera_node,
-        TimerAction(period=3.0, actions=[cam0_camera_node]),
-        yolo_container,
+        cuda_camera_node,
+        cpu_camera_node,
+        yolo_cam0_node,
+        yolo_cam1_node,
         bbox_drawer_node,
         vision_decision_node,
     ])
@@ -230,8 +182,8 @@ Hardware:
   ┌──────────────────────────────────────────────┐
   │  NVIDIA Jetson Orin Nano                      │
   │                                               │
-  │  Argus sensor-id 0 → IMX477 → Input Tray     │
-  │  Argus sensor-id 1 → IMX477 → Output Tray    │
+  │  /dev/video1 → logical CAM0 → rack/input      │
+  │  /dev/video0 → logical CAM1 → green output    │
   └──────────────────────────────────────────────┘
 
 Topic Flow:
@@ -251,7 +203,7 @@ Verify:
   ros2 topic hz /cam0HP/image_raw
   ros2 topic hz /cam1HP/image_raw
   
-  # Check YOLO detections (only with enable_inference:=true)
+  # Check YOLO detections
   ros2 topic echo /cam0HP/yolo/bounding_boxes
   ros2 topic echo /cam1HP/yolo/bounding_boxes
   
@@ -260,11 +212,11 @@ Verify:
     → Select /cam0HP/image_overlay
     → Select /cam1HP/image_overlay
 
-Camera-only launch is the default on Jetson:
+TensorRT inference is enabled by default:
   ros2 launch csi_camera dual_camera_system.launch.py
 
-Hailo inference requires Hailo hardware/runtime and built YOLO packages:
-  ros2 launch csi_camera dual_camera_system.launch.py enable_inference:=true
+Camera-only diagnostic launch:
+  ros2 launch csi_camera dual_camera_system.launch.py enable_inference:=false
 
 ================================================================================
 """

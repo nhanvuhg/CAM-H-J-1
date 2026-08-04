@@ -36,7 +36,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'output_height',
-            default_value='480',
+            default_value='360',
             description='Output image height'
         ),
     ]

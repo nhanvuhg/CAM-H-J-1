@@ -1578,7 +1578,17 @@ class CartridgeSystem(Node):
         Đẩy xi lanh 3 ra (EXTEND) — cố định khay tại Tray Pos1 sau khi Cyl1 đã thả.
         Channel mặc định: extend=6, retract=7 (Module 4 valve CPX 253).
         Sensor feedback: S15=retracted, S16=extended.
+
+        Bị CHẶN khi _cyl3_s13s14_latch còn set (S13+S14 cùng OFF → không có khay
+        ở cả 2 vị trí output). Caller muốn extend hợp lệ phải clear latch trước:
+        manual GUI extend hoặc STATE 2 recheck S6 ON.
         """
+        if self._cyl3_s13s14_latch:
+            self._log_once(
+                "CYL3_EXTEND_BLOCKED_LATCH",
+                "[CYL3] EXTEND bị chặn — S13+S14 latch đang giữ RETRACT",
+            )
+            return False
         io = self.io_module
         if io:
             try:
@@ -3701,21 +3711,24 @@ class CartridgeSystem(Node):
             self._watchdog_last_tick = time.time()
             if self._system_paused:
                 return
-            # Cyl3 safety watchdog: S13 và S14 cùng OFF -> ép Cyl3 RETRACT và LATCH ở mọi chế độ
-            # CHỈ chạy khi ở chế độ AUTO/AI và hệ thống đang chạy (giữ nguyên trạng thái chỉ read khi chạy run node)
-            if self.operation_mode in ['auto', 'ai'] and getattr(self, '_system_running', False):
-                if self._conf('cyl3_present', True):
-                    s13 = self.sensor(S13_OUT1_TRAYPOS1)
-                    s14 = self.sensor(S14_OUT2_TRAYPOS1)
-                    if not s13 and not s14:
-                        self._cyl3_s13s14_latch = True
-                        s15 = self.sensor(S15_CYL3_RETRACTED)
-                        now = time.time()
-                        if not s15 or self._cyl3_expected != "retracted":
-                            if now - getattr(self, '_cyl3_watchdog_last_fire', 0.0) >= 1.0:
-                                self._cyl3_retract()
-                                self._cyl3_watchdog_last_fire = now
-                                self.get_logger().info("[CYL3-WATCHDOG] S13+S14 OFF but Cyl3 not retracted → Force Cyl3 RETRACT + LATCH (giữ đến khi manual GUI extend hoặc STATE 2 rerun recheck S6)")
+            # Cyl3 safety watchdog: S13 và S14 cùng OFF -> ép Cyl3 RETRACT và LATCH.
+            # Chạy ở MỌI chế độ (auto/ai/manual) và không phụ thuộc _system_running:
+            # không có khay ở cả 2 vị trí output thì piston Cyl3 không được thò ra,
+            # bất kể operator đang chạy chu trình hay chỉ bật node. Sensor cache do
+            # thread _io_bg_loop nuôi độc lập nên đọc luôn tươi.
+            # Latch chỉ nhả khi manual GUI extend hoặc STATE 2 rerun recheck S6 ON.
+            if self._conf('cyl3_present', True):
+                s13 = self.sensor(S13_OUT1_TRAYPOS1)
+                s14 = self.sensor(S14_OUT2_TRAYPOS1)
+                if not s13 and not s14:
+                    self._cyl3_s13s14_latch = True
+                    s15 = self.sensor(S15_CYL3_RETRACTED)
+                    now = time.time()
+                    if not s15 or self._cyl3_expected != "retracted":
+                        if now - getattr(self, '_cyl3_watchdog_last_fire', 0.0) >= 1.0:
+                            self._cyl3_retract()
+                            self._cyl3_watchdog_last_fire = now
+                            self.get_logger().info("[CYL3-WATCHDOG] S13+S14 OFF but Cyl3 not retracted → Force Cyl3 RETRACT + LATCH (giữ đến khi manual GUI extend hoặc STATE 2 rerun recheck S6)")
 
             self._cyl3_safety_check()
             self._cyl3_monitor()
