@@ -274,6 +274,13 @@ class CartridgeSystem(Node):
         # Motion flags
         self._inx_moving = False
         self._iny_moving = False
+        # Lệnh position non-blocking đang còn hiệu lực, dùng để PAUSE dừng tức
+        # thời và RESUME phát lại đúng target của step hiện tại.
+        # sid -> (target_mm, velocity, continuous_update)
+        self._active_servo_moves: dict = {}
+        self._paused_servo_moves: dict = {}
+        self._pause_started_at = 0.0
+        self._pause_restart_homing = False
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         # ⚠️  CRITICAL ZONE — đọc memory feedback_critical_code_zones.md trước khi sửa.
         # Timestamp lệnh motion gần nhất per-servo (sid → time.time()).
@@ -432,8 +439,8 @@ class CartridgeSystem(Node):
         # homing.  Without an explicit initial value that callback can crash
         # the entire cartridge node before /cartridge/homing_done is emitted.
         self._system_running = False
-        self._system_paused  = False  # True = đã halt thực sự (graceful PAUSE đã promote)
-        self._pause_pending  = False  # True = user bấm PAUSE, chờ ranh giới state để promote
+        self._system_paused  = False  # True = state machine + motion đã dừng tức thời
+        self._pause_pending  = False  # Legacy compatibility; instant PAUSE luôn để False
         self._input_trays_empty_debounce_count = 0
         self._drain_armed_after_s2 = False
         self._drain_state = False
@@ -1202,6 +1209,8 @@ class CartridgeSystem(Node):
             if servo_id == 1: self._inx_moving = True
             elif servo_id == 2: self._iny_moving = True
             now = time.time()
+            self._active_servo_moves[servo_id] = (
+                float(pos_mm), int(vel), bool(continuous_update))
             setattr(self, f'_ignore_arrived_{servo_id}', now + 0.5)
             self._servo_motion_t[servo_id] = now  # cho _publish_positions đọc tươi
             return True
@@ -1225,8 +1234,13 @@ class CartridgeSystem(Node):
             with self._servo_lock:
                 done = mot.target_position_reached()
             if done:
-                if servo_id == 1: self._inx_moving = False
-                if servo_id == 2: self._iny_moving = False
+                active = self._active_servo_moves.get(servo_id)
+                physically_at_target = (
+                    active is None or self._at_position(servo_id, active[0]))
+                if physically_at_target:
+                    self._active_servo_moves.pop(servo_id, None)
+                    if servo_id == 1: self._inx_moving = False
+                    if servo_id == 2: self._iny_moving = False
             return done
         except Exception:
             return False
@@ -1274,6 +1288,7 @@ class CartridgeSystem(Node):
             except Exception:
                 pass
         self._jog_active.discard(servo_id)
+        self._active_servo_moves.pop(servo_id, None)
         if servo_id == 1: self._inx_moving = False
         if servo_id == 2: self._iny_moving = False
 
@@ -1333,6 +1348,7 @@ class CartridgeSystem(Node):
                 ).start()
 
         self._jog_active.discard(servo_id)
+        self._active_servo_moves.pop(servo_id, None)
         if servo_id == 1: self._inx_moving = False
         if servo_id == 2: self._iny_moving = False
 
@@ -2388,6 +2404,9 @@ class CartridgeSystem(Node):
 
         self._system_paused = False
         self._pause_pending = False
+        self._paused_servo_moves.clear()
+        self._pause_started_at = 0.0
+        self._pause_restart_homing = False
         self._system_running = True
         self._inx_moving = self._iny_moving = False
         self._state1_enabled = (self.operation_mode in ['auto', 'ai'])
@@ -2462,6 +2481,9 @@ class CartridgeSystem(Node):
         self._enter_s4(SystemState.IDLE)
         self._system_paused  = False
         self._pause_pending  = False
+        self._paused_servo_moves.clear()
+        self._pause_started_at = 0.0
+        self._pause_restart_homing = False
         self._system_running = False
         self._input_tray_done = False
         self._motion_busy = False
@@ -2530,6 +2552,9 @@ class CartridgeSystem(Node):
 
         self._system_paused  = False
         self._pause_pending  = False
+        self._paused_servo_moves.clear()
+        self._pause_started_at = 0.0
+        self._pause_restart_homing = False
         self._system_running = False
         self._motion_busy    = False
         self._state1_enabled = False
@@ -2549,61 +2574,124 @@ class CartridgeSystem(Node):
 
     def _cb_pause(self, msg: Bool):
         """
-        Graceful PAUSE: set _pause_pending=True; chỉ thực sự halt khi
-        toàn bộ sub-chain (state_in / state_s3 / state_s4) về IDLE
-        và global không trong HOMING/HOMING_RUNNING. State đang chạy
-        (vd STATE 2 cấp khay) chạy nốt rồi mới halt.
-        RESUME: bấm nút RESUME (topic /system/resume_button).
+        PAUSE tức thời: freeze state/sub-state hiện tại, phát STOP telegram tới
+        các servo đang chạy và lưu target. RESUME phát lại target đó để step
+        tiếp tục từ vị trí vật lý đang dừng, không reset state/counter/CPX.
+
+        Referencing không hỗ trợ Continue giữa chừng; nếu PAUSE trong HOMING,
+        dừng toàn bộ trục và RESUME sẽ chạy lại HOMING an toàn từ đầu.
         """
         if not msg.data:
             return
-        if self._system_paused or self._pause_pending:
+        if self._system_paused:
             return  # idempotent
-        self._pause_pending = True
-        if self._can_pause_now():
-            # Tại ranh giới ngay lập tức → promote luôn để feedback nhanh.
-            self._promote_pause()
+        self._system_paused = True
+        self._pause_pending = False
+        self._pause_started_at = time.time()
+        self._pause_restart_homing = self.state in (
+            SystemState.HOMING, SystemState.HOMING_RUNNING)
+
+        if self._pause_restart_homing:
+            # Invalidate thread cũ để nó không commit zero_offset sau PAUSE.
+            with self._homing_guard_lock:
+                self._homing_abort.set()
+                self._homing_generation += 1
+            pause_axes = list(self.servos)
+            self._paused_servo_moves.clear()
         else:
-            self._notify('warn', 'PAUSE pending',
-                         'Hệ thống sẽ tạm dừng khi state hiện tại hoàn tất')
+            # Snapshot trước khi _stop_immediate() xóa active map.
+            self._paused_servo_moves = dict(self._active_servo_moves)
+            pause_axes = list(self._paused_servo_moves)
+
+        for sid in pause_axes:
+            self._stop_immediate(sid)
+
+        self.get_logger().warn(
+            f"[PAUSE] Instant stop; state={self.state.name}, "
+            f"in={self.state_in.name}, s3={self.state_s3.name}, "
+            f"s4={self.state_s4.name}, axes={pause_axes}"
+        )
+        detail = ('HOMING sẽ chạy lại từ đầu khi RESUME'
+                  if self._pause_restart_homing
+                  else f'Đã giữ step; dừng servo {pause_axes or "(không có motion)"}')
+        self._notify('warn', 'PAUSED', detail)
 
     def _cb_resume(self, msg: Bool):
         """
-        RESUME: clear cả _system_paused lẫn _pause_pending → state machine
-        tiếp tục dispatch như bình thường. State machine sẽ tự pick up
-        từ IDLE → auto-trigger STATE kế tiếp nếu đủ điều kiện.
+        RESUME motion đang giữ rồi mở lại đúng state/sub-state hiện tại.
+        Thời gian PAUSE được cộng bù vào các deadline để không tạo timeout giả.
         """
         if not msg.data:
             return
-        if not (self._system_paused or self._pause_pending):
+        if not self._system_paused:
             return  # nothing to resume
-        was_pending = self._pause_pending and not self._system_paused
+
+        paused_for = max(0.0, time.time() - self._pause_started_at)
+        restarted_axes = []
+        if self._pause_restart_homing:
+            # Thread homing cũ đã bị invalidate; khởi động một generation mới.
+            self._homing_done_event.clear()
+            self._enter(SystemState.HOMING)
+        else:
+            failed = []
+            for sid, (target, vel, continuous) in sorted(self._paused_servo_moves.items()):
+                if self._nb_move(sid, target, vel=vel, continuous_update=continuous):
+                    restarted_axes.append(sid)
+                else:
+                    failed.append(sid)
+            if failed:
+                # Không để vài trục chạy trong khi hệ thống vẫn mang cờ PAUSED.
+                for sid in restarted_axes:
+                    self._stop_immediate(sid)
+                self.get_logger().error(
+                    f"[RESUME] Cannot restore servo targets: {failed}; still PAUSED")
+                self._notify('error', 'RESUME thất bại',
+                             f'Không phát lại được target servo {failed}; hệ thống vẫn PAUSED')
+                return
+
+        self._shift_pause_timers(paused_for)
         self._system_paused = False
         self._pause_pending = False
+        self._paused_servo_moves.clear()
+        self._pause_started_at = 0.0
+        restart_homing = self._pause_restart_homing
+        self._pause_restart_homing = False
         # Refresh heartbeat để tránh false-positive timeout ngay sau khi resume
         # (pause lâu → _robot_last_seen stale → heartbeat check sẽ fire ngay).
         if self._robot_last_seen > 0:
             self._robot_last_seen = time.time()
-        if was_pending:
-            self._notify('info', 'RESUMED', 'Hủy PAUSE pending')
-        else:
-            self._notify('info', 'RESUMED', 'Tiếp tục state hiện tại')
+        detail = ('Khởi động lại HOMING an toàn'
+                  if restart_homing
+                  else f'Tiếp tục step hiện tại; servo {restarted_axes or "(không có motion)"}')
+        self.get_logger().info(f"[RESUME] {detail}; pause duration={paused_for:.2f}s")
+        self._notify('info', 'RESUMED', detail)
+
+    def _shift_pause_timers(self, paused_for: float):
+        """Freeze các deadline/state delay trong khoảng PAUSE."""
+        if paused_for <= 0.0:
+            return
+        timer_names = (
+            '_drive_warm_t', '_step_start_in', '_step_timeout_in',
+            '_30s_timeout', '_tray_robot_check_start', '_s10_warn_t',
+            '_cyl_retry_t', '_place_delay_start', '_step_start_s3',
+            '_step_timeout_s3', '_cyl4_retry_t', '_step_start_s4',
+            '_step_timeout_s4', '_outy_jog_start', '_cyl2_retry_t',
+            '_cyl5_retry_t', '_s10_off_time', '_cyl3_cmd_time',
+        )
+        for name in timer_names:
+            value = getattr(self, name, 0.0)
+            if isinstance(value, (int, float)) and value > 0.0:
+                setattr(self, name, value + paused_for)
 
     def _can_pause_now(self) -> bool:
         """
-        True khi an toàn promote _pause_pending → _system_paused:
-          - Không trong HOMING/HOMING_RUNNING (per user: chạy nốt homing rồi mới halt)
-          - Cả 3 sub-chain về IDLE (state hiện tại đã hoàn tất)
-        ERROR vẫn cho pause (no-op thực tế vì state machine không dispatch).
+        Legacy helper kept for compatibility. Instant PAUSE no longer waits for
+        a state boundary, therefore it is always promotable.
         """
-        if self.state in (SystemState.HOMING, SystemState.HOMING_RUNNING):
-            return False
-        return (self.state_in == SystemState.IDLE
-                and self.state_s3 == SystemState.IDLE
-                and self.state_s4 == SystemState.IDLE)
+        return True
 
     def _promote_pause(self):
-        """Promote _pause_pending → _system_paused và notify operator."""
+        """Legacy compatibility path; new PAUSE is promoted in _cb_pause."""
         self._system_paused = True
         self._pause_pending = False
         self._notify('warn', 'PAUSED', 'Hệ thống đã tạm dừng — nhấn RESUME để tiếp tục')

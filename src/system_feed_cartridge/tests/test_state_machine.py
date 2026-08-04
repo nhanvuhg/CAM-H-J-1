@@ -229,6 +229,10 @@ def _make_node():
     node._gui_confirmed    = False
     node._system_paused    = False
     node._pause_pending    = False
+    node._active_servo_moves = {}
+    node._paused_servo_moves = {}
+    node._pause_started_at = 0.0
+    node._pause_restart_homing = False
     node._s4_trigger       = False
     node._jog_mode         = False
     node._drain_armed_after_s2 = False
@@ -591,6 +595,62 @@ class TestStateTransitions:
         node._error("Test error")
 
         node._enter.assert_called_with(SystemState.ERROR)
+
+
+class TestInstantPauseResume:
+    """PAUSE phải dừng motion ngay nhưng không đổi state/step."""
+
+    def test_pause_stops_active_axes_and_keeps_state(self):
+        node = _make_node()
+        node.state_in = SystemState.S1_INY_TO_ROW
+        node._active_servo_moves = {
+            1: (450.0, 200, False),
+            2: (620.0, 120, True),
+        }
+        node._notify = MagicMock()
+        node._stop_immediate = MagicMock(
+            side_effect=lambda sid: node._active_servo_moves.pop(sid, None))
+
+        node._cb_pause(types.SimpleNamespace(data=True))
+
+        assert node._system_paused is True
+        assert node.state_in == SystemState.S1_INY_TO_ROW
+        assert node._paused_servo_moves == {
+            1: (450.0, 200, False),
+            2: (620.0, 120, True),
+        }
+        assert node._stop_immediate.call_args_list == [call(1), call(2)]
+
+    def test_resume_reissues_targets_and_preserves_step(self):
+        node = _make_node()
+        node.state_s4 = SystemState.S4_OUTY_DROP
+        node._system_paused = True
+        node._pause_started_at = time.time() - 5.0
+        node._paused_servo_moves = {5: (310.0, 80, True)}
+        node._notify = MagicMock()
+        node._nb_move = MagicMock(return_value=True)
+
+        node._cb_resume(types.SimpleNamespace(data=True))
+
+        assert node._system_paused is False
+        assert node.state_s4 == SystemState.S4_OUTY_DROP
+        node._nb_move.assert_called_once_with(
+            5, 310.0, vel=80, continuous_update=True)
+        assert node._paused_servo_moves == {}
+
+    def test_resume_failure_remains_paused(self):
+        node = _make_node()
+        node._system_paused = True
+        node._pause_started_at = time.time()
+        node._paused_servo_moves = {3: (800.0, 100, False)}
+        node._notify = MagicMock()
+        node._nb_move = MagicMock(return_value=False)
+        node._stop_immediate = MagicMock()
+
+        node._cb_resume(types.SimpleNamespace(data=True))
+
+        assert node._system_paused is True
+        assert node._paused_servo_moves == {3: (800.0, 100, False)}
 
 
 class TestSensorReading:

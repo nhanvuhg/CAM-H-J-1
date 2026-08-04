@@ -133,6 +133,8 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   motion_busy_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   soft_stop_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   stop_button_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   pause_button_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   resume_button_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  set_mode_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_homing_done_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sensors_state_sub_;
@@ -215,6 +217,7 @@ private:
     std::thread       state_machine_thread_;
     std::atomic<bool> state_machine_running_{true};
     std::recursive_mutex state_mutex_;
+    std::mutex           pause_mutex_;  // serialize service + topic duplicates
 
     bool is_first_batch_{true};
 
@@ -258,8 +261,7 @@ private:
     std::atomic<bool> system_enabled_{true};
     std::atomic<bool> emergency_stop_{false};
     std::atomic<bool> manual_mode_{true};   // Default = MANUAL (toàn hệ thống) — sync với Python cartridge node
-    std::atomic<bool> system_paused_{false};    // Active PAUSE: state machine không transition mới
-    std::atomic<bool> pause_requested_{false};  // Pending PAUSE: chờ motion goal hiện tại xong rồi promote
+    std::atomic<bool> system_paused_{false};    // PAUSE: giữ state machine + Dobot motion tại chỗ
     std::atomic<bool> use_ai_for_control_{false};
     std::atomic<bool> stored_scale_result_{false};
     std::atomic<bool> stop_after_single_motion_{false};
@@ -735,6 +737,28 @@ void RobotLogicNode::initSubscriptions()
     start_button_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/system/start_button", 10,
         std::bind(&RobotLogicNode::startButtonCallback, this, std::placeholders::_1));
+
+    // Topic path keeps web/other HMIs in sync with the service path. The GUI
+    // currently sends both; pause_mutex_ makes the duplicate idempotent.
+    pause_button_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/system/pause_button", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (!msg->data) return;
+            auto req = std::make_shared<std_srvs::srv::SetBool::Request>();
+            auto res = std::make_shared<std_srvs::srv::SetBool::Response>();
+            req->data = true;
+            pauseSystemCallback(req, res);
+        });
+
+    resume_button_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/system/resume_button", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            if (!msg->data) return;
+            auto req = std::make_shared<std_srvs::srv::SetBool::Request>();
+            auto res = std::make_shared<std_srvs::srv::SetBool::Response>();
+            req->data = false;
+            pauseSystemCallback(req, res);
+        });
 
     // new_tray_loaded: input tray ready after cartridge system change
     new_tray_sub_ = create_subscription<std_msgs::msg::Bool>(
@@ -1781,7 +1805,6 @@ void RobotLogicNode::emergencyStopCallback(
         emergency_stop_ = true;
         system_enabled_ = false;
         system_paused_  = false;
-        pause_requested_ = false;
         system_running_ = false;
         system_started_ = false;
         current_state_  = SystemState::IDLE;
@@ -1891,7 +1914,6 @@ void RobotLogicNode::resetStateCallback(
     cartridge_drain_confirmed_ = false;
     emergency_stop_          = false;
     system_paused_           = false;
-    pause_requested_         = false;
     manual_mode_             = true;   // Reset về MANUAL (safe default toàn hệ thống)
     stop_after_single_motion_ = false;
     motion_fail_count_       = 0;
@@ -1910,56 +1932,86 @@ void RobotLogicNode::pauseSystemCallback(
     const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
     std::shared_ptr<std_srvs::srv::SetBool::Response> response)
 {
+    std::lock_guard<std::mutex> pause_lock(pause_mutex_);
     if (request->data) {
-        // Graceful PAUSE: nếu motion đang trong flight → đặt cờ pending,
-        // chờ motion goal hiện tại hoàn tất rồi mới promote → halt tại
-        // ranh giới motion (handleCurrentState lo promote).
-        if (system_paused_ || pause_requested_) {
+        // PAUSE tức thời: khóa state machine trước, rồi phát Pause() native tới
+        // Dobot. MotionExecutor giữ action đang chạy và chờ mode 10; Resume sẽ
+        // Continue() chính trajectory/target đó.
+        if (system_paused_) {
             response->success = true;
-            response->message = "Already paused (or pending)";
+            response->message = "Already paused";
             return;
         }
-        pause_requested_ = true;
-        if (!motion_in_progress_) {
-            // Không có motion → promote ngay để feedback nhanh
-            system_paused_   = true;
-            pause_requested_ = false;
-            RCLCPP_WARN(get_logger(), "[PAUSE] ⏸ Paused (motion idle)");
-            publishSystemStatus("PAUSED");
+        system_paused_ = true;
+        publishSystemStatus("PAUSED");
+
+        if (pause_client_ && pause_client_->service_is_ready()) {
+            auto pause_req = std::make_shared<Pause::Request>();
+            pause_client_->async_send_request(pause_req,
+                [this](rclcpp::Client<Pause>::SharedFuture f) {
+                    try {
+                        const int res = f.get()->res;
+                        if (res == 0) {
+                            RCLCPP_WARN(get_logger(),
+                                "[PAUSE] Dobot motion paused at current position");
+                        } else {
+                            RCLCPP_ERROR(get_logger(),
+                                "[PAUSE] Dobot Pause failed, result=%d", res);
+                            publishError("DOBOT_PAUSE_FAILED");
+                        }
+                    } catch (const std::exception& e) {
+                        RCLCPP_ERROR(get_logger(), "[PAUSE] Dobot Pause exception: %s", e.what());
+                        publishError("DOBOT_PAUSE_FAILED");
+                    }
+                });
             response->success = true;
-            response->message = "System PAUSED";
+            response->message = "System PAUSED; Dobot motion pause requested";
         } else {
-            RCLCPP_WARN(get_logger(),
-                "[PAUSE] ⏸ Pending — wait for motion '%s' to finish",
-                getMotionCmd().c_str());
-            publishSystemStatus("PAUSING");
-            response->success = true;
-            response->message = "PAUSE pending — waiting for motion to finish";
+            RCLCPP_ERROR(get_logger(), "[PAUSE] Dobot Pause service not ready");
+            publishError("DOBOT_PAUSE_SERVICE_OFFLINE");
+            response->success = false;
+            response->message = "State held, but Dobot Pause service is offline";
         }
     } else {
-        // RESUME: clear cả 2 cờ. Reset các timestamp state-wait để pause
-        // dài không gây false-positive timeout ngay sau resume. Motion
-        // watchdog (motion_started_at_) cũng reset vì motion đang chạy
-        // (nếu có) thực sự đã tiêu thụ "now - motion_started_at_" trong
-        // pause window — không công bằng nếu vẫn tính.
+        // RESUME: Continue() native để Dobot đi tiếp trajectory đang giữ, rồi
+        // mở state machine. Refresh timeout để thời gian PAUSE không bị tính.
+        if (!system_paused_) {
+            response->success = true;
+            response->message = "Already running";
+            return;
+        }
+        if (!continue_client_ || !continue_client_->service_is_ready()) {
+            RCLCPP_ERROR(get_logger(), "[RESUME] Dobot Continue service not ready");
+            response->success = false;
+            response->message = "Still paused: Dobot Continue service is offline";
+            return;
+        }
+
+        auto continue_req = std::make_shared<Continues::Request>();
+        auto continue_res = callService<Continues>(continue_client_, continue_req, "Continue");
+        if (!continue_res || continue_res->res != 0) {
+            const int res = continue_res ? continue_res->res : -1;
+            RCLCPP_ERROR(get_logger(), "[RESUME] Dobot Continue failed, result=%d", res);
+            publishError("DOBOT_CONTINUE_FAILED");
+            response->success = false;
+            response->message = "Still paused: Dobot Continue failed";
+            return;
+        }
+        RCLCPP_INFO(get_logger(),
+            "[RESUME] Dobot motion continuing from paused position");
+
         motion_fail_count_ = 0;
         if (!motion_in_progress_ && !motion_result_ && !getMotionCmd().empty())
             clearMotionCmd();
-        bool was_paused  = system_paused_;
-        bool was_pending = pause_requested_;
-        system_paused_   = false;
-        pause_requested_ = false;
+        system_paused_ = false;
         auto now = this->now();
         motion_started_at_   = now;
         wait_tray_start_time_ = now;
         scale_wait_start_    = now;
-        if (was_paused || was_pending) {
-            RCLCPP_INFO(get_logger(), "[RESUME] ▶ %s — timers refreshed",
-                was_pending ? "Cancelled pending PAUSE" : "Resumed from PAUSED");
-        }
+        RCLCPP_INFO(get_logger(), "[RESUME] State machine resumed — timers refreshed");
         notifyStateChange();
         response->success = true;
-        response->message = "System RESUMED";
+        response->message = "System RESUMED; Dobot motion continue requested";
     }
 }
 
@@ -2144,24 +2196,8 @@ void RobotLogicNode::handleCurrentState()
         publishSystemStatus("EMERGENCY_STOP");
         return;
     }
-    // Graceful PAUSE: nếu user đã yêu cầu pause và motion goal hiện tại đã xong
-    // → promote thành active PAUSE để halt hẳn ranh giới state.
-    if (pause_requested_ && !motion_in_progress_) {
-        system_paused_   = true;
-        pause_requested_ = false;
-        RCLCPP_WARN(get_logger(),
-            "[PAUSE] ⏸ Promoted to active (motion goal complete)");
-        publishSystemStatus("PAUSED");
-        return;
-    }
     if (system_paused_) {
         publishSystemStatus("PAUSED");
-        return;
-    }
-    // PAUSE pending + motion vẫn trong flight → để motion chạy nốt
-    // qua result callback, nhưng KHÔNG transition state mới.
-    if (pause_requested_) {
-        publishSystemStatus("PAUSING");
         return;
     }
     if (!system_enabled_ && current_state_ != SystemState::IDLE) {

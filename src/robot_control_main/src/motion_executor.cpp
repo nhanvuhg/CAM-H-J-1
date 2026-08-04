@@ -149,6 +149,18 @@ public:
                 if (msg->data) requestMotionStop("/system/stop_button");
             });
 
+        pause_button_sub_ = create_subscription<std_msgs::msg::Bool>(
+            "/system/pause_button", 10,
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                if (msg->data) operator_paused_ = true;
+            });
+
+        resume_button_sub_ = create_subscription<std_msgs::msg::Bool>(
+            "/system/resume_button", 10,
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                if (msg->data) operator_paused_ = false;
+            });
+
         // Heartbeat Timer (500ms)
         heartbeat_timer_ = create_wall_timer(500ms, [this]() {
             std_msgs::msg::Header h;
@@ -186,6 +198,7 @@ private:
     // Abort flag — set bởi handle_cancel (STOP), check trong tất cả motion helpers
     // để thoát NGAY khi STOP thay vì chạy hết sequence.
     std::atomic<bool> abort_motion_{false};
+    std::atomic<bool> operator_paused_{false};
 
     int current_fail_slot_{1};
 
@@ -213,6 +226,8 @@ private:
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr speed_ratio_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr soft_stop_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr stop_button_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr pause_button_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr resume_button_sub_;
     
     rclcpp::TimerBase::SharedPtr heartbeat_timer_;
 
@@ -378,11 +393,42 @@ private:
         return res->res == 0;
     }
 
+    bool waitWhilePaused(const std::string& context) {
+        bool logged = false;
+        while (rclcpp::ok()) {
+            if (shouldAbort()) return false;
+
+            bool controller_paused = false;
+            if (robot_mode_client_ && robot_mode_client_->service_is_ready()) {
+                auto req = std::make_shared<RobotMode::Request>();
+                auto future = robot_mode_client_->async_send_request(req);
+                if (future.wait_for(1s) == std::future_status::ready) {
+                    try {
+                        auto res = future.get();
+                        if (res && res->res == 0)
+                            controller_paused = std::stoi(res->mode) == 10;
+                    } catch (...) {}
+                }
+            }
+
+            if (!operator_paused_.load() && !controller_paused)
+                return true;
+            if (!logged) {
+                RCLCPP_WARN(get_logger(),
+                    "[%s] PAUSED — hold current action step", context.c_str());
+                logged = true;
+            }
+            rclcpp::sleep_for(std::chrono::milliseconds(50));
+        }
+        return false;
+    }
+
     // ========================================================================
     // MOTION PRIMITIVES
     // ========================================================================
     bool moveToIndex(size_t index, int speed_override = -1) {
         if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveToIndex] aborted"); return false; }
+        if (!waitWhilePaused("moveToIndex")) return false;
         if (index >= joint_sequences_.size()) {
             RCLCPP_ERROR(get_logger(), "[MOTION] Invalid index: %zu (max: %zu)", 
                          index, joint_sequences_.size() - 1);
@@ -416,6 +462,7 @@ private:
 
     bool moveR(double dx, double dy, double dz, int speed_override = -1) {
         if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveR] aborted"); return false; }
+        if (!waitWhilePaused("moveR")) return false;
         if (!prepareLinearMotion(speed_override)) {
             RCLCPP_ERROR(get_logger(), "[moveR] Prepare failed");
             return false;
@@ -462,6 +509,7 @@ private:
 
     bool moveJ_Absolute(const std::vector<double>& pose) {
         if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveJ_Absolute] aborted"); return false; }
+        if (!waitWhilePaused("moveJ_Absolute")) return false;
         if (pose.size() < 6) return false;
         
         if (!prepareJointMotion()) {
@@ -489,6 +537,7 @@ private:
 
     bool moveL_Absolute(const std::vector<double>& pose) {
         if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveL_Absolute] aborted"); return false; }
+        if (!waitWhilePaused("moveL_Absolute")) return false;
         if (pose.size() < 6) return false;
         
         if (!prepareLinearMotion()) {
@@ -517,6 +566,7 @@ private:
 
     bool setDigitalOutput(int index, bool status) {
         if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[setDigitalOutput] aborted"); return false; }
+        if (!waitWhilePaused("setDigitalOutput")) return false;
         // Publish to ROS topics first for the Festo Gripper Node
         if (index == 1 && pub_gripper_) {
             auto msg = std_msgs::msg::Bool();
@@ -599,13 +649,17 @@ private:
         // before it officially starts trajectory execution.
         rclcpp::sleep_for(std::chrono::milliseconds(250));
 
-        bool continue_sent = false;
-        const int max_attempts = 600; // 60 seconds max
+        const int max_attempts = 600; // 60 seconds active motion; PAUSE time is excluded
         for (int i = 0; i < max_attempts; ++i) {
             // Thoát ngay nếu STOP/cancel — không chờ thêm
             if (shouldAbort()) {
                 RCLCPP_WARN(get_logger(), "[SYNC] aborted (STOP) — return false");
                 return false;
+            }
+            if (operator_paused_.load()) {
+                --i;
+                rclcpp::sleep_for(std::chrono::milliseconds(50));
+                continue;
             }
             auto req = std::make_shared<RobotMode::Request>();
             auto future = robot_mode_client_->async_send_request(req);
@@ -620,9 +674,12 @@ private:
                     if (mode == 5) {
                         RCLCPP_DEBUG(get_logger(), "[SYNC] Robot idle (mode=5) after %d polls - SUCCESS", i);
                         return true;
-                    } else if (mode == 10 && !continue_sent) {
-                        continue_sent = true;
-                        continueIfPaused("SYNC");
+                    } else if (mode == 10) {
+                        // Operator PAUSE: giữ nguyên action/primitive hiện tại.
+                        // Chỉ /robot/pause_system(false) phát Continue(). Không
+                        // tính thời gian đứng yên này vào watchdog motion 60s.
+                        --i;
+                        rclcpp::sleep_for(std::chrono::milliseconds(100));
                         continue;
                     } else if (mode != 7) {
                         RCLCPP_ERROR(get_logger(), "[SYNC] Motion INTERRUPTED! Mode=%d (not 7 or 5)", mode);
@@ -686,6 +743,11 @@ private:
             if (shouldAbort()) {
                 RCLCPP_WARN(get_logger(), "[wait] aborted mid-sleep");
                 return false;
+            }
+            if (operator_paused_.load()) {
+                const auto pause_begin = std::chrono::steady_clock::now();
+                if (!waitWhilePaused("wait")) return false;
+                deadline += std::chrono::steady_clock::now() - pause_begin;
             }
             rclcpp::sleep_for(std::chrono::milliseconds(50));
         }
@@ -881,8 +943,11 @@ private:
                     std::this_thread::sleep_for(300ms);
                     
                     RCLCPP_INFO(get_logger(), "[ACTION] Robot re-enabled after error clear");
-                } else if (mode == 10) {
+                } else if (mode == 10 && !operator_paused_.load()) {
                     continueIfPaused("ACTION");
+                } else if (mode == 10) {
+                    RCLCPP_WARN(get_logger(),
+                        "[ACTION] Goal accepted while operator PAUSED — hold before first step");
                 }
                 // mode 5 = standby, mode 7 = running — không cần làm gì
             } catch (...) {
@@ -1018,6 +1083,7 @@ private:
     // Hàm di chuyển theo trục chuẩn của mặt bàn (Base/User 0)
     bool moveBase(double dx, double dy, double dz) {
         if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveBase] aborted"); return false; }
+        if (!waitWhilePaused("moveBase")) return false;
         if (!prepareLinearMotion()) return false;
         auto current_pose = getCurrentPose();
         if (current_pose.size() < 6) return false;

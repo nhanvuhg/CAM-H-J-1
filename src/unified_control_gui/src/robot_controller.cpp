@@ -1642,8 +1642,8 @@ void RobotController::setDigitalOutput(int index, bool status)
 void RobotController::pauseRobot()
 {
     qDebug() << "PauseRobot -> /robot/pause_system true + /system/pause_button";
-    // Graceful PAUSE: robot dừng tại ranh giới motion goal hiện tại.
-    // Đồng thời publish /system/pause_button để cartridge cũng pause graceful.
+    // Instant PAUSE: Dobot giữ trajectory hiện tại; cartridge dừng servo/VFD
+    // và giữ nguyên state/step để Resume tiếp tục.
     callServiceAsync(pause_system_client_, true);
     if (system_pause_pub_) {
         std_msgs::msg::Bool m;

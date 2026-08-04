@@ -23,6 +23,8 @@ Input:
     /providesystem/sensors_state (String, char 0/1/2 = S1/S2/S3)
     /system_state                (String, format "global|state_in|state_out")
     /robot/set_mode              (Int32, 1=auto, 2=ai, 3=manual)
+    /system/pause_button         (Bool, True=stop belt immediately)
+    /system/resume_button        (Bool, True=restore if interlocks still allow)
 Output:
     /vfd/cmd_run (Bool) → rs485_bus_node trên RevPi A → Modbus RTU → ATV320
 """
@@ -48,6 +50,10 @@ class VfdLogicNode(Node):
             String, '/system_state', self.state_cb, 10)
         self.create_subscription(
             Int32, '/robot/set_mode', self.mode_cb, 10)
+        self.create_subscription(
+            Bool, '/system/pause_button', self.pause_cb, 10)
+        self.create_subscription(
+            Bool, '/system/resume_button', self.resume_cb, 10)
         # homing_done: cartridge publish latching (True khi homing xong, False
         # ở init + khi clear zero_offset do STOP/mode-switch/ERROR). QoS phải
         # match TRANSIENT_LOCAL để start sau vẫn nhận state cuối.
@@ -62,6 +68,8 @@ class VfdLogicNode(Node):
         self.cartridge_homed = False  # False cho tới khi cartridge publish homing_done=True
         self.op_mode = self.MODE_MANUAL  # default — match cartridge default
         self.current_cmd = False
+        self.system_paused = False
+        self.pre_pause_cmd = False
         self.run_started_at = None
         self.run_timeout_s = float(self.declare_parameter('run_timeout_s', 30.0).value)
 
@@ -78,6 +86,38 @@ class VfdLogicNode(Node):
         self.get_logger().info(
             f"Cartridge homed = {self.cartridge_homed} → {'enable' if self.cartridge_homed else 'BLOCK'} sensor check")
         self.evaluate_logic()
+
+    def pause_cb(self, msg):
+        """STOP VFD ngay, giữ lại RUN state để Resume có thể tiếp tục."""
+        if not msg.data or self.system_paused:
+            return
+        self.system_paused = True
+        self.pre_pause_cmd = self.current_cmd
+        self.current_cmd = False
+        self.run_started_at = None
+        self.publish_cmd(False)
+        self.get_logger().warn(
+            f"VFD PAUSED immediately (pre_pause_run={self.pre_pause_cmd})")
+
+    def resume_cb(self, msg):
+        """Khôi phục RUN chỉ khi mode/homing/state và S3 vẫn cho phép."""
+        if not msg.data or not self.system_paused:
+            return
+        self.system_paused = False
+        gate_open = (
+            (self.op_mode in (self.MODE_AUTO, self.MODE_AI) and self.cartridge_homed)
+            or (self.op_mode == self.MODE_MANUAL and self.in_state1)
+        )
+        restore_run = self.pre_pause_cmd and gate_open and not self.s3_state
+        self.pre_pause_cmd = False
+        self.current_cmd = restore_run
+        self.run_started_at = time.monotonic() if restore_run else None
+        self.publish_cmd(restore_run)
+        # Re-evaluate current sensors immediately; S3 and closed gates retain
+        # priority, while a previous RUN may carry across a tray gap.
+        self.evaluate_logic()
+        self.get_logger().info(
+            f"VFD RESUMED -> {'RUN' if self.current_cmd else 'STOP'}")
 
     def mode_cb(self, msg):
         if msg.data == self.op_mode:
@@ -138,6 +178,12 @@ class VfdLogicNode(Node):
     # subscription /cartridge/homing_done.
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     def evaluate_logic(self, allow_carry=True):
+        if self.system_paused:
+            if self.current_cmd:
+                self.current_cmd = False
+                self.run_started_at = None
+                self.publish_cmd(False)
+            return
         if self.op_mode in (self.MODE_AUTO, self.MODE_AI):
             if not self.cartridge_homed:
                 new_cmd, reason = False, f"{self._mode_name(self.op_mode)} chưa homing (chờ START)"

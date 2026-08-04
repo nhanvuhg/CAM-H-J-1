@@ -279,14 +279,14 @@ void CartridgeController::softStop()
 
 void CartridgeController::pauseSystem()
 {
-    // Sync 2 chiều: cartridge dừng tại ranh giới state, robot dừng tại
-    // ranh giới motion goal — cả 2 graceful, không halt giữa chừng.
+    // Sync 2 chiều: dừng ngay robot + servo cartridge + băng tải VFD,
+    // đồng thời giữ nguyên state/step để Resume tiếp tục.
     publishBool(pause_button_pub_, true);
     if (robot_pause_client_ && robot_pause_client_->service_is_ready()) {
         auto req = std::make_shared<std_srvs::srv::SetBool::Request>();
         req->data = true;
         robot_pause_client_->async_send_request(req);
-        addLog("PAUSE → cartridge + robot (graceful)", "info");
+        addLog("PAUSE → cartridge + robot (instant motion hold)", "info");
     } else {
         addLog("PAUSE → cartridge (robot pause service offline)", "warn");
     }
