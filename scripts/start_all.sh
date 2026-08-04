@@ -25,6 +25,7 @@ export DISPLAY=${DISPLAY:-:0}
 export FILL_HP_USERS_FILE="${FILL_HP_USERS_FILE:-$WS/src/unified_control_gui/fill_hp_users.json}"
 CAM0_AI_MODEL="${CAM0_AI_MODEL:-$HOME/models/data_input_hp1.engine}"
 CAM1_AI_MODEL="${CAM1_AI_MODEL:-$HOME/models/data_output_hp1.engine}"
+AI_MAX_FPS="${AI_MAX_FPS:-20.0}"
 
 # Keep Qt geometry identical to the RevPi reference display. Jetson's X server
 # reports 92x91 DPI while the RevPi reports 96x96; explicit 1:1 scaling avoids
@@ -120,25 +121,36 @@ NODE_PATTERNS=(
     "vfd_logic_node"
 )
 
+camera_stack_pids() {
+    {
+        pgrep -f "^${WS}/install/csi_camera/lib/csi_camera/v4l2_dual_camera_cuda_node([[:space:]]|$)" 2>/dev/null || true
+        pgrep -f "^${WS}/install/csi_camera/lib/csi_camera/v4l2_dual_camera_node([[:space:]]|$)" 2>/dev/null || true
+        pgrep -f "^${WS}/install/yolo_tensorrt_ros2/lib/yolo_tensorrt_ros2/yolo_tensorrt_node([[:space:]]|$)" 2>/dev/null || true
+        pgrep -f "^${WS}/install/bbox_drawer_cpp/lib/bbox_drawer_cpp/overlay_bboxes_node([[:space:]]|$)" 2>/dev/null || true
+        pgrep -f "^${WS}/install/robot_control_main/lib/robot_control_main/vision_decision_node([[:space:]]|$)" 2>/dev/null || true
+    } | sort -nu
+}
+
 stop_jetson_camera_nodes() {
-    local camera_pids=""
-    for camera_name in csi_camera_node v4l2_dual_camera_cuda_node v4l2_dual_camera_node; do
-        local matching_pids
-        matching_pids=$(pgrep -x "$camera_name" 2>/dev/null || true)
-        [ -n "$matching_pids" ] && camera_pids="$camera_pids $matching_pids"
-    done
+    local camera_pids
+    local remaining_pids
+    camera_pids=$(camera_stack_pids)
     [ -z "$camera_pids" ] && return
 
-    echo "📷 Stopping V4L2 camera nodes gracefully..."
+    echo "📷 Stopping camera stack gracefully..."
     kill -TERM $camera_pids 2>/dev/null || true
     local camera_wait=0
-    while pgrep -x "csi_camera_node" >/dev/null 2>&1 || \
-          pgrep -x "v4l2_dual_camera_cuda_node" >/dev/null 2>&1 || \
-          pgrep -x "v4l2_dual_camera_node" >/dev/null 2>&1; do
+    while true; do
+        remaining_pids=""
+        for camera_pid in $camera_pids; do
+            if kill -0 "$camera_pid" 2>/dev/null; then
+                remaining_pids="$remaining_pids $camera_pid"
+            fi
+        done
+        [ -z "$remaining_pids" ] && break
         if [ "$camera_wait" -ge 6 ]; then
-            pkill -KILL -x "csi_camera_node" 2>/dev/null || true
-            pkill -KILL -x "v4l2_dual_camera_cuda_node" 2>/dev/null || true
-            pkill -KILL -x "v4l2_dual_camera_node" 2>/dev/null || true
+            echo "⚠️  Forcing remaining camera stack PIDs:$remaining_pids"
+            kill -KILL $remaining_pids 2>/dev/null || true
             break
         fi
         sleep 1
@@ -351,9 +363,24 @@ camera_stack_supervisor() {
 
     _stop_camera_child() {
         if [ -n "$camera_launch_pid" ] && kill -0 "$camera_launch_pid" 2>/dev/null; then
-            kill -INT "$camera_launch_pid" 2>/dev/null || true
+            kill -TERM "$camera_launch_pid" 2>/dev/null || true
+            local shutdown_wait=0
+            local child_state=""
+            while kill -0 "$camera_launch_pid" 2>/dev/null; do
+                child_state=$(ps -o stat= -p "$camera_launch_pid" 2>/dev/null || true)
+                if [ -z "$child_state" ] || [[ "$child_state" == Z* ]]; then
+                    break
+                fi
+                if [ "$shutdown_wait" -ge 6 ]; then
+                    kill -KILL "$camera_launch_pid" 2>/dev/null || true
+                    break
+                fi
+                sleep 1
+                shutdown_wait=$((shutdown_wait + 1))
+            done
             wait "$camera_launch_pid" 2>/dev/null || true
         fi
+        stop_jetson_camera_nodes
         exit 0
     }
     trap _stop_camera_child TERM INT HUP
@@ -367,7 +394,8 @@ camera_stack_supervisor() {
         ros2 launch csi_camera dual_camera_system.launch.py \
             enable_inference:=true \
             cam0_model:="$CAM0_AI_MODEL" \
-            cam1_model:="$CAM1_AI_MODEL" &
+            cam1_model:="$CAM1_AI_MODEL" \
+            max_inference_fps:="$AI_MAX_FPS" &
         camera_launch_pid=$!
         echo "RUNNING launch_pid=$camera_launch_pid failures=$consecutive_failures" \
             > "$CAMERA_SUPERVISOR_STATUS"

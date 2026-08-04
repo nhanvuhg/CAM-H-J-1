@@ -125,6 +125,7 @@ public:
       static_cast<float>(declare_parameter<double>("nms_threshold", 0.45));
     max_detections_ = declare_parameter<int>("max_detections", 300);
     device_id_ = declare_parameter<int>("device_id", 0);
+    max_inference_fps_ = declare_parameter<double>("max_inference_fps", 0.0);
 
     if (engine_path_.empty()) {
       throw std::runtime_error("Parameter engine_path must not be empty");
@@ -136,6 +137,13 @@ public:
       throw std::runtime_error("nms_threshold must be in (0, 1]");
     }
     max_detections_ = std::max(1, max_detections_);
+    if (max_inference_fps_ < 0.0 || max_inference_fps_ > 120.0) {
+      throw std::runtime_error("max_inference_fps must be in range 0..120");
+    }
+    if (max_inference_fps_ > 0.0) {
+      minimum_inference_interval_ = std::chrono::nanoseconds(
+        static_cast<std::int64_t>(1000000000.0 / max_inference_fps_));
+    }
 
     load_engine();
 
@@ -158,10 +166,10 @@ public:
     RCLCPP_INFO(
       get_logger(),
       "READY engine=%s input=%dx%d output_channels=%d candidates=%d classes=%d "
-      "image=%s detections=%s",
+      "image=%s detections=%s max_fps=%.1f",
       engine_path_.c_str(), input_width_, input_height_, output_channels_,
       output_candidates_, class_count_, image_topic_.c_str(),
-      detections_topic_.c_str());
+      detections_topic_.c_str(), max_inference_fps_);
   }
 
   ~YoloTensorRtNode() override
@@ -430,6 +438,23 @@ private:
   void image_callback(const sensor_msgs::msg::Image::ConstSharedPtr message)
   {
     const auto started = std::chrono::steady_clock::now();
+    received_frames_.fetch_add(1);
+    if (minimum_inference_interval_.count() > 0) {
+      if (next_inference_due_.time_since_epoch().count() == 0) {
+        next_inference_due_ = started + minimum_inference_interval_;
+      } else if (started < next_inference_due_) {
+        rate_limited_frames_.fetch_add(1);
+        return;
+      } else if (started - next_inference_due_ >= minimum_inference_interval_) {
+        // Rebase after a long input gap so recovery does not cause a burst.
+        next_inference_due_ = started + minimum_inference_interval_;
+      } else {
+        // Preserve the fractional cadence against a 30 FPS camera clock. This
+        // alternates accepted input gaps instead of collapsing 20 FPS to 15.
+        next_inference_due_ += minimum_inference_interval_;
+      }
+    }
+
     try {
       const cv_bridge::CvImageConstPtr image =
         cv_bridge::toCvShare(message, "bgr8");
@@ -481,7 +506,10 @@ private:
     std_msgs::msg::String message;
     std::ostringstream status;
     status << "READY backend=TensorRT engine=" << engine_path_
+           << " max_fps=" << max_inference_fps_
+           << " received=" << received_frames_.load()
            << " frames=" << processed_frames_.load()
+           << " rate_limited=" << rate_limited_frames_.load()
            << " errors=" << inference_errors_.load()
            << " inference_ms=" << last_inference_ms_.load()
            << " detections=" << last_detection_count_.load();
@@ -515,6 +543,9 @@ private:
   int output_channels_{0};
   int output_candidates_{0};
   int class_count_{0};
+  double max_inference_fps_{0.0};
+  std::chrono::nanoseconds minimum_inference_interval_{0};
+  std::chrono::steady_clock::time_point next_inference_due_{};
 
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_subscription_;
   rclcpp::Publisher<vision_msgs::msg::Detection2DArray>::SharedPtr
@@ -523,6 +554,8 @@ private:
   rclcpp::TimerBase::SharedPtr health_timer_;
 
   std::atomic<std::uint64_t> processed_frames_{0};
+  std::atomic<std::uint64_t> received_frames_{0};
+  std::atomic<std::uint64_t> rate_limited_frames_{0};
   std::atomic<std::uint64_t> inference_errors_{0};
   std::atomic<std::size_t> last_detection_count_{0};
   std::atomic<double> last_inference_ms_{0.0};

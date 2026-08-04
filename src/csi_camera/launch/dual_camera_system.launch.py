@@ -6,12 +6,14 @@ from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     cam0_model = LaunchConfiguration('cam0_model')
     cam1_model = LaunchConfiguration('cam1_model')
     enable_inference = LaunchConfiguration('enable_inference')
     use_cuda_camera = LaunchConfiguration('use_cuda_camera')
+    max_inference_fps = LaunchConfiguration('max_inference_fps')
     # The camera node owns both V4L2 devices and performs the validated CUDA
     # debayer/tone path. It publishes BGR8 640x360 with depth=1 semantics.
     camera_topic_parameters = {
@@ -73,6 +75,7 @@ def generate_launch_description():
             'class_names': ['tray', 'cartridge'],
             'confidence_threshold': 0.60,
             'nms_threshold': 0.45,
+            'max_inference_fps': ParameterValue(max_inference_fps, value_type=float),
         }],
     )
 
@@ -92,6 +95,7 @@ def generate_launch_description():
             'class_names': ['tray', 'cartridge', 'cartridgefall'],
             'confidence_threshold': 0.30,
             'nms_threshold': 0.45,
+            'max_inference_fps': ParameterValue(max_inference_fps, value_type=float),
         }],
     )
 
@@ -154,6 +158,11 @@ def generate_launch_description():
             'use_cuda_camera',
             default_value='true',
             description='Use the production V4L2 CUDA camera; false selects V4L2 CPU diagnostics',
+        ),
+        DeclareLaunchArgument(
+            'max_inference_fps',
+            default_value='20.0',
+            description='Maximum TensorRT inference rate per camera; 0 disables limiting',
         ),
         DeclareLaunchArgument(
             'cam0_model',
