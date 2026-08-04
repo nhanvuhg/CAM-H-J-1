@@ -46,6 +46,10 @@ import QtGraphicalEffects 1.15
         property bool startCommandLocked: false
         property bool suppressJogEchoForManual: false
         property bool pauseLatched: false
+        // Even a tiny infinite opacity animation keeps Qt Quick's scene graph
+        // rendering at display refresh rate. Static colors still expose every
+        // state while avoiding a permanently busy QSGRenderThread.
+        property bool continuousAnimationsEnabled: false
         property Item activeDataInput: null
         readonly property bool viewerContentLocked: mainWindow.isViewer
         readonly property bool operatorTechnicalLocked: mainWindow.isOperator && stack.currentIndex === 1
@@ -563,7 +567,9 @@ import QtGraphicalEffects 1.15
                                 if (s === "IDLE" || s === "UNKNOWN" || s === "") return root.cOrange
                                 return root.cGreen
                             }
-                            SequentialAnimation on opacity { loops: Animation.Infinite
+                            SequentialAnimation on opacity {
+                                loops: Animation.Infinite
+                                running: root.continuousAnimationsEnabled
                                 NumberAnimation { to: 0.35; duration: 900 }
                                 NumberAnimation { to: 1.0;  duration: 900 }
                             }
@@ -586,7 +592,8 @@ import QtGraphicalEffects 1.15
 
                     // Nhấp nháy khi chưa chọn mode
                     SequentialAnimation on opacity {
-                        loops: Animation.Infinite; running: modePill.isIdle
+                        loops: Animation.Infinite
+                        running: root.continuousAnimationsEnabled && modePill.isIdle
                         NumberAnimation { to: 0.4; duration: 600 }
                         NumberAnimation { to: 1.0; duration: 600 }
                     }
@@ -1942,7 +1949,7 @@ import QtGraphicalEffects 1.15
                                                         visible: sBtn.on_
 
                                                         SequentialAnimation {
-                                                            running: sBtn.on_
+                                                            running: root.continuousAnimationsEnabled && sBtn.on_
                                                             loops: Animation.Infinite
                                                             PauseAnimation { duration: index * 1000 }
                                                             ParallelAnimation {
@@ -3473,12 +3480,12 @@ import QtGraphicalEffects 1.15
                 color: "transparent"
                 border.color: root.cAccent
                 border.width: 4
-                opacity: 0
+                opacity: cbr.blinking && !root.continuousAnimationsEnabled ? 1 : 0
                 visible: cbr.blinking
                 z: 2
                 SequentialAnimation on opacity {
                     loops: Animation.Infinite
-                    running: cbr.blinking
+                    running: root.continuousAnimationsEnabled && cbr.blinking
                     NumberAnimation { to: 1.0; duration: 350; easing.type: Easing.InOutQuad }
                     NumberAnimation { to: 0.2; duration: 350; easing.type: Easing.InOutQuad }
                 }

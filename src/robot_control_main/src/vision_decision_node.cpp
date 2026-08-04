@@ -712,7 +712,7 @@ private:
                                  (raw_count == INPUT_ROW_THRESHOLD);
                 bool stable    = row_filters_[i].update_ready(raw_ready);
                 row_full_[i]   = stable;
-                RCLCPP_INFO(get_logger(),
+                RCLCPP_DEBUG(get_logger(),
                     "[ROW %zu] raw=%d filtered=%d thr=%d READY(raw)=%s READY(stable)=%s (streak=%d/%d) [tray_total=%d]",
                     i + 1, raw_count, filtered, INPUT_ROW_THRESHOLD,
                     raw_ready ? "YES" : "NO", stable ? "YES" : "NO",

@@ -13,6 +13,7 @@ def generate_launch_description():
     cam1_model = LaunchConfiguration('cam1_model')
     enable_inference = LaunchConfiguration('enable_inference')
     use_cuda_camera = LaunchConfiguration('use_cuda_camera')
+    capture_fps = LaunchConfiguration('capture_fps')
     max_inference_fps = LaunchConfiguration('max_inference_fps')
     # The camera node owns both V4L2 devices and performs the validated CUDA
     # debayer/tone path. It publishes BGR8 640x360 with depth=1 semantics.
@@ -34,7 +35,7 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             **camera_topic_parameters,
-            'capture_fps': 30,
+            'capture_fps': ParameterValue(capture_fps, value_type=int),
             'exposure': 32000,
         }],
         condition=IfCondition(use_cuda_camera),
@@ -163,6 +164,11 @@ def generate_launch_description():
             'max_inference_fps',
             default_value='20.0',
             description='Maximum TensorRT inference rate per camera; 0 disables limiting',
+        ),
+        DeclareLaunchArgument(
+            'capture_fps',
+            default_value='20',
+            description='Sensor capture rate; keep aligned with inference to avoid excess frames',
         ),
         DeclareLaunchArgument(
             'cam0_model',

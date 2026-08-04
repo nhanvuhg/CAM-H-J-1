@@ -34,7 +34,7 @@ public:
               "cam1_health_topic", "/camera/cam1/health")),
           cam0_clarity_(declare_parameter<double>("cam0_clarity", 0.45)),
           cam1_clarity_(declare_parameter<double>("cam1_clarity", 0.60)),
-          capture_fps_(declare_parameter<int>("capture_fps", 30)),
+          capture_fps_(declare_parameter<int>("capture_fps", 20)),
           exposure_(declare_parameter<int>("exposure", 32000)) {
         auto image_qos = rclcpp::SensorDataQoS().keep_last(1);
         image_publishers_[0] =
@@ -98,6 +98,8 @@ private:
                                 "Both CUDA camera streams are active");
 
                     std::array<uint64_t, 2> window_frames{0, 0};
+                    std::array<uint32_t, 2> last_sequences{0, 0};
+                    std::array<bool, 2> have_sequence{false, false};
                     auto window_start = std::chrono::steady_clock::now();
                     while (rclcpp::ok() && !stopping_.load()) {
                         V4L2Camera* cameras[2] = {&cam0, &cam1};
@@ -111,6 +113,16 @@ private:
                              ++camera_id) {
                             auto frame = cameras[camera_id]->readLatest();
                             if (!frame.data) break;
+                            if (have_sequence[camera_id]) {
+                                const uint32_t sequence_delta =
+                                    frame.sequence - last_sequences[camera_id];
+                                if (sequence_delta > 1) {
+                                    sequence_gaps_[camera_id].fetch_add(
+                                        static_cast<uint64_t>(sequence_delta - 1));
+                                }
+                            }
+                            last_sequences[camera_id] = frame.sequence;
+                            have_sequence[camera_id] = true;
                             cv::Mat image;
                             try {
                                 image = processor.process(
@@ -217,6 +229,8 @@ private:
                  << kOutputHeight << " fps=" << std::fixed
                  << std::setprecision(1) << fps[id] << " age="
                  << std::setprecision(2) << age << "s gpu_ms=" << gpu_ms
+                 << " target_fps=" << capture_fps_
+                 << " sequence_gaps=" << sequence_gaps_[id].load()
                  << " reconnects=" << reconnects_.load()
                  << " published=" << published_[id].load();
             message.data = text.str();
@@ -241,6 +255,7 @@ private:
     std::atomic<bool> stopping_{false};
     std::atomic<int> reconnects_{0};
     std::array<std::atomic<uint64_t>, 2> published_{{0, 0}};
+    std::array<std::atomic<uint64_t>, 2> sequence_gaps_{{0, 0}};
     std::array<std::atomic<int64_t>, 2> last_frame_ns_{{0, 0}};
     std::mutex status_mutex_;
     std::array<double, 2> measured_fps_{{0.0, 0.0}};
