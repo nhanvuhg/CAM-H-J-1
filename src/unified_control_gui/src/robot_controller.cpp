@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QHash>
 #include <QRegularExpression>
 #include <QSettings>
@@ -369,6 +370,13 @@ void RobotController::callServiceAsync(rclcpp::Client<std_srvs::srv::SetBool>::S
 
 QString RobotController::captureScreenshot()
 {
+    if (screenshot_process_) {
+        const QString message = "Screenshot already in progress";
+        qWarning() << message;
+        emit serviceCallResult(false, message);
+        return QString();
+    }
+
     const QString outputDir = QDir::home().filePath("PicturesGUI");
     if (!QDir().mkpath(outputDir)) {
         const QString message = "Cannot create screenshot directory: " + outputDir;
@@ -377,10 +385,12 @@ QString RobotController::captureScreenshot()
         return QString();
     }
 
-    const QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss");
+    const QString timestamp = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss_zzz");
     const QString outputPath = outputDir + "/screenshot_" + timestamp + ".png";
 
-    QProcess process;
+    auto* process = new QProcess(this);
+    screenshot_process_ = process;
+
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     if (!env.contains("DISPLAY") || env.value("DISPLAY").isEmpty()) {
         env.insert("DISPLAY", ":0");
@@ -392,41 +402,82 @@ QString RobotController::captureScreenshot()
         const QString homeAuth = QDir::home().filePath(".Xauthority");
         env.insert("XAUTHORITY", QFile::exists(runtimeAuth) ? runtimeAuth : homeAuth);
     }
-    process.setProcessEnvironment(env);
+    process->setProcessEnvironment(env);
 
     QString captureProgram;
     QStringList captureArguments;
-    if (QFile::exists("/usr/bin/gnome-screenshot")) {
-        captureProgram = "/usr/bin/gnome-screenshot";
-        captureArguments << "-f" << outputPath;
-    } else if (QFile::exists("/usr/bin/scrot")) {
+    // scrot uses a small direct X11 capture path. Prefer it over
+    // gnome-screenshot, which asks the compositor/session to capture and has
+    // triggered nvgpu MMU/SM faults on this Jetson under concurrent Qt Quick,
+    // camera and TensorRT rendering load.
+    if (QFile::exists("/usr/bin/scrot")) {
         captureProgram = "/usr/bin/scrot";
         captureArguments << outputPath;
     } else {
-        const QString message =
-            "Screenshot failed: gnome-screenshot/scrot is not installed";
+        // Do not fall back to gnome-screenshot on Jetson: that path caused a
+        // reproducible display/GPU reset. Failing closed is safer.
+        const QString message = "Screenshot failed: scrot is not installed";
         qWarning() << message;
         emit serviceCallResult(false, message);
-        return QString();
-    }
-    process.start(captureProgram, captureArguments);
-
-    if (!process.waitForStarted(1000)) {
-        const QString message = "Cannot start scrot";
-        qWarning() << message << process.errorString();
-        emit serviceCallResult(false, message);
-        return QString();
-    }
-    if (!process.waitForFinished(5000) || process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
-        const QString err = QString::fromLocal8Bit(process.readAllStandardError()).trimmed();
-        const QString message = err.isEmpty() ? "Screenshot failed" : err;
-        qWarning() << message;
-        emit serviceCallResult(false, message);
+        screenshot_process_ = nullptr;
+        process->deleteLater();
         return QString();
     }
 
-    qDebug() << "Screenshot saved:" << outputPath;
-    emit serviceCallResult(true, "Screenshot saved: " + outputPath);
+    connect(process, &QProcess::errorOccurred, this,
+        [this, process, outputPath](QProcess::ProcessError error) {
+            if (screenshot_process_ != process) return;
+            screenshot_process_ = nullptr;
+            QFile::remove(outputPath);
+            const QString message = QString("Screenshot process error (%1): %2")
+                .arg(static_cast<int>(error)).arg(process->errorString());
+            qWarning() << message;
+            emit serviceCallResult(false, message);
+            process->deleteLater();
+        });
+
+    connect(process,
+        qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
+        [this, process, outputPath](int exitCode, QProcess::ExitStatus exitStatus) {
+            if (screenshot_process_ != process) return;
+            screenshot_process_ = nullptr;
+            const QString err = QString::fromLocal8Bit(
+                process->readAllStandardError()).trimmed();
+            const QFileInfo outputInfo(outputPath);
+            const bool ok = exitStatus == QProcess::NormalExit
+                         && exitCode == 0
+                         && outputInfo.isFile()
+                         && outputInfo.size() > 0;
+            if (ok) {
+                qDebug() << "Screenshot saved asynchronously:" << outputPath;
+                emit serviceCallResult(true, "Screenshot saved: " + outputPath);
+            } else {
+                QFile::remove(outputPath);
+                const QString message = err.isEmpty()
+                    ? QString("Screenshot failed (exit=%1)").arg(exitCode)
+                    : err;
+                qWarning() << message;
+                emit serviceCallResult(false, message);
+            }
+            process->deleteLater();
+        });
+
+    // A failed display/session capture must never leave a process or busy flag
+    // hanging indefinitely. kill() is asynchronous and does not block Qt.
+    QTimer::singleShot(10000, this, [this, process, outputPath]() {
+        if (screenshot_process_ != process) return;
+        screenshot_process_ = nullptr;
+        process->kill();
+        QFile::remove(outputPath);
+        const QString message = "Screenshot timed out after 10 seconds";
+        qWarning() << message;
+        emit serviceCallResult(false, message);
+        process->deleteLater();
+    });
+
+    process->start(captureProgram, captureArguments, QIODevice::ReadOnly);
+    qDebug() << "Screenshot scheduled asynchronously with" << captureProgram
+             << "->" << outputPath;
     return outputPath;
 }
 

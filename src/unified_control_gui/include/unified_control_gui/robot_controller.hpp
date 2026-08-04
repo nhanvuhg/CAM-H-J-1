@@ -35,6 +35,8 @@
 #include <memory>
 #include <mutex>
 
+class QProcess;
+
 
 class RobotController : public QObject
 {
@@ -185,6 +187,10 @@ signals:
     void cylLoadcellOnChanged();
 
 private:
+    // Screenshot process is asynchronous. Never block the Qt GUI thread while
+    // the scene graph/render thread is active on Jetson.
+    QProcess* screenshot_process_{nullptr};
+
     rclcpp::Node::SharedPtr node_;
     
     // Service clients
