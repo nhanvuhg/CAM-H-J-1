@@ -34,7 +34,7 @@ public:
               "cam1_health_topic", "/camera/cam1/health")),
           cam0_clarity_(declare_parameter<double>("cam0_clarity", 0.45)),
           cam1_clarity_(declare_parameter<double>("cam1_clarity", 0.60)),
-          capture_fps_(declare_parameter<int>("capture_fps", 20)),
+          capture_fps_(declare_parameter<int>("capture_fps", 25)),
           exposure_(declare_parameter<int>("exposure", 32000)) {
         auto image_qos = rclcpp::SensorDataQoS().keep_last(1);
         image_publishers_[0] =

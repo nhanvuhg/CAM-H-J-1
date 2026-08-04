@@ -25,8 +25,8 @@ export DISPLAY=${DISPLAY:-:0}
 export FILL_HP_USERS_FILE="${FILL_HP_USERS_FILE:-$WS/src/unified_control_gui/fill_hp_users.json}"
 CAM0_AI_MODEL="${CAM0_AI_MODEL:-$HOME/models/data_input_hp1.engine}"
 CAM1_AI_MODEL="${CAM1_AI_MODEL:-$HOME/models/data_output_hp1.engine}"
-CAMERA_CAPTURE_FPS="${CAMERA_CAPTURE_FPS:-20}"
-AI_MAX_FPS="${AI_MAX_FPS:-$CAMERA_CAPTURE_FPS}"
+CAMERA_CAPTURE_FPS="${CAMERA_CAPTURE_FPS:-25}"
+AI_MAX_FPS="${AI_MAX_FPS:-20}"
 
 # Keep Qt geometry identical to the RevPi reference display. Jetson's X server
 # reports 92x91 DPI while the RevPi reports 96x96; explicit 1:1 scaling avoids

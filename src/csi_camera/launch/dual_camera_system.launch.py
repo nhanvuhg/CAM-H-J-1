@@ -167,8 +167,8 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'capture_fps',
-            default_value='20',
-            description='Sensor capture rate; keep aligned with inference to avoid excess frames',
+            default_value='25',
+            description='Sensor capture rate; inference is capped separately for GPU headroom',
         ),
         DeclareLaunchArgument(
             'cam0_model',
