@@ -27,6 +27,7 @@ CAM0_AI_MODEL="${CAM0_AI_MODEL:-$HOME/models/data_input_hp1.engine}"
 CAM1_AI_MODEL="${CAM1_AI_MODEL:-$HOME/models/data_output_hp1.engine}"
 CAMERA_CAPTURE_FPS="${CAMERA_CAPTURE_FPS:-25}"
 AI_MAX_FPS="${AI_MAX_FPS:-20}"
+CAMERA_DRIVER_SETTLE_SEC="${CAMERA_DRIVER_SETTLE_SEC:-10}"
 
 # Keep Qt geometry identical to the RevPi reference display. Jetson's X server
 # reports 92x91 DPI while the RevPi reports 96x96; explicit 1:1 scaling avoids
@@ -259,6 +260,56 @@ PID_WEB_GUI=""
 PID_QML_GUI=""
 CAMERA_SUPERVISOR_STATUS="/tmp/camera_stack_supervisor.status"
 
+camera_devices_ready() {
+    [ -c /dev/video0 ] && [ -c /dev/video1 ]
+}
+
+camera_device_holders() {
+    local device
+    for device in /dev/video0 /dev/video1; do
+        [ -e "$device" ] || continue
+        fuser "$device" 2>/dev/null || true
+    done | tr ' ' '\n' | sed '/^$/d' | sort -nu
+}
+
+prepare_camera_devices() {
+    camera_devices_ready && return 0
+
+    # nv_imx477 is intentionally blacklisted from automatic boot probing.
+    # V3Link receivers need time to become ready; probing at t=1s can fail and
+    # leak cam_reset_gpio until reboot.  start_all loads the module here, after
+    # userspace/hardware power have settled.
+    if lsmod | awk '{print $1}' | grep -qx nv_imx477; then
+        echo "REBOOT_REQUIRED missing_video_devices=1 driver=nv_imx477_loaded" \
+            > "$CAMERA_SUPERVISOR_STATUS"
+        echo "[$(date --iso-8601=seconds)] Camera driver partially probed; reset GPIO is likely held. Reboot required."
+        return 2
+    fi
+
+    echo "WAITING_POWER_SETTLE seconds=$CAMERA_DRIVER_SETTLE_SEC" \
+        > "$CAMERA_SUPERVISOR_STATUS"
+    echo "[$(date --iso-8601=seconds)] Waiting ${CAMERA_DRIVER_SETTLE_SEC}s before first IMX477 probe"
+    sleep "$CAMERA_DRIVER_SETTLE_SEC"
+    camera_devices_ready && return 0
+
+    echo "LOADING_DRIVER nv_imx477" > "$CAMERA_SUPERVISOR_STATUS"
+    if ! sudo -n modprobe nv_imx477; then
+        echo "WAITING_DRIVER reason=modprobe_failed" > "$CAMERA_SUPERVISOR_STATUS"
+        echo "[$(date --iso-8601=seconds)] Cannot load nv_imx477 (passwordless sudo required); retrying"
+        return 1
+    fi
+    udevadm settle --timeout=10 2>/dev/null || true
+    sleep 2
+    if camera_devices_ready; then
+        echo "[$(date --iso-8601=seconds)] Both camera devices are ready"
+        return 0
+    fi
+
+    echo "REBOOT_REQUIRED reason=imx477_partial_probe" > "$CAMERA_SUPERVISOR_STATUS"
+    echo "[$(date --iso-8601=seconds)] nv_imx477 loaded but both video devices were not created; refusing retry to avoid GPIO leak"
+    return 2
+}
+
 _CLEANUP_DONE=0
 cleanup() {
     [ "$_CLEANUP_DONE" -eq 1 ] && return
@@ -388,6 +439,21 @@ camera_stack_supervisor() {
 
     while true; do
         stop_jetson_camera_nodes
+
+        if ! prepare_camera_devices; then
+            sleep 15
+            continue
+        fi
+
+        local holders
+        holders=$(camera_device_holders)
+        if [ -n "$holders" ]; then
+            echo "HELD holders=$(echo "$holders" | tr '\n' ',')" \
+                > "$CAMERA_SUPERVISOR_STATUS"
+            echo "[$(date --iso-8601=seconds)] Camera device still held by PID(s): $(echo "$holders" | tr '\n' ' ')"
+            sleep 5
+            continue
+        fi
 
         echo "STARTING failures=$consecutive_failures" > "$CAMERA_SUPERVISOR_STATUS"
         echo "[$(date --iso-8601=seconds)] Starting paired camera stack"

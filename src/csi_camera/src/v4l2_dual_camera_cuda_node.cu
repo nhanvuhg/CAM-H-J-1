@@ -35,7 +35,11 @@ public:
           cam0_clarity_(declare_parameter<double>("cam0_clarity", 0.45)),
           cam1_clarity_(declare_parameter<double>("cam1_clarity", 0.60)),
           capture_fps_(declare_parameter<int>("capture_fps", 25)),
-          exposure_(declare_parameter<int>("exposure", 32000)) {
+          exposure_(declare_parameter<int>("exposure", 32000)),
+          health_grace_sec_(declare_parameter<double>("health_grace_sec", 20.0)),
+          min_healthy_fps_(declare_parameter<double>("min_healthy_fps", 5.0)),
+          max_unhealthy_ticks_(declare_parameter<int>("max_unhealthy_ticks", 5)),
+          started_at_(std::chrono::steady_clock::now()) {
         auto image_qos = rclcpp::SensorDataQoS().keep_last(1);
         image_publishers_[0] =
             create_publisher<sensor_msgs::msg::Image>(cam0_topic_, image_qos);
@@ -51,6 +55,10 @@ public:
         }
         if (exposure_ < 13 || exposure_ > 683710) {
             throw std::runtime_error("exposure is outside IMX477 range");
+        }
+        if (health_grace_sec_ < 5.0 || min_healthy_fps_ < 0.1 ||
+            max_unhealthy_ticks_ < 1) {
+            throw std::runtime_error("invalid camera health watchdog parameters");
         }
 
         health_timer_ = create_wall_timer(
@@ -113,9 +121,10 @@ private:
                              ++camera_id) {
                             auto frame = cameras[camera_id]->readLatest();
                             if (!frame.data) break;
-                            if (have_sequence[camera_id]) {
-                                const uint32_t sequence_delta =
-                                    frame.sequence - last_sequences[camera_id];
+                            if (have_sequence[camera_id] &&
+                                frame.sequence > last_sequences[camera_id]) {
+                                const uint32_t sequence_delta = frame.sequence -
+                                    last_sequences[camera_id];
                                 if (sequence_delta > 1) {
                                     sequence_gaps_[camera_id].fetch_add(
                                         static_cast<uint64_t>(sequence_delta - 1));
@@ -219,9 +228,19 @@ private:
             std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now().time_since_epoch())
                 .count();
+        bool both_healthy = true;
+        std::ostringstream unhealthy_reason;
         for (int id = 0; id < 2; ++id) {
             const int64_t last_ns = last_frame_ns_[id].load();
             const double age = last_ns > 0 ? (now_ns - last_ns) / 1e9 : 999.0;
+            if (age > 3.0 || fps[id] < min_healthy_fps_) {
+                if (!both_healthy) unhealthy_reason << "; ";
+                unhealthy_reason << "cam" << id << " fps=" << std::fixed
+                                 << std::setprecision(1) << fps[id]
+                                 << " age=" << std::setprecision(2) << age
+                                 << "s status=" << status[id];
+                both_healthy = false;
+            }
             std_msgs::msg::String message;
             std::ostringstream text;
             text << status[id] << " device=/dev/video" << (id == 0 ? 1 : 0)
@@ -236,6 +255,32 @@ private:
             message.data = text.str();
             health_publishers_[id]->publish(message);
         }
+
+        const double runtime_sec = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - started_at_).count();
+        if (runtime_sec < health_grace_sec_ || both_healthy) {
+            unhealthy_ticks_ = 0;
+            return;
+        }
+
+        const int unhealthy_ticks = ++unhealthy_ticks_;
+        RCLCPP_WARN(get_logger(),
+                    "Camera watchdog unhealthy %d/%d: %s",
+                    unhealthy_ticks, max_unhealthy_ticks_,
+                    unhealthy_reason.str().c_str());
+        if (unhealthy_ticks < max_unhealthy_ticks_) return;
+
+        {
+            std::lock_guard<std::mutex> lock(status_mutex_);
+            statuses_[0] = "FATAL_WATCHDOG";
+            statuses_[1] = "FATAL_WATCHDOG";
+        }
+        RCLCPP_FATAL(get_logger(),
+                     "Camera watchdog stopping dead stack for supervisor recovery: %s",
+                     unhealthy_reason.str().c_str());
+        stopping_.store(true);
+        g_stop.store(true);
+        rclcpp::shutdown();
     }
 
     std::string cam0_topic_;
@@ -246,6 +291,9 @@ private:
     double cam1_clarity_;
     int capture_fps_;
     int exposure_;
+    double health_grace_sec_;
+    double min_healthy_fps_;
+    int max_unhealthy_ticks_;
     std::array<rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr, 2>
         image_publishers_;
     std::array<rclcpp::Publisher<std_msgs::msg::String>::SharedPtr, 2>
@@ -254,6 +302,7 @@ private:
     std::thread capture_thread_;
     std::atomic<bool> stopping_{false};
     std::atomic<int> reconnects_{0};
+    std::atomic<int> unhealthy_ticks_{0};
     std::array<std::atomic<uint64_t>, 2> published_{{0, 0}};
     std::array<std::atomic<uint64_t>, 2> sequence_gaps_{{0, 0}};
     std::array<std::atomic<int64_t>, 2> last_frame_ns_{{0, 0}};
@@ -261,6 +310,7 @@ private:
     std::array<double, 2> measured_fps_{{0.0, 0.0}};
     std::array<std::string, 2> statuses_{{"OPENING", "OPENING"}};
     double average_gpu_ms_ = 0.0;
+    std::chrono::steady_clock::time_point started_at_;
 };
 
 int main(int argc, char** argv) {

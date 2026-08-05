@@ -2,7 +2,7 @@
 """Production dual-camera launch: direct V4L2 + CUDA tone/debayer + YOLO."""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, Shutdown
 from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -40,6 +40,9 @@ def generate_launch_description():
         }],
         condition=IfCondition(use_cuda_camera),
         respawn=False,
+        # A dead capture process must end the whole launch (YOLO/overlay nodes
+        # otherwise keep ros2 launch alive with stale topic names forever).
+        on_exit=[Shutdown(reason='CUDA dual-camera capture exited')],
     )
 
     # V4L2 CPU path is retained only as a diagnostic rollback. It uses the
@@ -52,6 +55,7 @@ def generate_launch_description():
         parameters=[camera_topic_parameters],
         condition=UnlessCondition(use_cuda_camera),
         respawn=False,
+        on_exit=[Shutdown(reason='CPU dual-camera capture exited')],
     )
     
     # ================================================================
