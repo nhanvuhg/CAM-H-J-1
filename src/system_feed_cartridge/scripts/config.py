@@ -67,7 +67,7 @@ class SystemConfig(BaseModel):
     # Axes
     inx_home: float = 0.0
     inx_safe: float = -60.0
-    inx_target2: float = 500.0
+    inx_target2: float = 502.5
     inx_output_stack: float = 100.0
     iny_home: float = 0.0
     iny_safe_zone: float = 50.0
@@ -89,7 +89,7 @@ class SystemConfig(BaseModel):
     outy_output_zones: Dict[int, List[float]]
 
     # Pos 2
-    iny_target2: float = 60.0
+    iny_target2: float = 87.0
     servo3_home: float = 0.0
     servo3_target2: float = 400.0
     servo3_jog_velocity: float = 50.0

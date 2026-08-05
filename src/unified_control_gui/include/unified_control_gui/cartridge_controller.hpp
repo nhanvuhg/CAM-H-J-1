@@ -66,6 +66,7 @@ public slots:
     void abortToJog();
     Q_INVOKABLE void simulateDoneTrayInput();
     Q_INVOKABLE void simulateDoneTrayOutput();
+    Q_INVOKABLE void acceptState2OutputFull();
     void confirmOutput();
 
     // Cylinder manual control (MANUAL + IDLE only) — cyl1: extend/retract, cyl2: extend/retract

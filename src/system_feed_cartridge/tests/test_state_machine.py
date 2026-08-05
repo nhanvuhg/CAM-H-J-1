@@ -84,7 +84,7 @@ from config import SystemConfig
 from cartridge_providesystem_py_node import (
     CartridgeSystem,
     SystemState,
-    S1_BELT_START, S2_BELT_MID, S3_BELT_END,
+    S1_BELT_START, S2_BELT_MID, S3_BELT_END, S4_SCAN_STACK_P1,
     S7_TRAY_AT_ROBOT, S9_CYL1_RETRACTED, S10_CYL1_EXTENDED,
     S17_PLATFORM, S18_FEED_OK, S19_CHECK_TRAY_P2, S20_SCAN_STACK_P2,
     S25_CYL4_RETRACTED, S26_CYL4_EXTENDED,
@@ -215,7 +215,8 @@ class TestSystemStateEnum:
         """Các state quan trọng phải tồn tại."""
         required = ['IDLE', 'ERROR', 'HOMING', 'HOMING_RUNNING',
                      'S1_CONFIRM_SAFE', 'S1_COMPLETE',
-                     'S2A_CHECK_INTERLOCK', 'S2A_COMPLETE',
+                     'S2A_CHECK_INTERLOCK', 'S2A_WAIT_OUTPUT_CLEAR',
+                     'S2A_COMPLETE',
                      'S3_CHECK_OUTXY_SAFE', 'S3_CYL4_EXTEND', 'S3_COMPLETE',
                      'S4_CHECK_OUTY_SAFE', 'S4_CYL5_SYNC', 'S4_COMPLETE']
         for name in required:
@@ -263,6 +264,7 @@ def _make_node():
     node._state1_enabled   = True
     node._input_tray_done  = False
     node._gui_confirmed    = False
+    node._s2_output_full_accept = False
     node._system_paused    = False
     node._pause_pending    = False
     node._active_servo_moves = {}
@@ -724,6 +726,38 @@ class TestSensorReading:
 class TestCallbackLogic:
     """Test ROS callback handlers."""
 
+    def test_output_full_accept_is_dedicated_one_shot(self):
+        """Dedicated ACCEPT chỉ arm S4 recheck, không confirm wait-state khác."""
+        node = _make_node()
+        node.state_in = SystemState.S2A_WAIT_OUTPUT_CLEAR
+        msg = MagicMock(data="S2_OUTPUT_FULL_ACCEPT")
+
+        node._cb_gui_confirm(msg)
+
+        assert node._s2_output_full_accept is True
+        assert node._gui_confirmed is False
+
+    def test_stale_output_full_accept_is_ignored(self):
+        """ACCEPT đến trễ ngoài wait-state không được arm cho chu kỳ sau."""
+        node = _make_node()
+        node.state_in = SystemState.IDLE
+        msg = MagicMock(data="S2_OUTPUT_FULL_ACCEPT")
+
+        node._cb_gui_confirm(msg)
+
+        assert node._s2_output_full_accept is False
+        assert node._gui_confirmed is False
+
+    def test_legacy_gui_confirm_remains_compatible(self):
+        """Các nút xác nhận cũ vẫn dùng _gui_confirmed như trước."""
+        node = _make_node()
+        msg = MagicMock(data="CONFIRM")
+
+        node._cb_gui_confirm(msg)
+
+        assert node._gui_confirmed is True
+        assert node._s2_output_full_accept is False
+
     def test_cb_done_tray_input_sets_flag_in_auto(self):
         """AUTO mode: done_tray_input(True) → set flag + enable auto-chain S1."""
         node = _make_node()
@@ -824,6 +858,203 @@ class TestIdleDispatch:
 
         node._do_idle_input()
         assert node.state_in == SystemState.IDLE
+
+
+class TestState2OutputFullGate:
+    """S4 gate tại posture chờ: InX=-60mm và InY=87mm."""
+
+    @staticmethod
+    def _node_at_state2_entry(
+        s4_on: bool,
+        *,
+        inx_at_safe: bool = True,
+        iny_at_target: bool = True,
+    ):
+        node = _make_node()
+        node.state_in = SystemState.S2A_CHECK_INTERLOCK
+        node._cmd_sent_in = False
+        node._drive_warm_t = 0.0
+        node._iny_safe = MagicMock(return_value=True)
+        node.config.iny_target2 = 87.0
+        node._gate_trace = []
+
+        def at_position(sid, target, *args, **kwargs):
+            node._gate_trace.append(("position", sid, target))
+            if sid == 1 and target == node.config.inx_safe:
+                return inx_at_safe
+            if sid == 2 and target == node.config.iny_target2:
+                return iny_at_target
+            return True
+
+        def sensor(sid):
+            node._gate_trace.append(("sensor", sid))
+            return sid == S4_SCAN_STACK_P1 and s4_on
+
+        node._at_position = MagicMock(side_effect=at_position)
+        node._nb_move = MagicMock(return_value=True)
+        node._cyl1_extend = MagicMock()
+        node._cyl3_extend = MagicMock(return_value=True)
+        node._cyl3_retract = MagicMock(return_value=True)
+        node._s2a_preflight_scan = MagicMock()
+        node._notify = MagicMock()
+        node.sensor = MagicMock(side_effect=sensor)
+        return node
+
+    @staticmethod
+    def _notify_codes(node):
+        return [
+            notify_call.kwargs.get("code")
+            for notify_call in node._notify.call_args_list
+        ]
+
+    def test_s4_on_at_entry_blocks_while_inx_is_safe(self):
+        """S4 ON: khóa khi InX=-60/InY=87, trước mọi lệnh rời posture."""
+        node = self._node_at_state2_entry(s4_on=True)
+
+        node._s2a_check_interlock()
+
+        assert node.config.inx_safe == -60.0
+        node._at_position.assert_any_call(1, node.config.inx_safe)
+        node._at_position.assert_any_call(2, node.config.iny_target2)
+        node.sensor.assert_any_call(S4_SCAN_STACK_P1)
+        s4_scan_index = node._gate_trace.index(("sensor", S4_SCAN_STACK_P1))
+        assert node._gate_trace.index(
+            ("position", 1, node.config.inx_safe)
+        ) < s4_scan_index
+        assert node._gate_trace.index(
+            ("position", 2, node.config.iny_target2)
+        ) < s4_scan_index
+        assert node.state_in == SystemState.S2A_WAIT_OUTPUT_CLEAR
+        assert node._s2_output_full_accept is False
+        node._nb_move.assert_not_called()
+        node._cyl1_extend.assert_not_called()
+        assert "s2_output_full" in self._notify_codes(node)
+
+    def test_s4_off_at_entry_allows_inx_move_state(self):
+        """Posture đúng + S4 OFF: mở khóa sang A2, chưa phát motion A2."""
+        node = self._node_at_state2_entry(s4_on=False)
+
+        node._s2a_check_interlock()
+
+        node._at_position.assert_any_call(1, node.config.inx_safe)
+        node._at_position.assert_any_call(2, node.config.iny_target2)
+        node.sensor.assert_any_call(S4_SCAN_STACK_P1)
+        s4_scan_index = node._gate_trace.index(("sensor", S4_SCAN_STACK_P1))
+        assert node._gate_trace.index(
+            ("position", 1, node.config.inx_safe)
+        ) < s4_scan_index
+        assert node._gate_trace.index(
+            ("position", 2, node.config.iny_target2)
+        ) < s4_scan_index
+        assert node.state_in == SystemState.S2A_INX_MOVE_POS_PICK
+        node._nb_move.assert_not_called()
+        node._cyl1_extend.assert_not_called()
+        assert "s2_output_full" not in self._notify_codes(node)
+
+    def test_a1_restores_iny_87_before_scanning_s4(self):
+        """InY lệch posture: đưa về 87mm và chưa được đọc S4/chạy InX pick."""
+        node = self._node_at_state2_entry(
+            s4_on=True,
+            iny_at_target=False,
+        )
+
+        node._s2a_check_interlock()
+
+        node._nb_move.assert_called_once_with(
+            2, node.config.iny_target2, vel=150
+        )
+        assert call(S4_SCAN_STACK_P1) not in node.sensor.call_args_list
+        assert node.state_in == SystemState.S2A_CHECK_INTERLOCK
+        node._cyl1_extend.assert_not_called()
+
+    def test_a1_restores_inx_safe_before_scanning_s4(self):
+        """InX lệch posture: đưa về -60mm và chưa được đọc S4/chạy pick."""
+        node = self._node_at_state2_entry(
+            s4_on=True,
+            inx_at_safe=False,
+        )
+
+        node._s2a_check_interlock()
+
+        node._nb_move.assert_called_once_with(
+            1, node.config.inx_safe, vel=200
+        )
+        assert call(S4_SCAN_STACK_P1) not in node.sensor.call_args_list
+        assert node.state_in == SystemState.S2A_CHECK_INTERLOCK
+        node._cyl1_extend.assert_not_called()
+
+    def test_s4_off_without_accept_stays_blocked(self):
+        """S4 tự OFF không đủ: operator phải nhấn ACCEPT mới được recheck."""
+        node = self._node_at_state2_entry(s4_on=False)
+        node.state_in = SystemState.S2A_WAIT_OUTPUT_CLEAR
+        node.sensor.reset_mock()
+        node._at_position.reset_mock()
+
+        node._s2a_wait_output_clear()
+
+        assert node.state_in == SystemState.S2A_WAIT_OUTPUT_CLEAR
+        node.sensor.assert_not_called()
+        node._at_position.assert_not_called()
+        node._nb_move.assert_not_called()
+        node._cyl1_extend.assert_not_called()
+
+    def test_accept_while_s4_still_on_remains_blocked(self):
+        """ACCEPT recheck thấy S4 còn ON: hiện cảnh báo lại và tiếp tục khóa."""
+        node = self._node_at_state2_entry(s4_on=True)
+        node.state_in = SystemState.S2A_WAIT_OUTPUT_CLEAR
+        node._s2_output_full_accept = True
+
+        node._s2a_wait_output_clear()
+
+        node.sensor.assert_any_call(S4_SCAN_STACK_P1)
+        assert node.state_in == SystemState.S2A_WAIT_OUTPUT_CLEAR
+        assert node._s2_output_full_accept is False
+        node._nb_move.assert_not_called()
+        node._cyl1_extend.assert_not_called()
+        assert "s2_output_full" in self._notify_codes(node)
+
+    def test_accept_restores_iny_posture_before_s4_recheck(self):
+        """ACCEPT khi InY lệch 87: khôi phục posture, chưa đọc S4."""
+        node = self._node_at_state2_entry(s4_on=False, iny_at_target=False)
+        node.state_in = SystemState.S2A_WAIT_OUTPUT_CLEAR
+        node._s2_output_full_accept = True
+        node.sensor.reset_mock()
+
+        node._s2a_wait_output_clear()
+
+        node._nb_move.assert_called_once_with(2, 87.0, vel=150)
+        node.sensor.assert_not_called()
+        assert node._s2_output_full_accept is False
+        assert node.state_in == SystemState.S2A_WAIT_OUTPUT_CLEAR
+
+    def test_accept_restores_inx_safe_before_s4_recheck(self):
+        """ACCEPT khi InX lệch -60: khôi phục safe, chưa đọc S4."""
+        node = self._node_at_state2_entry(s4_on=False, inx_at_safe=False)
+        node.state_in = SystemState.S2A_WAIT_OUTPUT_CLEAR
+        node._s2_output_full_accept = True
+        node.sensor.reset_mock()
+
+        node._s2a_wait_output_clear()
+
+        node._nb_move.assert_called_once_with(1, -60.0, vel=200)
+        node.sensor.assert_not_called()
+        assert node._s2_output_full_accept is False
+        assert node.state_in == SystemState.S2A_WAIT_OUTPUT_CLEAR
+
+    def test_accept_after_s4_off_returns_to_a1_preflight(self):
+        """ACCEPT + S4 OFF: quay lại A1/preflight, chưa move hoặc extend Cyl1."""
+        node = self._node_at_state2_entry(s4_on=False)
+        node.state_in = SystemState.S2A_WAIT_OUTPUT_CLEAR
+        node._s2_output_full_accept = True
+
+        node._s2a_wait_output_clear()
+
+        node.sensor.assert_any_call(S4_SCAN_STACK_P1)
+        assert node._s2_output_full_accept is False
+        assert node.state_in == SystemState.S2A_CHECK_INTERLOCK
+        node._nb_move.assert_not_called()
+        node._cyl1_extend.assert_not_called()
+        assert "s2_output_clear" in self._notify_codes(node)
 
 
 # ══════════════════════════════════════════════════════════════════

@@ -339,6 +339,12 @@ void CartridgeController::simulateDoneTrayOutput()
     addLog("Simulate: done_tray_output (trigger State 4)", "info");
 }
 
+void CartridgeController::acceptState2OutputFull()
+{
+    publishString(gui_confirm_pub_, "S2_OUTPUT_FULL_ACCEPT");
+    addLog("STATE 2: recheck S4 output stack", "info");
+}
+
 void CartridgeController::confirmOutput()
 {
     // Giữ để tương thích QML cũ

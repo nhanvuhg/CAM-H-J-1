@@ -181,6 +181,7 @@ class SystemState(Enum):
     S2A_CHECK_INTERLOCK   = "s2a_check_interlock"
     S2A_INX_MOVE_POS_PICK           = "s2a_inx_move_pos_pick"
     S2A_POS_PLACE_TRAY_ROBOT_CYL1      = "s2a_pos_place_tray_robot_cyl1"
+    S2A_WAIT_OUTPUT_CLEAR    = "s2a_wait_output_clear"
     S2A_WAIT_CYL_EXT          = "s2a_wait_cyl_ext"
     S2A_INY_HOME            = "s2a_iny_home"
     S2A_INX_PLACE_TRAY_OUT_POS1            = "s2a_inx_place_tray_out_pos1"
@@ -342,6 +343,9 @@ class CartridgeSystem(Node):
         self._output_target_pos = 0.0
         self._s4_armed_out      = False
         self._s4_prev_out       = False
+        # One-shot recheck request from the dedicated GUI ACCEPT button.
+        # It never overrides S4; State 2 only resumes after a fresh S4=OFF.
+        self._s2_output_full_accept = False
         self._s2a_s6off_phase   = 0   # 0=idle, 1=fast→950 @ vel150, 2=slow→r1_target @ vel50
 
         # ── STATE S3 runtime ─────────────────────────────────────────
@@ -1831,12 +1835,14 @@ class CartridgeSystem(Node):
         except Exception:
             return default
 
-    def _notify(self, level: str, title: str, detail: str = "", hint: str = ""):
+    def _notify(self, level: str, title: str, detail: str = "", hint: str = "",
+                code: str = ""):
         """
         Gửi thông báo đến GUI qua topic /providesystem/gui_notify (JSON).
         level: 'info' | 'warn' | 'error' | 'silent_ok'
         hint : optional UI hint cho GUI animation (vd 'press_homing', 'press_stop',
                'switch_manual'). GUI subscribe và blink button tương ứng.
+        code : optional machine-readable event code cho popup/action chuyên biệt.
         Throttle 0.5s/title để không flood GUI với cùng một thông báo lặp lại.
         """
         now = time.time()
@@ -1848,6 +1854,8 @@ class CartridgeSystem(Node):
             payload = {"level": level, "title": title, "detail": detail}
             if hint:
                 payload["hint"] = hint
+            if code:
+                payload["code"] = code
             msg.data = json.dumps(payload)
             self.pub_gui_notify.publish(msg)
         except Exception:
@@ -2523,6 +2531,7 @@ class CartridgeSystem(Node):
         self._pause_restart_homing = False
         self._system_running = False
         self._input_tray_done = False
+        self._s2_output_full_accept = False
         self._motion_busy = False
         self._state1_enabled = False
         self._drain_armed_after_s2 = False
@@ -2890,9 +2899,25 @@ class CartridgeSystem(Node):
     def _cb_gui_confirm(self, msg: String):
         """
         Nhận xác nhận từ operator qua GUI (topic /providesystem/gui_confirm).
-        Set _gui_confirmed=True để state machine tiếp tục từ trạng thái đang chờ
-        xác nhận (S1_WAIT_GUI_CONFIRM, S3_WAIT_GUI_CONFIRM).
+        S2_OUTPUT_FULL_ACCEPT chỉ tạo một lần recheck S4 khi State 2
+        đang ở S2A_WAIT_OUTPUT_CLEAR. Lệnh riêng này không được phép
+        xác nhận nhầm các wait-state cũ.
+
+        Các message khác giữ backward compatibility: set
+        _gui_confirmed=True cho S1_WAIT_GUI_CONFIRM / S3_WAIT_GUI_CONFIRM.
         """
+        command = str(getattr(msg, 'data', '')).strip().upper()
+        if command == 'S2_OUTPUT_FULL_ACCEPT':
+            if self.state_in == SystemState.S2A_WAIT_OUTPUT_CLEAR:
+                self._s2_output_full_accept = True
+                self.get_logger().info(
+                    "[S2A] Operator ACCEPT -> request one-shot S4 recheck"
+                )
+            else:
+                self.get_logger().warn(
+                    f"[S2A] Ignore stale output-full ACCEPT in {self.state_in.name}"
+                )
+            return
         self._gui_confirmed = True
 
     def _cb_robot_mode(self, msg: Int32):
@@ -3556,6 +3581,7 @@ class CartridgeSystem(Node):
         self._publish_drain(False)
         self._s5_retry = 0; self._s1_retry_count = 0; self._cmd_sent_in = False
         self._input_tray_done = False
+        self._s2_output_full_accept = False
         self._s4_trigger = False
         self._enter_in(SystemState.IDLE)
         self._enter_s3(SystemState.IDLE)
@@ -4127,6 +4153,7 @@ class CartridgeSystem(Node):
         elif s == SystemState.S2A_CHECK_INTERLOCK:   self._s2a_check_interlock()
         elif s == SystemState.S2A_INX_MOVE_POS_PICK:           self._s2a_inx_move_pos_pick()
         elif s == SystemState.S2A_POS_PLACE_TRAY_ROBOT_CYL1:      self._s2a_pos_place_tray_robot_cyl1()
+        elif s == SystemState.S2A_WAIT_OUTPUT_CLEAR:    self._s2a_wait_output_clear()
         elif s == SystemState.S2A_WAIT_CYL_EXT:          self._s2a_wait_cyl_ext()
         elif s == SystemState.S2A_INY_HOME:            self._s2a_iny_home()
         elif s == SystemState.S2A_INX_PLACE_TRAY_OUT_POS1:            self._s2a_inx_place_tray_out_pos1()
@@ -5111,7 +5138,11 @@ class CartridgeSystem(Node):
         (referencing_task) drive accept position_task nhưng không chuyển động vật lý.
         Phải gọi stop_motion_task() để flush queue, đợi 1s settle, rồi mới gửi move.
 
-        Next: S2A_INX_MOVE_POS_PICK (sau khi InY safe + warm-up xong).
+        Trước khi chạy State 2, giữ đúng wait posture cuối State 1:
+        InX=inx_safe (-60mm), InY=iny_target2 (87mm). Chỉ tại posture này
+        mới scan S4. S4 ON thì khóa State 2 và chờ operator ACCEPT.
+
+        Next: S2A_WAIT_OUTPUT_CLEAR hoặc S2A_INX_MOVE_POS_PICK.
         """
         # ── Drive warm-up gate (FAS firmware quirk) ──────────────────
         if self._drive_warm_t < 0.0:
@@ -5126,8 +5157,44 @@ class CartridgeSystem(Node):
             self._drive_warm_t = 0.0
         # ─────────────────────────────────────────────────────────────
 
+        # STATE 1 normally leaves exactly this posture. Re-establish it before
+        # reading S4 if an abnormal/manual move caused either axis to drift.
+        # InX must never travel toward the pick target while S4 is unresolved.
+        if not self._at_position(2, self.config.iny_target2):
+            if not self._iny_moving:
+                ok = self._nb_move(2, self.config.iny_target2, vel=150)
+                if not ok:
+                    self.get_logger().warn(
+                        f"S2A gate: INY -> {self.config.iny_target2}mm fail"
+                    )
+            self._log_once(
+                "S2A_GATE_INY_87",
+                f"S2A gate: cho InY tai {self.config.iny_target2}mm de scan S4",
+            )
+            return
+
+        if not self._at_position(1, self.config.inx_safe):
+            if not self._inx_moving:
+                ok = self._nb_move(1, self.config.inx_safe, vel=200)
+                if not ok:
+                    self.get_logger().warn(
+                        f"S2A gate: INX -> safe {self.config.inx_safe}mm fail"
+                    )
+            self._log_once(
+                "S2A_GATE_INX_SAFE",
+                f"S2A gate: cho InX tai safe {self.config.inx_safe}mm",
+            )
+            return
+
         if not self._cmd_sent_in:
+            self._s2_output_full_accept = False
             self._pub_cartridge_busy(True)
+
+            # Gate before State 2 performs its normal preflight/actuator work.
+            if self.sensor(S4_SCAN_STACK_P1):
+                self._block_s2_for_output_full()
+                return
+
             self._s2a_preflight_scan()
 
             # --- CYL3 S6 CHECK ON STATE 2 TRIGGER ---
@@ -5146,21 +5213,24 @@ class CartridgeSystem(Node):
             self._output_row        = 0
             self._output_target_pos = 0.0
             self._cmd_sent_in = True
-        if self._iny_safe():
-            self._enter_in(SystemState.S2A_INX_MOVE_POS_PICK)
-        else:
-            if not self._iny_moving:
-                ok = self._nb_move(2, self.config.iny_home)
-                if not ok:
-                    self.get_logger().warn("S2 Step1: INY home fail")
-                    return
-            self._log_once("S2A_WAIT_INY", f"Step1: cho INY <= {self.config.iny_safe_zone}mm")
+        self._enter_in(SystemState.S2A_INX_MOVE_POS_PICK)
+
+    def _block_s2_for_output_full(self):
+        """Khóa State 2 khi InX=-60mm, InY=87mm; không cho pick motion."""
+        self._s2_output_full_accept = False
+        self.get_logger().warn(
+            f"[S2A] S4 ON -> block State 2; hold InX={self.config.inx_safe}mm, "
+            f"InY={self.config.iny_target2}mm (pick InX={self.config.inx_target2}mm)"
+        )
+        self._notify_s2_output_full()
+        self._enter_in(SystemState.S2A_WAIT_OUTPUT_CLEAR)
 
     def _s2a_inx_move_pos_pick(self):
         """
-        STATE 2A bước A2: InX → inx_target2 (505.5mm) để lấy khay cũ từ robot về.
+        STATE 2A bước A2: InX → inx_target2 để lấy khay cũ từ robot về.
         Pre-condition:
           - InY safe (interlock).
+          - S4 OFF ngay trước khi gửi lệnh InX rời inx_safe.
           - S9 (Cyl1 RETRACTED) ON — interlock S2 mới: tránh InX di chuyển khi Cyl1
             còn extended trong workspace.
         Next: S2A_POS_PLACE_TRAY_ROBOT_CYL1.
@@ -5168,9 +5238,15 @@ class CartridgeSystem(Node):
         if not self._iny_safe():
             self._log_once("S2A_INY2", "A2: INY chua safe")
             return
+        if not self._cmd_sent_in and self.sensor(S4_SCAN_STACK_P1):
+            # Last-moment gate: cover a S4 transition between A1 and A2 ticks.
+            # No pick command has been sent yet, so InX is still at inx_safe.
+            self._block_s2_for_output_full()
+            return
         if not self.sensor(S9_CYL1_RETRACTED):
             self._log_once("S2A_S13_ILK", "INTERLOCK S2: S9=OFF -> INX bi khoa")
-            self._notify_step('warn', 'STATE 2A', 'A2 InX→505.5',
+            self._notify_step('warn', 'STATE 2A',
+                f'A2 InX→{self.config.inx_target2:g}',
                 f'INTERLOCK: {self._sensor_label(9)} OFF (Cyl1 chưa retract) — InX bị khóa',
                 enum_name='S2A_INX_MOVE_POS_PICK',
                 check=['van Cyl1 retract', 'áp khí', f'dây {self._sensor_label(9)}', f'có thể đồng thời {self._sensor_label(10)} ON?'],
@@ -5179,7 +5255,10 @@ class CartridgeSystem(Node):
         if not self._cmd_sent_in:
             ok = self._nb_move(1, self.config.inx_target2, vel=200)
             if not ok:
-                self._log_once("S2A_A2_FAIL", "S2A A2: INX 505.5mm fail")
+                self._log_once(
+                    "S2A_A2_FAIL",
+                    f"S2A A2: INX {self.config.inx_target2:g}mm fail",
+                )
                 return
             self._cmd_sent_in     = True
             self._step_timeout_in = time.time() + self.config.move_timeout
@@ -5193,10 +5272,11 @@ class CartridgeSystem(Node):
     def _s2a_pos_place_tray_robot_cyl1(self):
         """
         STATE 2A bước A3: InY → iny_target2 (87mm) tới vị trí kẹp khay cũ, sau đó
-        kích Cyl1 EXTEND để kẹp.
+        kích Cyl1 EXTEND để kẹp. S4 đã được gate khi InX còn ở
+        inx_safe và InY ở iny_target2, trước bước InX pick motion.
         CAO RỦI RO: verify _at_position(2, iny_target2) trước khi Cyl1 extend
         để tránh kẹp sai vị trí.
-        Next: S2A_WAIT_CYL_EXT (chờ S10 ON xác nhận Cyl1 đã extended).
+        Next: S2A_WAIT_CYL_EXT.
         """
         if not self._cmd_sent_in:
             ok = self._nb_move(2, self.config.iny_target2, vel=150)
@@ -5215,6 +5295,75 @@ class CartridgeSystem(Node):
                 )
                 self._cyl1_extend()
                 self._enter_in(SystemState.S2A_WAIT_CYL_EXT)
+
+    def _notify_s2_output_full(self, recheck: bool = False):
+        """Hiện popup chuyên biệt; GUI chỉ gửi yêu cầu recheck S4."""
+        prefix = "Kiểm tra lại: S4 vẫn ON. " if recheck else ""
+        self._notify(
+            'warn',
+            'OUTPUT TRAY FULL',
+            prefix
+            + f'S4 đang ON tại vị trí check tray. InX được giữ tại '
+              f'{self.config.inx_safe:g} mm, InY giữ tại '
+              f'{self.config.iny_target2:g} mm; InX không di chuyển tới vị trí '
+              f'lấy khay {self.config.inx_target2:g} mm. Dọn khay Output rồi '
+              'nhấn ACCEPT để kiểm tra lại S4.',
+            code='s2_output_full',
+        )
+
+    def _s2a_wait_output_clear(self):
+        """
+        Giữ wait posture InX=inx_safe, InY=iny_target2 khi output stack đầy.
+
+        S4 tự OFF không làm flow tiếp tục. Chỉ khi operator nhấn
+        ACCEPT, callback đặt one-shot flag và state này mới recheck S4.
+        S4 còn ON -> tiếp tục chờ; S4 OFF -> chạy lại interlock A1
+        rồi mới cho InX đi tới vị trí lấy khay.
+        """
+        # While waiting, issue no motion and no Modbus position reads. The
+        # servo drives keep the verified -60/87 posture, avoiding unnecessary
+        # bus load during a potentially long operator wait.
+        if not self._s2_output_full_accept:
+            return
+
+        # Consume every ACCEPT exactly once. Posture is verified before S4;
+        # if either axis drifted, restore it safely and require a new ACCEPT.
+        self._s2_output_full_accept = False
+        if not self._at_position(2, self.config.iny_target2):
+            if not self._iny_moving:
+                self._nb_move(2, self.config.iny_target2, vel=150)
+            self._log_once(
+                "S2A_OUTPUT_FULL_INY_87",
+                f"S4 ON: giu InY tai {self.config.iny_target2}mm de check tray",
+            )
+            return
+
+        if not self._at_position(1, self.config.inx_safe):
+            if not self._inx_moving:
+                self._nb_move(1, self.config.inx_safe, vel=200)
+            self._log_once(
+                "S2A_OUTPUT_FULL_INX_SAFE",
+                f"S4 ON: giu InX tai safe {self.config.inx_safe}mm",
+            )
+            return
+
+        if self.sensor(S4_SCAN_STACK_P1):
+            self.get_logger().warn(
+                "[S2A] ACCEPT recheck: S4 still ON -> keep State 2 blocked"
+            )
+            self._notify_s2_output_full(recheck=True)
+            return
+
+        self.get_logger().info(
+            "[S2A] ACCEPT recheck: S4 OFF, output clear -> restart A1 interlocks"
+        )
+        self._notify(
+            'info',
+            'OUTPUT TRAY CLEAR',
+            'S4 đã OFF. STATE 2 tiếp tục từ InX=-60 mm, InY=87 mm.',
+            code='s2_output_clear',
+        )
+        self._enter_in(SystemState.S2A_CHECK_INTERLOCK)
 
     def _s2a_wait_cyl_ext(self):
         """
@@ -5711,6 +5860,7 @@ class CartridgeSystem(Node):
     def _s2a_complete(self):
         if not self._cmd_sent_in:
             self._input_tray_done = False
+            self._s2_output_full_accept = False
             self._pub_cartridge_busy(False)
             self._notify('info', 'STATE 2 COMPLETE', 'Da rut khay ra')
             self._cmd_sent_in = True

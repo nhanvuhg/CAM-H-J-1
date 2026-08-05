@@ -16,6 +16,7 @@ ApplicationWindow {
     property bool scaleIssueWarning: false
     property bool autoAiStartedSinceModeSelect: false
     property string selectedCartridgeMode: cartridgeController.currentMode || "idle"
+    property bool state2OutputFullWaitSeen: false
 
     // Fill HP node-compatible authentication.
     property bool loginOpen: false
@@ -216,6 +217,138 @@ ApplicationWindow {
     }
 
     // ────────────────────────────────────────────────────────────
+    // GLOBAL POPUP — State 2 blocked because the output tray stack is full
+    // ACCEPT only requests a fresh S4 check. The backend owns the state and
+    // closes this popup by reporting s2_output_clear or leaving the wait state.
+    Connections {
+        target: cartridgeController
+
+        function onNotificationReceived() {
+            var obj
+            try {
+                obj = JSON.parse(cartridgeController.lastNotification || "{}")
+            } catch (error) {
+                return
+            }
+
+            var code = (obj.code || "").toString().trim().toLowerCase()
+            if (code === "s2_output_full") {
+                state2OutputFullPopup.open()
+            } else if (code === "s2_output_clear") {
+                mainWindow.state2OutputFullWaitSeen = false
+                state2OutputFullPopup.close()
+            }
+        }
+
+        function onSystemStateChanged() {
+            var state = (cartridgeController.stateIn || "").toString().trim().toLowerCase()
+            var waitingForOutputClear = state === "s2a_wait_output_clear"
+
+            if (waitingForOutputClear) {
+                mainWindow.state2OutputFullWaitSeen = true
+                state2OutputFullPopup.open()
+            } else if (mainWindow.state2OutputFullWaitSeen) {
+                mainWindow.state2OutputFullWaitSeen = false
+                state2OutputFullPopup.close()
+            }
+        }
+    }
+
+    Popup {
+        id: state2OutputFullPopup
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        modal: true
+        closePolicy: Popup.NoAutoClose
+        width: 680
+        height: 390
+
+        background: Rectangle {
+            color: "#081627"
+            border.color: "#f0735c"
+            border.width: 3
+            radius: 10
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 24
+            spacing: 16
+
+            Text {
+                Layout.alignment: Qt.AlignHCenter
+                text: "⚠  OUTPUT TRAY FULL"
+                color: "#f0735c"
+                font.pixelSize: 28
+                font.bold: true
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "Sensor S4 đang ON khi bắt đầu STATE 2: khay Output đã đầy.\n" +
+                      "Hệ thống giữ InX tại -60 mm và InY tại 87 mm để check tray.\n" +
+                      "InX sẽ không di chuyển " +
+                      "tới vị trí lấy khay 502.5 mm.\n\n" +
+                      "Hãy lấy/dọn khay Output, sau đó nhấn ACCEPT để kiểm tra lại S4."
+                color: "#c7dcef"
+                font.pixelSize: 18
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Item { Layout.fillHeight: true }
+
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                spacing: 18
+
+                MotionButton {
+                    Layout.preferredWidth: 360
+                    Layout.preferredHeight: 60
+                    text: "✓  ACCEPT — RECHECK S4"
+                    font.pixelSize: 17
+                    font.bold: true
+                    background: Rectangle {
+                        color: "#0a493b"
+                        border.color: "#3ed0b4"
+                        border.width: 2
+                        radius: 6
+                    }
+                    contentItem: Text {
+                        text: parent.text
+                        color: "#d9fff7"
+                        font: parent.font
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: cartridgeController.acceptState2OutputFull()
+                }
+
+                MotionButton {
+                    Layout.preferredWidth: 220
+                    Layout.preferredHeight: 60
+                    text: "⏹  STOP"
+                    font.pixelSize: 17
+                    font.bold: true
+                    background: Rectangle {
+                        color: "#3a1614"
+                        border.color: "#f0735c"
+                        border.width: 2
+                        radius: 6
+                    }
+                    contentItem: Text {
+                        text: parent.text
+                        color: "#f0735c"
+                        font: parent.font
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: mainWindow.stopSynchronizedSystems()
+                }
+            }
+        }
+    }
+
     // GLOBAL POPUP — feed_chamber timeout resume choice
     // ────────────────────────────────────────────────────────────
     // GLOBAL POPUP — feed_chamber timeout resume choice
