@@ -1,0 +1,16 @@
+[Unit]
+Description=CAM-H-J-1 delayed dual IMX477 driver initialization
+Documentation=file:/home/nhan/ros2_ws/patches/kernel/README.md
+After=systemd-udev-settle.service graphical.target
+Wants=systemd-udev-settle.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/nhan/ros2_ws/scripts/camera_tools/prepare_imx477.sh --attempts 1 --settle 10
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=15s
+TimeoutStartSec=90s
+
+[Install]
+WantedBy=graphical.target

@@ -1131,8 +1131,8 @@ private:
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả khay vào chamber
         if (!wait(0.5)) return false;
         if (!moveR(0, -56, 0)) return false;
-        if (!moveR(-10, 20.5, 0,8)) return false;
-        if (!wait(0.5)) return false;
+        if (!moveR(-10, 21, 0,8)) return false;
+        if (!wait(1.5)) return false;
         if (!moveR(0, -75, 0)) return false;
         if (!moveToIndex(37)) return false;
         if (!moveToIndex(29)) return false;
@@ -1258,8 +1258,8 @@ private:
         if (!setDigitalOutput(1, false)) return false;  // Picker NHẢ — thả cart vào chamber
         if (!wait(0.5)) return false;
         if (!moveR(-1, -56, 0)) return false;
-        if (!moveR(-10, 20.5, 0,8)) return false;
-        if (!wait(0.5)) return false;
+        if (!moveR(-10, 21, 0,8)) return false;
+        if (!wait(1.5)) return false;
         if (!moveR(0, -90, 0)) return false;
         if (!moveToIndex(37)) return false;
         return true;

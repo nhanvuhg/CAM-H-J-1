@@ -36,7 +36,7 @@ def generate_launch_description():
         parameters=[{
             **camera_topic_parameters,
             'capture_fps': ParameterValue(capture_fps, value_type=int),
-            'exposure': 32000,
+            'exposure': 43000,
         }],
         condition=IfCondition(use_cuda_camera),
         respawn=False,

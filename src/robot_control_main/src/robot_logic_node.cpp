@@ -262,6 +262,7 @@ private:
     std::atomic<bool> emergency_stop_{false};
     std::atomic<bool> manual_mode_{true};   // Default = MANUAL (toàn hệ thống) — sync với Python cartridge node
     std::atomic<bool> system_paused_{false};    // PAUSE: giữ state machine + Dobot motion tại chỗ
+    std::atomic<bool> dobot_motion_paused_{false}; // True only after native Pause() succeeds/mode=10
     std::atomic<bool> use_ai_for_control_{false};
     std::atomic<bool> stored_scale_result_{false};
     std::atomic<bool> stop_after_single_motion_{false};
@@ -1083,6 +1084,8 @@ void RobotLogicNode::softStopToManual(const std::string& source)
     system_started_     = false;
     manual_mode_        = true;
     use_ai_for_control_ = false;
+    system_paused_      = false;
+    dobot_motion_paused_ = false;
     motion_busy_        = false;
     motion_in_progress_ = false;
     clearMotionCmd();
@@ -1805,6 +1808,7 @@ void RobotLogicNode::emergencyStopCallback(
         emergency_stop_ = true;
         system_enabled_ = false;
         system_paused_  = false;
+        dobot_motion_paused_ = false;
         system_running_ = false;
         system_started_ = false;
         current_state_  = SystemState::IDLE;
@@ -1914,6 +1918,7 @@ void RobotLogicNode::resetStateCallback(
     cartridge_drain_confirmed_ = false;
     emergency_stop_          = false;
     system_paused_           = false;
+    dobot_motion_paused_     = false;
     manual_mode_             = true;   // Reset về MANUAL (safe default toàn hệ thống)
     stop_after_single_motion_ = false;
     motion_fail_count_       = 0;
@@ -1934,76 +1939,145 @@ void RobotLogicNode::pauseSystemCallback(
 {
     std::lock_guard<std::mutex> pause_lock(pause_mutex_);
     if (request->data) {
-        // PAUSE tức thời: khóa state machine trước, rồi phát Pause() native tới
-        // Dobot. MotionExecutor giữ action đang chạy và chờ mode 10; Resume sẽ
-        // Continue() chính trajectory/target đó.
+        // PAUSE tức thời: khóa state machine trước. Chỉ gửi native
+        // Pause() khi Dobot thực sự đang RUNNING (mode 7). Ở WAIT_FILLING,
+        // IDLE hoặc khe giữa hai motion primitive, Pause() trả -1 là bình
+        // thường; MotionExecutor vẫn giữ action/step qua pause topic.
         if (system_paused_) {
             response->success = true;
             response->message = "Already paused";
             return;
         }
         system_paused_ = true;
+        dobot_motion_paused_ = false;
         publishSystemStatus("PAUSED");
 
-        if (pause_client_ && pause_client_->service_is_ready()) {
-            auto pause_req = std::make_shared<Pause::Request>();
-            pause_client_->async_send_request(pause_req,
-                [this](rclcpp::Client<Pause>::SharedFuture f) {
-                    try {
-                        const int res = f.get()->res;
-                        if (res == 0) {
-                            RCLCPP_WARN(get_logger(),
-                                "[PAUSE] Dobot motion paused at current position");
-                        } else {
-                            RCLCPP_ERROR(get_logger(),
-                                "[PAUSE] Dobot Pause failed, result=%d", res);
-                            publishError("DOBOT_PAUSE_FAILED");
-                        }
-                    } catch (const std::exception& e) {
-                        RCLCPP_ERROR(get_logger(), "[PAUSE] Dobot Pause exception: %s", e.what());
-                        publishError("DOBOT_PAUSE_FAILED");
-                    }
-                });
+        int controller_mode = -1;
+        if (robot_mode_client_ && robot_mode_client_->service_is_ready()) {
+            auto mode_req = std::make_shared<RobotMode::Request>();
+            auto mode_res = callService<RobotMode>(robot_mode_client_, mode_req, "RobotMode(Pause)");
+            if (mode_res && mode_res->res == 0) {
+                try { controller_mode = std::stoi(mode_res->mode); }
+                catch (...) { controller_mode = -1; }
+            }
+        }
+        const bool tracked_motion_active =
+            motion_in_progress_.load() || motion_busy_.load();
+        const bool native_pause_needed =
+            controller_mode == 7 || (controller_mode < 0 && tracked_motion_active);
+
+        if (controller_mode == 10) {
+            dobot_motion_paused_ = true;
+            RCLCPP_WARN(get_logger(),
+                "[PAUSE] Dobot was already paused (mode=10); state/step held");
             response->success = true;
-            response->message = "System PAUSED; Dobot motion pause requested";
-        } else {
-            RCLCPP_ERROR(get_logger(), "[PAUSE] Dobot Pause service not ready");
-            publishError("DOBOT_PAUSE_SERVICE_OFFLINE");
+            response->message = "System PAUSED; Dobot already paused";
+        } else if (native_pause_needed && pause_client_ && pause_client_->service_is_ready()) {
+            auto pause_req = std::make_shared<Pause::Request>();
+            auto pause_res = callService<Pause>(pause_client_, pause_req, "Pause");
+            if (pause_res && pause_res->res == 0) {
+                dobot_motion_paused_ = true;
+                RCLCPP_WARN(get_logger(),
+                    "[PAUSE] Dobot motion paused at current position");
+                response->success = true;
+                response->message = "System PAUSED; Dobot motion paused";
+            } else {
+                // The motion may finish in the small RobotMode->Pause race.
+                // Re-read mode: idle means software pause is sufficient.
+                int mode_after_pause = -1;
+                auto mode_req = std::make_shared<RobotMode::Request>();
+                auto mode_res = callService<RobotMode>(
+                    robot_mode_client_, mode_req, "RobotMode(after Pause)");
+                if (mode_res && mode_res->res == 0) {
+                    try { mode_after_pause = std::stoi(mode_res->mode); }
+                    catch (...) { mode_after_pause = -1; }
+                }
+                if (mode_after_pause == 10) {
+                    dobot_motion_paused_ = true;
+                    response->success = true;
+                    response->message = "System PAUSED; Dobot reports paused";
+                } else if (mode_after_pause == 5) {
+                    RCLCPP_WARN(get_logger(),
+                        "[PAUSE] Motion completed before native Pause; holding next step");
+                    response->success = true;
+                    response->message = "System PAUSED between motion steps";
+                } else {
+                    const int result = pause_res ? pause_res->res : -1;
+                    RCLCPP_ERROR(get_logger(),
+                        "[PAUSE] Dobot Pause failed result=%d mode=%d; state remains held",
+                        result, mode_after_pause);
+                    response->success = false;
+                    response->message = "State held, but Dobot motion pause failed";
+                }
+            }
+        } else if (native_pause_needed) {
+            RCLCPP_ERROR(get_logger(),
+                "[PAUSE] Active motion detected but Dobot Pause service is unavailable; state remains held");
             response->success = false;
             response->message = "State held, but Dobot Pause service is offline";
+        } else {
+            RCLCPP_WARN(get_logger(),
+                "[PAUSE] Software hold only (Dobot mode=%d, motion_in_progress=%s)",
+                controller_mode, motion_in_progress_.load() ? "true" : "false");
+            response->success = true;
+            response->message = "System PAUSED; no active Dobot trajectory";
         }
     } else {
-        // RESUME: Continue() native để Dobot đi tiếp trajectory đang giữ, rồi
-        // mở state machine. Refresh timeout để thời gian PAUSE không bị tính.
+        // Chỉ Continue() khi native Pause() đã thực sự được engage.
+        // Software-only pause (idle/between-step) mở state machine ngay.
         if (!system_paused_) {
             response->success = true;
             response->message = "Already running";
             return;
         }
-        if (!continue_client_ || !continue_client_->service_is_ready()) {
-            RCLCPP_ERROR(get_logger(), "[RESUME] Dobot Continue service not ready");
-            response->success = false;
-            response->message = "Still paused: Dobot Continue service is offline";
-            return;
-        }
+        const bool native_pause_engaged = dobot_motion_paused_.load();
+        if (native_pause_engaged) {
+            if (!continue_client_ || !continue_client_->service_is_ready()) {
+                RCLCPP_ERROR(get_logger(), "[RESUME] Dobot Continue service not ready");
+                response->success = false;
+                response->message = "Still paused: Dobot Continue service is offline";
+                return;
+            }
 
-        auto continue_req = std::make_shared<Continues::Request>();
-        auto continue_res = callService<Continues>(continue_client_, continue_req, "Continue");
-        if (!continue_res || continue_res->res != 0) {
-            const int res = continue_res ? continue_res->res : -1;
-            RCLCPP_ERROR(get_logger(), "[RESUME] Dobot Continue failed, result=%d", res);
-            publishError("DOBOT_CONTINUE_FAILED");
-            response->success = false;
-            response->message = "Still paused: Dobot Continue failed";
-            return;
+            auto continue_req = std::make_shared<Continues::Request>();
+            auto continue_res = callService<Continues>(continue_client_, continue_req, "Continue");
+            if (!continue_res || continue_res->res != 0) {
+                // A completed/cancelled trajectory can make Continue return -1.
+                // Only mode 10 means the controller is genuinely still paused.
+                int controller_mode = -1;
+                auto mode_req = std::make_shared<RobotMode::Request>();
+                auto mode_res = callService<RobotMode>(
+                    robot_mode_client_, mode_req, "RobotMode(after Continue)");
+                if (mode_res && mode_res->res == 0) {
+                    try { controller_mode = std::stoi(mode_res->mode); }
+                    catch (...) { controller_mode = -1; }
+                }
+                if (controller_mode == 10 || controller_mode < 0) {
+                    const int result = continue_res ? continue_res->res : -1;
+                    RCLCPP_ERROR(get_logger(),
+                        "[RESUME] Dobot still paused; Continue result=%d mode=%d",
+                        result, controller_mode);
+                    response->success = false;
+                    response->message = "Still paused: Dobot Continue failed";
+                    return;
+                }
+                RCLCPP_WARN(get_logger(),
+                    "[RESUME] Continue returned nonzero but Dobot mode=%d is not paused; resuming state machine",
+                    controller_mode);
+            } else {
+                RCLCPP_INFO(get_logger(),
+                    "[RESUME] Dobot motion continuing from paused position");
+            }
+        } else {
+            RCLCPP_INFO(get_logger(),
+                "[RESUME] Software-only pause; no Dobot Continue required");
         }
-        RCLCPP_INFO(get_logger(),
-            "[RESUME] Dobot motion continuing from paused position");
 
         motion_fail_count_ = 0;
         if (!motion_in_progress_ && !motion_result_ && !getMotionCmd().empty())
             clearMotionCmd();
         system_paused_ = false;
+        dobot_motion_paused_ = false;
         auto now = this->now();
         motion_started_at_   = now;
         wait_tray_start_time_ = now;
@@ -2011,7 +2085,9 @@ void RobotLogicNode::pauseSystemCallback(
         RCLCPP_INFO(get_logger(), "[RESUME] State machine resumed — timers refreshed");
         notifyStateChange();
         response->success = true;
-        response->message = "System RESUMED; Dobot motion continue requested";
+        response->message = native_pause_engaged
+            ? "System RESUMED; Dobot motion continued"
+            : "System RESUMED; software hold released";
     }
 }
 

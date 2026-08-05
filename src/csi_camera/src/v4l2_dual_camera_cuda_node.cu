@@ -35,7 +35,7 @@ public:
           cam0_clarity_(declare_parameter<double>("cam0_clarity", 0.45)),
           cam1_clarity_(declare_parameter<double>("cam1_clarity", 0.60)),
           capture_fps_(declare_parameter<int>("capture_fps", 25)),
-          exposure_(declare_parameter<int>("exposure", 32000)),
+          exposure_(declare_parameter<int>("exposure", 43000)),
           health_grace_sec_(declare_parameter<double>("health_grace_sec", 20.0)),
           min_healthy_fps_(declare_parameter<double>("min_healthy_fps", 5.0)),
           max_unhealthy_ticks_(declare_parameter<int>("max_unhealthy_ticks", 5)),

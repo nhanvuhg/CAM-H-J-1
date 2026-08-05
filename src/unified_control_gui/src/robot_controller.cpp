@@ -1692,26 +1692,28 @@ void RobotController::setDigitalOutput(int index, bool status)
 
 void RobotController::pauseRobot()
 {
-    qDebug() << "PauseRobot -> /robot/pause_system true + /system/pause_button";
+    qDebug() << "PauseRobot -> /system/pause_button + /robot/pause_system true";
     // Instant PAUSE: Dobot giữ trajectory hiện tại; cartridge dừng servo/VFD
     // và giữ nguyên state/step để Resume tiếp tục.
-    callServiceAsync(pause_system_client_, true);
     if (system_pause_pub_) {
         std_msgs::msg::Bool m;
         m.data = true;
         system_pause_pub_->publish(m);
     }
+    // Publish first so MotionExecutor blocks the next primitive before the
+    // robot service checks whether a native Dobot Pause is required.
+    callServiceAsync(pause_system_client_, true);
 }
 
 void RobotController::resumeRobot()
 {
-    qDebug() << "ResumeRobot -> /robot/pause_system false + /system/resume_button";
-    callServiceAsync(pause_system_client_, false);
+    qDebug() << "ResumeRobot -> /system/resume_button + /robot/pause_system false";
     if (system_resume_pub_) {
         std_msgs::msg::Bool m;
         m.data = true;
         system_resume_pub_->publish(m);
     }
+    callServiceAsync(pause_system_client_, false);
 }
 
 
