@@ -28,6 +28,7 @@ CAM1_AI_MODEL="${CAM1_AI_MODEL:-$HOME/models/data_output_hp1.engine}"
 CAMERA_CAPTURE_FPS="${CAMERA_CAPTURE_FPS:-25}"
 AI_MAX_FPS="${AI_MAX_FPS:-20}"
 CAMERA_DRIVER_SETTLE_SEC="${CAMERA_DRIVER_SETTLE_SEC:-10}"
+CAMERA_DRIVER_PATCH_VERSION="${CAMERA_DRIVER_PATCH_VERSION:-2.0.6-camhj1-cleanup1}"
 
 # Keep Qt geometry identical to the RevPi reference display. Jetson's X server
 # reports 92x91 DPI while the RevPi reports 96x96; explicit 1:1 scaling avoids
@@ -272,18 +273,40 @@ camera_device_holders() {
     done | tr ' ' '\n' | sed '/^$/d' | sort -nu
 }
 
+camera_driver_loaded() {
+    lsmod | awk '{print $1}' | grep -qx nv_imx477
+}
+
+camera_driver_retry_safe() {
+    [ -r /sys/module/nv_imx477/version ] &&
+        [ "$(cat /sys/module/nv_imx477/version)" = "$CAMERA_DRIVER_PATCH_VERSION" ]
+}
+
+unload_camera_driver_for_retry() {
+    if ! camera_driver_retry_safe; then
+        return 1
+    fi
+
+    sudo -n modprobe -r nv_imx477 || return 1
+    udevadm settle --timeout=10 2>/dev/null || true
+    ! camera_driver_loaded
+}
+
 prepare_camera_devices() {
     camera_devices_ready && return 0
 
     # nv_imx477 is intentionally blacklisted from automatic boot probing.
-    # V3Link receivers need time to become ready; probing at t=1s can fail and
-    # leak cam_reset_gpio until reboot.  start_all loads the module here, after
-    # userspace/hardware power have settled.
-    if lsmod | awk '{print $1}' | grep -qx nv_imx477; then
-        echo "REBOOT_REQUIRED missing_video_devices=1 driver=nv_imx477_loaded" \
-            > "$CAMERA_SUPERVISOR_STATUS"
-        echo "[$(date --iso-8601=seconds)] Camera driver partially probed; reset GPIO is likely held. Reboot required."
-        return 2
+    # start_all loads the module after external power has settled.  The patched
+    # driver releases cam_reset_gpio when one sensor fails to probe, allowing
+    # this supervisor to unload it and retry without restarting ROS or the GUI.
+    if camera_driver_loaded; then
+        if ! unload_camera_driver_for_retry; then
+            echo "REBOOT_REQUIRED missing_video_devices=1 driver_cleanup_patch=missing" \
+                > "$CAMERA_SUPERVISOR_STATUS"
+            echo "[$(date --iso-8601=seconds)] Partial camera probe uses an unsafe driver; reboot required after installing the cleanup patch."
+            return 2
+        fi
+        echo "[$(date --iso-8601=seconds)] Unloaded partial camera probe before retry"
     fi
 
     echo "WAITING_POWER_SETTLE seconds=$CAMERA_DRIVER_SETTLE_SEC" \
@@ -305,8 +328,15 @@ prepare_camera_devices() {
         return 0
     fi
 
-    echo "REBOOT_REQUIRED reason=imx477_partial_probe" > "$CAMERA_SUPERVISOR_STATUS"
-    echo "[$(date --iso-8601=seconds)] nv_imx477 loaded but both video devices were not created; refusing retry to avoid GPIO leak"
+    if unload_camera_driver_for_retry; then
+        echo "RETRYING_PROBE reason=imx477_partial_probe retry_s=15" \
+            > "$CAMERA_SUPERVISOR_STATUS"
+        echo "[$(date --iso-8601=seconds)] Partial IMX477 probe cleaned up safely; retrying in background"
+        return 1
+    fi
+
+    echo "REBOOT_REQUIRED reason=imx477_cleanup_unavailable" > "$CAMERA_SUPERVISOR_STATUS"
+    echo "[$(date --iso-8601=seconds)] Partial IMX477 probe could not be cleaned up safely; reboot required"
     return 2
 }
 

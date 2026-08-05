@@ -1,0 +1,22 @@
+diff --git a/drivers/media/i2c/nv_imx477.c b/drivers/media/i2c/nv_imx477.c
+index 405c90a..d625438 100644
+--- a/drivers/media/i2c/nv_imx477.c
++++ b/drivers/media/i2c/nv_imx477.c
+@@ -747,6 +747,12 @@ static int imx477_probe(struct i2c_client *client,
+ 
+ 	err = imx477_board_setup(priv);
+ 	if (err) {
++		/*
++		 * tegracam_device_register() calls power_get(), which owns the
++		 * reset GPIO.  Release all tegracam resources when sensor probing
++		 * fails so the module can be unloaded and retried safely.
++		 */
++		tegracam_device_unregister(tc_dev);
+ 		dev_err(dev, "board setup failed\n");
+ 		return err;
+ 	}
+@@ -812,3 +818,4 @@ module_i2c_driver(imx477_i2c_driver);
+ MODULE_DESCRIPTION("Media Controller driver for Sony IMX477");
+ MODULE_AUTHOR("RidgeRun");
+ MODULE_LICENSE("GPL v2");
++MODULE_VERSION("2.0.6-camhj1-cleanup1");
