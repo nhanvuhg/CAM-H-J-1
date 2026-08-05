@@ -15,6 +15,8 @@ def generate_launch_description():
     use_cuda_camera = LaunchConfiguration('use_cuda_camera')
     capture_fps = LaunchConfiguration('capture_fps')
     max_inference_fps = LaunchConfiguration('max_inference_fps')
+    cam0_device = LaunchConfiguration('cam0_device')
+    cam1_device = LaunchConfiguration('cam1_device')
     # The camera node owns both V4L2 devices and performs the validated CUDA
     # debayer/tone path. It publishes BGR8 640x360 with depth=1 semantics.
     camera_topic_parameters = {
@@ -22,6 +24,9 @@ def generate_launch_description():
         'cam1_topic': '/cam1HP/image_raw',
         'cam0_health_topic': '/camera/cam0/health',
         'cam1_health_topic': '/camera/cam1/health',
+        # Current physical wiring: input camera is video0, output is video1.
+        'cam0_device': ParameterValue(cam0_device, value_type=int),
+        'cam1_device': ParameterValue(cam1_device, value_type=int),
         # Small extra luma-edge lift after the 1920x1080 -> 640x360
         # reduction; chroma denoise and edge threshold stay unchanged.
         'cam0_clarity': 0.45,
@@ -175,6 +180,16 @@ def generate_launch_description():
             description='Sensor capture rate; inference is capped separately for GPU headroom',
         ),
         DeclareLaunchArgument(
+            'cam0_device',
+            default_value='0',
+            description='V4L2 index for logical CAM0 input-tray camera',
+        ),
+        DeclareLaunchArgument(
+            'cam1_device',
+            default_value='1',
+            description='V4L2 index for logical CAM1 output-tray camera',
+        ),
+        DeclareLaunchArgument(
             'cam0_model',
             default_value='/home/nhan/models/data_input_hp1.engine',
             description='TensorRT engine used by camera 0 input-tray inference',
@@ -201,8 +216,8 @@ Hardware:
   ┌──────────────────────────────────────────────┐
   │  NVIDIA Jetson Orin Nano                      │
   │                                               │
-  │  /dev/video1 → logical CAM0 → rack/input      │
-  │  /dev/video0 → logical CAM1 → green output    │
+  │  /dev/video0 → logical CAM0 → rack/input      │
+  │  /dev/video1 → logical CAM1 → green output    │
   └──────────────────────────────────────────────┘
 
 Topic Flow:

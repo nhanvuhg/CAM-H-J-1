@@ -2,8 +2,8 @@
 """ROS2 publisher for the stable dual V3Link V4L2 pipeline.
 
 Logical mapping is intentional for this machine:
-  CAM0/input  -> /dev/video1 (rack)
-  CAM1/output -> /dev/video0 (green tray)
+  CAM0/input  -> /dev/video0 (rack)
+  CAM1/output -> /dev/video1 (green tray)
 
 Frames are published as BGR8 640x360 for low latency. The same capture/tone
 implementation is shared with the Desktop data-capture tool, which saves
@@ -22,8 +22,8 @@ from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
 sys.path.insert(0, "/home/nhan")
+import capture_yolo_v4l2 as capture_backend  # noqa: E402
 from capture_yolo_v4l2 import (  # noqa: E402
-    DEVICE_MAP,
     DualV4L2Capture,
     EXPOSURE,
     FPS,
@@ -54,6 +54,21 @@ class V4L2DualCameraNode(Node):
         self.cam1_health_topic = self.declare_parameter(
             "cam1_health_topic", "/camera/cam1/health"
         ).value
+        self.device_map = {
+            0: int(self.declare_parameter("cam0_device", 0).value),
+            1: int(self.declare_parameter("cam1_device", 1).value),
+        }
+        if (
+            min(self.device_map.values()) < 0
+            or len(set(self.device_map.values())) != 2
+        ):
+            raise ValueError(
+                "cam0_device and cam1_device must be distinct non-negative indexes"
+            )
+        # DualV4L2Capture reads this module-level map inside its worker
+        # threads. Override it before constructing/starting the backend so
+        # the diagnostic CPU path follows the same launch mapping as CUDA.
+        capture_backend.DEVICE_MAP.update(self.device_map)
         # The ROS image is downscaled to 640x360, so a modestly stronger
         # luma-only edge lift is useful for YOLO labels.  Keep these as ROS
         # parameters so the production launch can tune them without changing
@@ -100,8 +115,8 @@ class V4L2DualCameraNode(Node):
             self.publish_timer = self.create_timer(0.01, self._publish_latest)
             self.health_timer = self.create_timer(1.0, self._publish_health)
             self.get_logger().info(
-                f"V4L2 dual camera started: CAM0=/dev/video{DEVICE_MAP[0]} rack, "
-                f"CAM1=/dev/video{DEVICE_MAP[1]} green output tray; raw=1920x1080, "
+                f"V4L2 dual camera started: CAM0=/dev/video{self.device_map[0]} rack, "
+                f"CAM1=/dev/video{self.device_map[1]} green output tray; raw=1920x1080, "
                 f"published={ROS_WIDTH}x{ROS_HEIGHT}, exposure={EXPOSURE} "
                 f"gain={GAIN} gamma={GAMMA:.2f} saturation={SATURATION:.2f} "
                 f"WB={WB} clarity={self.ros_clarity}"
@@ -155,7 +170,7 @@ class V4L2DualCameraNode(Node):
             state = "STREAMING" if age < 2.5 else statuses[camera_id]
             message = String()
             message.data = (
-                f"{state} device=/dev/video{DEVICE_MAP[camera_id]} "
+                f"{state} device=/dev/video{self.device_map[camera_id]} "
                 f"size={ROS_WIDTH}x{ROS_HEIGHT} fps={fps[camera_id]:.1f} "
                 f"age={age:.2f}s reconnects={reconnects[camera_id]} "
                 f"published={self.published[camera_id]}"

@@ -32,6 +32,8 @@ public:
               "cam0_health_topic", "/camera/cam0/health")),
           cam1_health_topic_(declare_parameter<std::string>(
               "cam1_health_topic", "/camera/cam1/health")),
+          cam0_device_(declare_parameter<int>("cam0_device", 0)),
+          cam1_device_(declare_parameter<int>("cam1_device", 1)),
           cam0_clarity_(declare_parameter<double>("cam0_clarity", 0.45)),
           cam1_clarity_(declare_parameter<double>("cam1_clarity", 0.60)),
           capture_fps_(declare_parameter<int>("capture_fps", 25)),
@@ -56,6 +58,11 @@ public:
         if (exposure_ < 13 || exposure_ > 683710) {
             throw std::runtime_error("exposure is outside IMX477 range");
         }
+        if (cam0_device_ < 0 || cam1_device_ < 0 ||
+            cam0_device_ == cam1_device_) {
+            throw std::runtime_error(
+                "cam0_device and cam1_device must be distinct non-negative indexes");
+        }
         if (health_grace_sec_ < 5.0 || min_healthy_fps_ < 0.1 ||
             max_unhealthy_ticks_ < 1) {
             throw std::runtime_error("invalid camera health watchdog parameters");
@@ -68,10 +75,11 @@ public:
 
         RCLCPP_INFO(
             get_logger(),
-            "CUDA V4L2 starting: CAM0=/dev/video1 CAM1=/dev/video0, "
+            "CUDA V4L2 starting: CAM0=/dev/video%d CAM1=/dev/video%d, "
             "raw=1920x1080 RG10, publish=640x360 BGR8, request=%d fps, "
             "exposure=%d gain=66, clarity={%.2f,%.2f}",
-            capture_fps_, exposure_, cam0_clarity_, cam1_clarity_);
+            cam0_device_, cam1_device_, capture_fps_, exposure_,
+            cam0_clarity_, cam1_clarity_);
     }
 
     ~V4L2DualCameraCudaNode() override {
@@ -93,9 +101,11 @@ private:
                 try {
                     // Opening is intentionally serialized: both V3Link
                     // receivers share the camera control path.
-                    V4L2Camera cam0(0, 1, exposure_, capture_fps_);
+                    V4L2Camera cam0(
+                        0, cam0_device_, exposure_, capture_fps_);
                     std::this_thread::sleep_for(1500ms);
-                    V4L2Camera cam1(1, 0, exposure_, capture_fps_);
+                    V4L2Camera cam1(
+                        1, cam1_device_, exposure_, capture_fps_);
 
                     {
                         std::lock_guard<std::mutex> lock(status_mutex_);
@@ -108,6 +118,13 @@ private:
                     std::array<uint64_t, 2> window_frames{0, 0};
                     std::array<uint32_t, 2> last_sequences{0, 0};
                     std::array<bool, 2> have_sequence{false, false};
+                    const auto capture_period =
+                        std::chrono::duration_cast<
+                            std::chrono::steady_clock::duration>(
+                            std::chrono::duration<double>(
+                                1.0 / static_cast<double>(capture_fps_)));
+                    auto next_capture_due =
+                        std::chrono::steady_clock::now();
                     auto window_start = std::chrono::steady_clock::now();
                     while (rclcpp::ok() && !stopping_.load()) {
                         V4L2Camera* cameras[2] = {&cam0, &cam1};
@@ -151,6 +168,21 @@ private:
                                     std::chrono::steady_clock::now()
                                         .time_since_epoch())
                                     .count());
+                        }
+
+                        // Some Jetson V4L2 sensor drivers expose the requested
+                        // frame_rate control but continue delivering buffers at
+                        // the mode maximum. Pace each paired publish cycle here
+                        // so CUDA, DDS, TensorRT and Qt receive the configured
+                        // capture_fps instead of silently running near 36 FPS.
+                        next_capture_due += capture_period;
+                        const auto processing_done =
+                            std::chrono::steady_clock::now();
+                        if (next_capture_due > processing_done) {
+                            std::this_thread::sleep_until(next_capture_due);
+                        } else if (processing_done - next_capture_due >=
+                                   capture_period) {
+                            next_capture_due = processing_done;
                         }
 
                         const auto now = std::chrono::steady_clock::now();
@@ -243,7 +275,8 @@ private:
             }
             std_msgs::msg::String message;
             std::ostringstream text;
-            text << status[id] << " device=/dev/video" << (id == 0 ? 1 : 0)
+            text << status[id] << " device=/dev/video"
+                 << (id == 0 ? cam0_device_ : cam1_device_)
                  << " backend=CUDA size=" << kOutputWidth << "x"
                  << kOutputHeight << " fps=" << std::fixed
                  << std::setprecision(1) << fps[id] << " age="
@@ -287,6 +320,8 @@ private:
     std::string cam1_topic_;
     std::string cam0_health_topic_;
     std::string cam1_health_topic_;
+    int cam0_device_;
+    int cam1_device_;
     double cam0_clarity_;
     double cam1_clarity_;
     int capture_fps_;

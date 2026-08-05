@@ -31,6 +31,13 @@
 namespace
 {
 
+class CudaRuntimeError final : public std::runtime_error
+{
+public:
+  explicit CudaRuntimeError(const std::string & message)
+  : std::runtime_error(message) {}
+};
+
 class TensorRtLogger final : public nvinfer1::ILogger
 {
 public:
@@ -47,7 +54,7 @@ public:
 void check_cuda(cudaError_t result, const char * operation)
 {
   if (result != cudaSuccess) {
-    throw std::runtime_error(
+    throw CudaRuntimeError(
             std::string(operation) + ": " + cudaGetErrorString(result));
   }
 }
@@ -327,7 +334,7 @@ private:
         cudaMemcpyHostToDevice, stream_),
       "cudaMemcpyAsync(H2D)");
     if (!context_->enqueueV3(stream_)) {
-      throw std::runtime_error("TensorRT enqueueV3 failed");
+      throw CudaRuntimeError("TensorRT enqueueV3 failed");
     }
     check_cuda(
       cudaMemcpyAsync(
@@ -494,6 +501,18 @@ private:
           get_logger(), "AI running: frame=%lu inference=%.2fms detections=%zu",
           static_cast<unsigned long>(frame_count), elapsed, detections.size());
       }
+    } catch (const CudaRuntimeError & error) {
+      inference_errors_.fetch_add(1);
+      fatal_backend_error_.store(true);
+      RCLCPP_FATAL(
+        get_logger(),
+        "Fatal CUDA/TensorRT context error: %s; exiting for ROS launch respawn",
+        error.what());
+      // A launch timeout poisons this process' CUDA context. Retrying the
+      // callback can never recover it and wastes CPU/GPU resources needed by
+      // the Qt scene graph. End this process; both production YOLO actions are
+      // configured with respawn=True.
+      rclcpp::shutdown();
     } catch (const std::exception & error) {
       inference_errors_.fetch_add(1);
       RCLCPP_ERROR_THROTTLE(
@@ -505,7 +524,8 @@ private:
   {
     std_msgs::msg::String message;
     std::ostringstream status;
-    status << "READY backend=TensorRT engine=" << engine_path_
+    status << (fatal_backend_error_.load() ? "FATAL" : "READY")
+           << " backend=TensorRT engine=" << engine_path_
            << " max_fps=" << max_inference_fps_
            << " received=" << received_frames_.load()
            << " frames=" << processed_frames_.load()
@@ -557,6 +577,7 @@ private:
   std::atomic<std::uint64_t> received_frames_{0};
   std::atomic<std::uint64_t> rate_limited_frames_{0};
   std::atomic<std::uint64_t> inference_errors_{0};
+  std::atomic<bool> fatal_backend_error_{false};
   std::atomic<std::size_t> last_detection_count_{0};
   std::atomic<double> last_inference_ms_{0.0};
 };
