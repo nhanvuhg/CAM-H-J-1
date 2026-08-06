@@ -779,9 +779,21 @@ void RobotLogicNode::initSubscriptions()
                 bool prev_empty = input_belt_empty_from_sensors_.load();
                 input_belt_empty_from_sensors_ = empty;
                 cartridge_input_sensors_seen_ = true;
+                // Drain confirmation is level-triggered, not just gated on arrival of
+                // /cartridge/drain. A tray back on S1/S2/S3 invalidates any earlier
+                // confirmation — without this the latched flag survives until
+                // WAIT_FILLING/REFILL_BUFFER/PLACE_* and ends the batch on stale state.
+                bool drain_revoked = false;
+                if (!empty && cartridge_drain_confirmed_.exchange(false)) {
+                    drain_revoked = true;
+                    RCLCPP_WARN(get_logger(),
+                        "[DRAIN] Revoked drain confirmation: S1/S2/S3 sees tray again");
+                }
                 if (prev_empty != empty) {
                     RCLCPP_WARN(get_logger(), "[DRAIN] S1/S2/S3 belt empty from sensors: %s",
                         empty ? "TRUE" : "FALSE");
+                }
+                if (prev_empty != empty || drain_revoked) {
                     notifyStateChange();
                 }
             }
