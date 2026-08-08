@@ -41,13 +41,16 @@ Popup {
                                        "May", "June", "July", "August",
                                        "September", "October", "November", "December"]
 
-    // Range offered by the year wheel. Production logs do not go back further
-    // than the machine's install year, and a couple of years ahead covers a
-    // clock that has drifted forward.
+    // Range offered by the year wheel: 2020 through the current year, which is
+    // 2020-2026 today. Bounded by the clock rather than a literal 2026 so the
+    // wheel does not silently stop offering the present year come January.
+    // There is no future year to pick — production logs cannot exist ahead of
+    // now.
+    readonly property int firstYear: 2020
     readonly property var yearList: {
         var list = []
-        var now = new Date().getFullYear()
-        for (var y = now - 6; y <= now + 2; y++)
+        var last = Math.max(firstYear, new Date().getFullYear())
+        for (var y = firstYear; y <= last; y++)
             list.push(y)
         return list
     }
@@ -102,8 +105,12 @@ Popup {
             // Seed the wheels imperatively; binding currentIndex to viewMonth
             // while also writing it back would be a two-way binding.
             monthWheel.currentIndex = cal.viewMonth
+            // A field holding a year outside the wheel's range (a hand-typed
+            // 2019, say) snaps to the nearest end rather than the middle.
             var yi = cal.yearList.indexOf(cal.viewYear)
-            yearWheel.currentIndex = yi >= 0 ? yi : Math.floor(cal.yearList.length / 2)
+            if (yi < 0)
+                yi = cal.viewYear < cal.firstYear ? 0 : cal.yearList.length - 1
+            yearWheel.currentIndex = yi
         }
         cal.pickerMode = !cal.pickerMode
     }
@@ -166,7 +173,7 @@ Popup {
                         id: titleText
                         anchors.centerIn: parent
                         anchors.horizontalCenterOffset: -7
-                        text: cal.monthNames[cal.viewMonth] + " " + cal.viewYear
+                        text: cal.monthNames[cal.viewMonth] + " - " + cal.viewYear
                         color: cal.pickerMode ? cal.cAccent : cal.cText
                         font.pixelSize: 16; font.bold: true
                     }
@@ -299,6 +306,10 @@ Popup {
                         anchors.margins: 4
                         model: cal.monthNames
                         visibleItemCount: 5
+                        // Runs January at the top through December at the
+                        // bottom and stops at both ends, rather than cycling
+                        // December back round to January.
+                        wrap: false
                         onCurrentIndexChanged: if (cal.pickerMode) cal.viewMonth = currentIndex
                         delegate: Text {
                             text: modelData
@@ -326,6 +337,10 @@ Popup {
                         anchors.margins: 4
                         model: cal.yearList
                         visibleItemCount: 5
+                        // Oldest year at the top, current year at the bottom,
+                        // hard stops at both — there is nothing before 2020 or
+                        // after today to scroll to.
+                        wrap: false
                         onCurrentIndexChanged: {
                             if (cal.pickerMode && currentIndex >= 0)
                                 cal.viewYear = cal.yearList[currentIndex]
