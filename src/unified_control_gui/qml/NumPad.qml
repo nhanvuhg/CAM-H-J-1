@@ -33,16 +33,20 @@ Popup {
     signal applied(string value)
     signal cancelled()
 
-    readonly property color cBg:      "#0c1726"
-    readonly property color cPanel:   "#06101d"
-    readonly property color cBorder:  "#1a4a6e"
-    readonly property color cKey:     "#132a3f"
-    readonly property color cKeyDown: "#1d3e5c"
-    readonly property color cText:    "#e8f4ff"
-    readonly property color cDim:     "#74899f"
-    readonly property color cAccent:  "#36b6ff"
-    readonly property color cOk:      "#1f9e86"
-    readonly property color cCancel:  "#b53527"
+    // Matches the ENTER VALUE keypad in InkTab so the panel has one keypad
+    // look, with one deliberate change: the key faces are darker than that
+    // one's, which sat close enough to the page background to read as flat.
+    readonly property color cBg:      "#f20a1725"   // popup body
+    readonly property color cBorder:  "#263548"     // cFrameBorder
+    readonly property color cField:   "#123241"     // value display face
+    readonly property color cFieldBd: "#2b4a5c"     // cFieldBorder
+    readonly property color cKey:     "#07131f"     // key face — darkest layer
+    readonly property color cKeyDown: "#67d0ff"     // pressed flashes accent
+    readonly property color cText:    "#ffffff"
+    readonly property color cAccent:  "#67d0ff"
+    readonly property color cDanger:  "#f0735c"
+    readonly property color cOkStart: "#1a4a6e"
+    readonly property color cOkEnd:   "#0c1726"
 
     readonly property string displayText: edited ? (buffer === "" ? "0" : buffer) : originalText
 
@@ -55,37 +59,38 @@ Popup {
     closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
     padding: 0
 
-    width: 340
-    height: 452
+    width: 320
+    // Derived rather than a magic number, so a key-size change cannot push the
+    // action row out through the bottom of the popup.
+    height: body.implicitHeight + 30
 
-    // One key cell; four of these across the pad body. A Grid cannot give the
-    // zero key a double width or the action row its own height, so the keypad
-    // is laid out as explicit rows of these instead.
+    background: Rectangle {
+        color: pad.cBg
+        radius: 12
+        border.color: pad.cBorder
+        border.width: 1
+    }
+
+    // One key face. Pressing flashes the accent colour, matching InkTab.
     component Key: Rectangle {
         id: keyCell
 
         property string label: ""
-        property string kind: "digit"     // digit | aux | cancel | enter
         property bool disabled: false
         signal activated()
 
-        radius: 8
-        opacity: disabled ? 0.32 : 1.0
-        color: {
-            if (kind === "enter")  return keyMA.pressed ? Qt.darker(pad.cOk, 1.25) : pad.cOk
-            if (kind === "cancel") return keyMA.pressed ? Qt.darker(pad.cCancel, 1.25) : pad.cCancel
-            return keyMA.pressed ? pad.cKeyDown : pad.cKey
-        }
+        radius: 6
+        opacity: disabled ? 0.3 : 1.0
+        color: keyMA.pressed ? pad.cKeyDown : pad.cKey
         border.color: pad.cBorder
         border.width: 1
 
         Text {
             anchors.centerIn: parent
             text: keyCell.label
-            color: pad.cText
-            font.pixelSize: (keyCell.kind === "cancel" || keyCell.kind === "enter") ? 17 : 23
+            color: keyMA.pressed ? "#06101d" : pad.cText
+            font.pixelSize: 20
             font.bold: true
-            font.letterSpacing: (keyCell.kind === "cancel" || keyCell.kind === "enter") ? 1.2 : 0
         }
 
         MouseArea {
@@ -94,13 +99,6 @@ Popup {
             enabled: !keyCell.disabled
             onClicked: keyCell.activated()
         }
-    }
-
-    background: Rectangle {
-        color: pad.cBg
-        radius: 14
-        border.color: pad.cBorder
-        border.width: 2
     }
 
     function openFor(field, opts) {
@@ -199,16 +197,21 @@ Popup {
         }
 
         Column {
-            anchors.fill: parent
-            anchors.margins: 14
-            spacing: 10
+            id: body
+            // Three-sided anchor keeps implicitHeight driven by the children,
+            // which is what sizes the popup above.
+            anchors { top: parent.top; left: parent.left; right: parent.right; margins: 15 }
+            spacing: 8
 
+            // ── Title ──
             Text {
                 width: parent.width
-                text: pad.title
-                visible: pad.title !== ""
-                color: pad.cDim
-                font.pixelSize: 14
+                horizontalAlignment: Text.AlignHCenter
+                text: pad.title !== ""
+                      ? pad.title + (pad.units ? " (" + pad.units + ")" : "")
+                      : "ENTER VALUE" + (pad.units ? " (" + pad.units + ")" : "")
+                color: pad.cAccent
+                font.pixelSize: 16
                 font.bold: true
                 elide: Text.ElideRight
             }
@@ -216,88 +219,117 @@ Popup {
             // ── Value display ──
             Rectangle {
                 width: parent.width
-                height: 58
-                radius: 8
-                color: pad.cPanel
-                border.color: pad.edited ? pad.cAccent : pad.cBorder
-                border.width: 2
+                height: 50
+                radius: 6
+                color: pad.cField
+                border.color: pad.cFieldBd
+                border.width: 1
 
                 Text {
-                    anchors.right: parent.right
-                    anchors.rightMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: pad.displayText + (pad.units ? " " + pad.units : "")
-                    color: pad.cText
-                    font.pixelSize: 28
+                    anchors.centerIn: parent
+                    text: pad.displayText
+                    color: pad.cAccent
+                    font.pixelSize: 24
                     font.bold: true
-                    font.family: "monospace"
+                }
+
+                // The reference keypad has no sign key and no room for one in a
+                // 3x4 grid. Fields whose validator allows negatives still need
+                // it, so it lives on the display instead of costing a key.
+                Rectangle {
+                    visible: pad.allowSign
+                    anchors.left: parent.left
+                    anchors.leftMargin: 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 38; height: 38; radius: 6
+                    color: signMA.pressed ? pad.cKeyDown : pad.cKey
+                    border.color: pad.cBorder
+                    border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: "\u00b1"
+                        color: signMA.pressed ? "#06101d" : pad.cText
+                        font.pixelSize: 18
+                        font.bold: true
+                    }
+                    MouseArea {
+                        id: signMA
+                        anchors.fill: parent
+                        onClicked: pad.press("-")
+                    }
                 }
             }
 
-            // ── Digit block ──
-            Column {
-                id: keyBlock
+            // ── Digit block: same 3x4 arrangement as the InkTab keypad ──
+            Grid {
+                id: keyGrid
                 width: parent.width
-                spacing: 8
+                columns: 3
+                spacing: 6
 
-                readonly property real cell: (width - spacing * 3) / 4
+                readonly property real cell: (width - spacing * 2) / 3
                 readonly property real cellH: 54
-                // Zero spans two columns, so it swallows the gap between them.
-                readonly property real wideCell: cell * 2 + spacing
 
-                Row {
-                    spacing: keyBlock.spacing
-                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "7"; onActivated: pad.press("7") }
-                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "8"; onActivated: pad.press("8") }
-                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "9"; onActivated: pad.press("9") }
-                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "⌫"; kind: "aux"
-                          onActivated: pad.backspace() }
-                }
-                Row {
-                    spacing: keyBlock.spacing
-                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "4"; onActivated: pad.press("4") }
-                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "5"; onActivated: pad.press("5") }
-                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "6"; onActivated: pad.press("6") }
-                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "C"; kind: "aux"
-                          onActivated: pad.clearAll() }
-                }
-                Row {
-                    spacing: keyBlock.spacing
-                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "1"; onActivated: pad.press("1") }
-                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "2"; onActivated: pad.press("2") }
-                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "3"; onActivated: pad.press("3") }
-                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "±"; kind: "aux"
-                          disabled: !pad.allowSign; onActivated: pad.press("-") }
-                }
-                Row {
-                    spacing: keyBlock.spacing
-                    Key { width: keyBlock.wideCell; height: keyBlock.cellH; label: "0"
-                          onActivated: pad.press("0") }
-                    Key { width: keyBlock.wideCell; height: keyBlock.cellH; label: "."
-                          disabled: !pad.allowDecimal; onActivated: pad.press(".") }
+                Repeater {
+                    model: ["7", "8", "9",
+                            "4", "5", "6",
+                            "1", "2", "3",
+                            ".", "0", "\u232b"]
+
+                    delegate: Key {
+                        width: keyGrid.cell
+                        height: keyGrid.cellH
+                        label: modelData
+                        disabled: modelData === "." && !pad.allowDecimal
+                        onActivated: {
+                            if (modelData === "\u232b")      pad.backspace()
+                            else                              pad.press(modelData)
+                        }
+                    }
                 }
             }
 
             // ── Action row ──
-            // Held apart from the digits so a mis-tap while typing cannot
-            // commit or discard the value.
-            Item { width: 1; height: 4 }
-
             Row {
                 width: parent.width
                 spacing: 10
 
                 readonly property real halfW: (width - spacing) / 2
 
-                Key {
-                    width: parent.halfW; height: 58
-                    label: "CANCEL"; kind: "cancel"
-                    onActivated: pad.revert()
+                Rectangle {
+                    width: parent.halfW; height: 44; radius: 6
+                    color: cancelMA.pressed
+                           ? Qt.rgba(0.94, 0.27, 0.27, 0.32)
+                           : Qt.rgba(0.94, 0.27, 0.27, 0.15)
+                    border.color: pad.cDanger
+                    border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: "CANCEL"
+                        color: pad.cDanger
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
+                    MouseArea { id: cancelMA; anchors.fill: parent; onClicked: pad.revert() }
                 }
-                Key {
-                    width: parent.halfW; height: 58
-                    label: "ENTER"; kind: "enter"
-                    onActivated: pad.commit()
+
+                Rectangle {
+                    width: parent.halfW; height: 44; radius: 6
+                    border.color: pad.cBorder
+                    border.width: 1
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: okMA.pressed ? Qt.darker(pad.cOkStart, 1.3) : pad.cOkStart }
+                        GradientStop { position: 1.0; color: okMA.pressed ? Qt.darker(pad.cOkEnd, 1.3) : pad.cOkEnd }
+                    }
+                    Text {
+                        anchors.centerIn: parent
+                        text: "OK"
+                        color: "#ffffff"
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
+                    MouseArea { id: okMA; anchors.fill: parent; onClicked: pad.commit() }
                 }
             }
         }
