@@ -696,7 +696,11 @@ Item {
                     Layout.fillWidth: true
                     headers: ["Time", "Machine", "Operator", "Level", "Area", "Mode",
                               "Fill", "Dosing", "CR", "Detail", "Action"]
-                    colWidths: [1.2, 0.9, 1.0, 0.8, 0.9, 0.9, 0.8, 0.8, 0.8, 3.0, 2.4]
+                    // Action carries the repair instruction and is the reason
+                    // an operator opens this table, so it gets the widest
+                    // share and wraps rather than eliding.
+                    colWidths: [1.2, 0.9, 1.0, 0.8, 0.9, 0.9, 0.8, 0.8, 0.8, 2.2, 4.2]
+                    wrapColumns: ["Action"]
                     rows: buildEventRows(eventsData.items)
                 }
             }
@@ -861,6 +865,15 @@ Item {
         property var headers: []
         property var colWidths: [] // weights
         property var rows: []
+        // Header names whose cells wrap onto several lines and grow the row
+        // instead of being cut off with an ellipsis. Empty by default, so every
+        // other table keeps its fixed 36 px rows.
+        property var wrapColumns: []
+
+        function wrapsColumn(index) {
+            var hdr = headers.length > index ? headers[index] : ""
+            return wrapColumns.indexOf(hdr) >= 0
+        }
  
         color: "transparent"
         border.color: cBorder
@@ -958,34 +971,43 @@ Item {
                 Rectangle {
                     id: rowRect
                     Layout.fillWidth: true
-                    implicitHeight: 36
+                    // A Row positioner reports the tallest child as its implicit
+                    // height, so a wrapped cell grows the whole row.
+                    implicitHeight: Math.max(36, cellRow.implicitHeight)
                     color: index % 2 === 0 ? "transparent" : cCardBg
-                    
+
                     readonly property int rowIndex: index
 
                     Row {
-                        anchors.fill: parent
+                        id: cellRow
+                        width: parent.width
                         spacing: 0
                         Repeater {
                             model: rows[rowRect.rowIndex]
-                            Rectangle {
-                                width: tableRoot.getCellWidth(index, parent.width)
-                                height: parent.height
-                                color: "transparent"
-                                
-                                // Draw border on the right (except last item)
+                            Item {
+                                id: cellItem
+                                readonly property bool wraps: tableRoot.wrapsColumn(index)
+                                width: tableRoot.getCellWidth(index, cellRow.width)
+                                height: Math.max(36, cellText.implicitHeight + 10)
+
+                                // Separator spans the full row, which may be
+                                // taller than this cell.
                                 Rectangle {
                                     anchors.top: parent.top
-                                    anchors.bottom: parent.bottom
                                     anchors.right: parent.right
+                                    height: rowRect.height
                                     width: index < headers.length - 1 ? 1 : 0
                                     color: cBorder
                                 }
 
                                 Text {
                                     id: cellText
-                                    anchors.fill: parent
-                                    anchors.margins: 4
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.margins: 5
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    wrapMode: cellItem.wraps ? Text.WordWrap : Text.NoWrap
+                                    maximumLineCount: cellItem.wraps ? 3 : 1
                                     text: modelData
                                     color: {
                                         var hdr = headers.length > index ? headers[index] : ""
@@ -1005,7 +1027,7 @@ Item {
                                         var hdr = headers.length > index ? headers[index] : ""
                                         return hdr === "Result" || hdr === "Kết quả" || hdr === "Level" || hdr === "Event"
                                     }
-                                    horizontalAlignment: Text.AlignHCenter
+                                    horizontalAlignment: cellItem.wraps ? Text.AlignLeft : Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                     elide: Text.ElideRight
 
