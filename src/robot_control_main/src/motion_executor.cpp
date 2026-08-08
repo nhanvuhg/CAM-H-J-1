@@ -1134,7 +1134,7 @@ private:
         if (!moveR(-10, 21, 0,8)) return false;
         if (!wait(1.5)) return false;
         if (!moveR(0, -75, 0)) return false;
-        if (!moveToIndex(37)) return false;
+        if (!moveToIndex(37)) return false;        // 37 Đệm sau khi đặt vào chamber
         if (!moveToIndex(29)) return false;
         return true;
     }
@@ -1217,7 +1217,7 @@ private:
         if (!wait(3.3)) return false;
         if (!setDigitalOutput(6, true)) return false;  //3 nhả cartridge
         if (!moveToIndex(12)) return false; 
-        if (!moveR(0, 0, -59.5,5)) return false;
+        if (!moveR(0, 0, -62.5,5)) return false;
         if (!setDigitalOutput(2, true)) return false;   // Gripper GẮP — kẹp khay tại Index 11
         if (!wait(0.5)) return false;
         if (!moveR(0, 0, 70,8)) return false;
@@ -1261,7 +1261,7 @@ private:
         if (!moveR(-10, 21, 0,8)) return false;
         if (!wait(1.5)) return false;
         if (!moveR(0, -90, 0)) return false;
-        if (!moveToIndex(37)) return false;
+        if (!moveToIndex(37)) return false;  //37 Đệm sau khi đặt vào chamber
         return true;
     }
 
