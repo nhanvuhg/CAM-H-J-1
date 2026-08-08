@@ -11,6 +11,22 @@ TextInput {
     property bool showFocusBorder: true
     property bool focusBorderOnParent: true
 
+    // Touch keypad. The panel has no on-screen keyboard, so any field the
+    // operator is expected to type numbers into opens NumPad instead. Default
+    // to on whenever a validator or a digits-only input mask proves the field
+    // is numeric — a free-text field (operator name, usage code) must keep the
+    // normal caret. Set explicitly to override either way.
+    property bool useNumpad: validator !== null
+                             || inputMethodHints === Qt.ImhDigitsOnly
+    property string numpadTitle: ""
+    property string numpadUnits: ""
+    // Probe the validator's own properties rather than its type name: only
+    // DoubleValidator exposes `decimals`, and `bottom` tells us whether
+    // negatives are in range at all.
+    property bool numpadAllowDecimal: !validator || validator.decimals !== undefined
+    property bool numpadAllowSign: !validator || validator.bottom === undefined
+                                   || validator.bottom < 0
+
     selectByMouse: false
     activeFocusOnTab: true
     selectionColor: focusBorderColor
@@ -55,8 +71,19 @@ TextInput {
     MouseArea {
         anchors.fill: parent
         z: 2
-        cursorShape: Qt.IBeamCursor
+        cursorShape: control.useNumpad ? Qt.PointingHandCursor : Qt.IBeamCursor
         onPressed: {
+            if (control.useNumpad && focusHost && focusHost.openNumpad) {
+                control.forceActiveFocus(Qt.MouseFocusReason)
+                focusHost.openNumpad(control, {
+                    title: control.numpadTitle,
+                    units: control.numpadUnits,
+                    allowDecimal: control.numpadAllowDecimal,
+                    allowSign: control.numpadAllowSign
+                })
+                mouse.accepted = true
+                return
+            }
             if (!control.activeFocus) {
                 control.forceActiveFocus(Qt.MouseFocusReason)
                 control.selectAll()

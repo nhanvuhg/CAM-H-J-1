@@ -168,6 +168,7 @@ Item {
         return parts[2] + "/" + parts[1] + "/" + parts[0]
     }
 
+
     function setAllDates(isoDate) {
         var displayDate = isoToDisplay(isoDate)
         if (!displayDate)
@@ -513,9 +514,9 @@ Item {
                 RowLayout {
                     spacing: 10
                     Text { text: "From Date:"; color: cSection; font.pixelSize: 15; font.bold: true }
-                    DateBox { id: dateFromInput }
+                    DateBox { id: dateFromInput; onDateApplied: loadDate() }
                     Text { text: "To Date:"; color: cSection; font.pixelSize: 15; font.bold: true }
-                    DateBox { id: dateToInput }
+                    DateBox { id: dateToInput;   onDateApplied: loadDate() }
                     ActionBtn { label: "View"; onClicked: loadDate() }
                 }
 
@@ -566,7 +567,7 @@ Item {
                 RowLayout {
                     spacing: 10
                     Text { text: "Date:"; color: cSection; font.pixelSize: 15; font.bold: true }
-                    DateBox { id: inkDateInput }
+                    DateBox { id: inkDateInput;  onDateApplied: loadInk() }
                     Text { text: "Usage Code:"; color: cSection; font.pixelSize: 15; font.bold: true }
                     Rectangle {
                         width: 180; height: 44; radius: 8
@@ -645,7 +646,7 @@ Item {
                 RowLayout {
                     spacing: 10
                     Text { text: "Date:"; color: cSection; font.pixelSize: 15; font.bold: true }
-                    DateBox { id: alertsDateInput }
+                    DateBox { id: alertsDateInput; onDateApplied: loadAlerts() }
                     ActionBtn { label: "View"; onClicked: loadAlerts() }
                 }
 
@@ -677,7 +678,7 @@ Item {
                 RowLayout {
                     spacing: 10
                     Text { text: "Date:"; color: cSection; font.pixelSize: 15; font.bold: true }
-                    DateBox { id: eventsDateInput }
+                    DateBox { id: eventsDateInput; onDateApplied: loadEvents() }
                     ActionBtn { label: "View"; onClicked: loadEvents() }
                 }
 
@@ -774,9 +775,17 @@ Item {
  
     // ── Date input box ──
     component DateBox: Rectangle {
+        id: dateBox
         property alias text: dateField.text
+        // Emitted when the calendar closes with a day chosen, so the owning
+        // section can refresh itself. Typing into the field does not emit —
+        // that path still goes through the View button.
+        signal dateApplied()
+
         width: 160; height: 44; radius: 8
-        color: "transparent"; border.color: dateField.activeFocus ? cAccent : cFieldBorder; border.width: 1
+        color: "transparent"
+        border.color: (dateField.activeFocus || dateCalendar.opened) ? cAccent : cFieldBorder
+        border.width: 1
         gradient: Gradient {
             orientation: Gradient.Horizontal
             GradientStop { position: 0.0; color: cFieldStart }
@@ -789,11 +798,38 @@ Item {
             color: cFieldText; font.pixelSize: 15; font.family: prodTab.dashboardTextFamily
             clip: true; verticalAlignment: TextInput.AlignVCenter
             inputMask: "99/99/9999; "
+            // The calendar owns this field — a numeric pad would let the
+            // operator enter 31/02 and would hide the month view behind it.
+            useNumpad: false
             inputMethodHints: Qt.ImhDigitsOnly
             Text {
                 visible: (dateField.text.trim() === "//" || dateField.text === "  /  /    ") && !dateField.activeFocus
                 text: "DD/MM/YYYY"; color: cMuted; font.pixelSize: 14
                 anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
+            }
+        }
+
+        // Tapping the box opens the month view; typing the date by hand is
+        // still possible through the physical keyboard when one is attached.
+        MouseArea {
+            anchors.fill: parent
+            z: 5
+            // convertDateFormat returns "" for a half-typed mask, which makes
+            // the calendar fall back to today.
+            onClicked: dateCalendar.openAt(prodTab.convertDateFormat(dateBox.text))
+        }
+
+        CalendarPopup {
+            id: dateCalendar
+            // Anchored to the field, nudged up when it would fall off-screen.
+            parent: dateBox
+            x: 0
+            y: dateBox.mapToItem(prodTab, 0, dateBox.height).y + height > prodTab.height
+               ? -height - 6
+               : dateBox.height + 6
+            onAccepted: function(isoDate) {
+                dateBox.text = prodTab.isoToDisplay(isoDate)
+                dateBox.dateApplied()
             }
         }
     }

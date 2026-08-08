@@ -11,6 +11,15 @@ TextField {
     property int focusBorderWidth: 2
     property bool focusBorderOnParent: true
 
+    // See SmartTextInput for the rationale — same numeric-only NumPad rule.
+    property bool useNumpad: validator !== null
+                             || inputMethodHints === Qt.ImhDigitsOnly
+    property string numpadTitle: ""
+    property string numpadUnits: ""
+    property bool numpadAllowDecimal: !validator || validator.decimals !== undefined
+    property bool numpadAllowSign: !validator || validator.bottom === undefined
+                                   || validator.bottom < 0
+
     selectByMouse: false
     activeFocusOnTab: true
     selectionColor: focusBorderColor
@@ -55,8 +64,19 @@ TextField {
     MouseArea {
         anchors.fill: parent
         z: 2
-        cursorShape: Qt.IBeamCursor
+        cursorShape: control.useNumpad ? Qt.PointingHandCursor : Qt.IBeamCursor
         onPressed: {
+            if (control.useNumpad && focusHost && focusHost.openNumpad) {
+                control.forceActiveFocus(Qt.MouseFocusReason)
+                focusHost.openNumpad(control, {
+                    title: control.numpadTitle,
+                    units: control.numpadUnits,
+                    allowDecimal: control.numpadAllowDecimal,
+                    allowSign: control.numpadAllowSign
+                })
+                mouse.accepted = true
+                return
+            }
             if (!control.activeFocus) {
                 control.forceActiveFocus(Qt.MouseFocusReason)
                 control.selectAll()

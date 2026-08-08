@@ -42,7 +42,6 @@ import QtGraphicalEffects 1.15
         property int logH:    outerH - topH - gap
         property int previousStackIndex: 0
         property int slideDirection: 1
-        property int screenDragStartIndex: 0
         property bool startCommandLocked: false
         property bool suppressJogEchoForManual: false
         property bool pauseLatched: false
@@ -314,17 +313,24 @@ import QtGraphicalEffects 1.15
         }
 
         function setStackIndex(nextIndex) {
-            var clamped = Math.max(0, Math.min(5, nextIndex))
-            if (clamped === stack.currentIndex)
+            var clamped = Math.max(0, Math.min(stack.lastIndex, nextIndex))
+            if (clamped === stack.currentIndex && !stack.dragging)
                 return
 
             dismissDataInput()
             previousStackIndex = stack.currentIndex
             slideDirection = clamped > previousStackIndex ? 1 : -1
-            stack.currentIndex = clamped
-            stackSlide.x = slideDirection * Math.min(140, Math.max(70, stack.width * 0.10))
-            stack.opacity = 0.68
-            stackSlideAnim.restart()
+            stack.animateTo(clamped)
+        }
+
+        // Entry point for SmartTextField / SmartTextInput. Every numeric field
+        // in this page and in FillHpTab / InkTab / ProductionTab routes here,
+        // since they all pass focusHost: root.
+        function openNumpad(field, opts) {
+            if (!field || root.contentReadOnly)
+                return
+            registerDataInput(field)
+            numpad.openFor(field, opts)
         }
 
         function registerDataInput(input) {
@@ -368,7 +374,7 @@ import QtGraphicalEffects 1.15
         Shortcut {
             sequence: "Right"
             context: Qt.WindowShortcut
-            enabled: root.visible && stack.currentIndex < 5
+            enabled: root.visible && stack.currentIndex < stack.lastIndex
             onActivated: root.setStackIndex(stack.currentIndex + 1)
         }
 
@@ -945,7 +951,7 @@ import QtGraphicalEffects 1.15
                 onReleased: {
                     if (tabbar._wasDrag) {
                         var dx = mouseX - tabbar._dragPressX
-                        if (dx < 0 && stack.currentIndex < 5) root.setStackIndex(stack.currentIndex + 1)
+                        if (dx < 0 && stack.currentIndex < stack.lastIndex) root.setStackIndex(stack.currentIndex + 1)
                         else if (dx > 0 && stack.currentIndex > 0) root.setStackIndex(stack.currentIndex - 1)
                     } else {
                         var tabWidth = (tabbar.width - 8) / 6
@@ -970,7 +976,9 @@ import QtGraphicalEffects 1.15
                 property real dragPreviewOffset: tabDragArea.pressed && tabbar._wasDrag
                                                  ? Math.max(-tabWidth, Math.min(tabWidth, tabbar._dragCurrentX - tabbar._dragPressX)) * 0.28
                                                  : 0
-                x: 4 + stack.currentIndex * tabWidth + (tabWidth - width) / 2 + dragPreviewOffset
+                // Follows the deck's fractional position, so a page swipe drags
+                // the grip along with it instead of teleporting on release.
+                x: 4 + stack.position * tabWidth + (tabWidth - width) / 2 + dragPreviewOffset
                 z: 0
                 gradient: Gradient {
                     orientation: Gradient.Vertical
@@ -992,7 +1000,13 @@ import QtGraphicalEffects 1.15
                     verticalOffset: 5
                     color: "#36485d9a"
                 }
-                Behavior on x { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                // While the deck is being dragged or settling, x is already
+                // driven by stack.position — easing it a second time would make
+                // the grip lag behind the finger.
+                Behavior on x {
+                    enabled: !stack.dragging && !stack.settling
+                    NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+                }
                 Behavior on opacity { NumberAnimation { duration: 120 } }
                 Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
             }
@@ -1094,55 +1108,118 @@ import QtGraphicalEffects 1.15
         // ════════════════════════════════════════════════════════════
         // STACK
         // ════════════════════════════════════════════════════════════
-        StackLayout {
+        // ════════════════════════════════════════════════════════════
+        // SWIPE DECK
+        // A StackLayout only ever renders its current child, so a drag could
+        // not show the neighbouring page travelling with the finger — the old
+        // handler just measured the gesture and popped the next page in from a
+        // fixed offset. This plain Item positions every page itself from one
+        // fractional `position`, so a touch drag moves real pixels.
+        //
+        // `position` is the deck coordinate in page units: 2.0 means page 2 is
+        // centred, 2.4 means 40 % of the way towards page 3. Dragging writes it
+        // directly, releasing animates it to a whole number. currentIndex stays
+        // a derived integer so every existing binding keeps working.
+        // ════════════════════════════════════════════════════════════
+        Item {
             id: stack
             anchors { top: notifyBanner.bottom; left: parent.left; right: parent.right; bottom: tabbar.top }
-            currentIndex: 0
-            transform: Translate { id: stackSlide; x: 0 }
+            clip: true
+
+            readonly property int pageCount: 6
+            readonly property int lastIndex: pageCount - 1
+            property real position: 0
+            readonly property int currentIndex: Math.round(position)
+            readonly property bool dragging: screenSwipeHandler.active
+            readonly property bool settling: settleAnim.running
+            // Distance the finger must travel before the release commits, and
+            // the flick speed that commits regardless of distance. 18 % keeps a
+            // deliberate drag from switching, while the velocity path still
+            // allows a quick phone-style flick.
+            readonly property real commitFraction: 0.18
+            readonly property real commitVelocity: 620
+
+            property real _dragStartPosition: 0
+
+            // Only the page under the finger and the one being revealed are
+            // rendered; at rest this is a single page, exactly like the
+            // StackLayout it replaced. Six live pages would keep the Jetson's
+            // render thread busy for no reason.
+            function pageX(index) { return (index - position) * width }
+            function pageVisible(index) { return Math.abs(index - position) < 1.0 }
+
+            // Past the first or last page there is nothing to reveal, so let the
+            // deck follow the finger at a third speed and spring back. Without
+            // this the page simply stops dead and the screen feels broken.
+            function clampPosition(raw) {
+                if (raw < 0) return raw * 0.34
+                if (raw > lastIndex) return lastIndex + (raw - lastIndex) * 0.34
+                return raw
+            }
+
+            function animateTo(index) {
+                var clamped = Math.max(0, Math.min(lastIndex, index))
+                settleAnim.stop()
+                settleAnim.to = clamped
+                settleAnim.start()
+            }
+
+            NumberAnimation {
+                id: settleAnim
+                target: stack
+                property: "position"
+                duration: 260
+                easing.type: Easing.OutCubic
+            }
 
             DragHandler {
                 id: screenSwipeHandler
                 target: null
                 acceptedButtons: Qt.LeftButton
-                grabPermissions: PointerHandler.CanTakeOverFromAnything
+                // CanTakeOverFromAnything would steal the gesture from jog
+                // controls and sliders inside the pages. Taking over only from
+                // other handlers leaves item-level drags owning their input.
+                grabPermissions: PointerHandler.CanTakeOverFromHandlersOfDifferentType
                 xAxis.enabled: true
                 yAxis.enabled: false
 
                 onActiveChanged: {
                     if (active) {
-                        root.screenDragStartIndex = stack.currentIndex
-                    } else {
-                        var dx = activeTranslation.x
-                        if (Math.abs(dx) > 90) {
-                            if (dx < 0 && root.screenDragStartIndex < 5)
-                                root.setStackIndex(root.screenDragStartIndex + 1)
-                            else if (dx > 0 && root.screenDragStartIndex > 0)
-                                root.setStackIndex(root.screenDragStartIndex - 1)
-                        }
+                        settleAnim.stop()
+                        stack._dragStartPosition = stack.position
+                        root.dismissDataInput()
+                        return
                     }
-                }
-            }
 
-            ParallelAnimation {
-                id: stackSlideAnim
-                NumberAnimation {
-                    target: stackSlide
-                    property: "x"
-                    to: 0
-                    duration: 240
-                    easing.type: Easing.OutCubic
+                    var travelled = stack.position - stack._dragStartPosition
+                    var flick = -centroid.velocity.x
+                    var origin = Math.round(stack._dragStartPosition)
+                    var target = origin
+
+                    if (travelled > stack.commitFraction || flick > stack.commitVelocity)
+                        target = origin + 1
+                    else if (travelled < -stack.commitFraction || flick < -stack.commitVelocity)
+                        target = origin - 1
+
+                    stack.animateTo(target)
                 }
-                NumberAnimation {
-                    target: stack
-                    property: "opacity"
-                    to: 1.0
-                    duration: 180
-                    easing.type: Easing.OutQuad
+
+                // Qt 5.15 exposes `translation`; activeTranslation /
+                // persistentTranslation only arrived in Qt 6, so reading those
+                // here yields undefined.
+                onTranslationChanged: {
+                    if (!active || stack.width <= 0)
+                        return
+                    stack.position = stack.clampPosition(
+                        stack._dragStartPosition - translation.x / stack.width)
                 }
             }
 
             // ── PAGE 1: CONTROL DASHBOARD ────────────────────────
             Item {
+                width: stack.width; height: stack.height
+                x: stack.pageX(0); visible: stack.pageVisible(0)
+
                 Item {
                     id: pageGrid
                     anchors { fill: parent; margins: root.pad }
@@ -1985,6 +2062,8 @@ import QtGraphicalEffects 1.15
             // ── PAGE 2: TECHNICAL SYSTEM — horizontal 4-column layout ──
             Item {
                 id: page2Root
+                width: stack.width; height: stack.height
+                x: stack.pageX(1); visible: stack.pageVisible(1)
                 property var parsedConfig: ({})
                 property int configRevision: 0
                 property var p2FilteredLog: []
@@ -2225,6 +2304,8 @@ import QtGraphicalEffects 1.15
             // ── PAGE 3: ROBOT CONTROL ──────────────────────────────────
             Item {
                 id: page3Root
+                width: stack.width; height: stack.height
+                x: stack.pageX(2); visible: stack.pageVisible(2)
                 property string currentMode: root.currentUiMode  // bind to synchronized system mode
                 // MANUAL controls (JOG) stay open before START, even if AUTO / AI was selected.
                 // Only lock when the chosen AUTO / AI mode has actually been started.
@@ -3273,15 +3354,46 @@ import QtGraphicalEffects 1.15
             } // Page 3
 
             // ── PAGE 4: FILL HP CONTROL (redesigned — see FillHpTab.qml) ──
-            FillHpTab { focusHost: root }
+            FillHpTab {
+                focusHost: root
+                width: stack.width; height: stack.height
+                x: stack.pageX(3); visible: stack.pageVisible(3)
+            }
 
             // ── PAGE 5: INK SYSTEM ──────────────────────────────────────
-            InkTab { focusHost: root }
+            InkTab {
+                focusHost: root
+                width: stack.width; height: stack.height
+                x: stack.pageX(4); visible: stack.pageVisible(4)
+            }
 
             // ── PAGE 6: PRODUCTION OUTPUT ───────────────────────────────
-            ProductionTab { focusHost: root }
+            ProductionTab {
+                focusHost: root
+                width: stack.width; height: stack.height
+                x: stack.pageX(5); visible: stack.pageVisible(5)
+            }
 
-        } // StackLayout
+        } // swipe deck
+
+        // Single keypad shared by every numeric field on the page. Centred over
+        // the whole page so it never lands under the finger that opened it.
+        NumPad {
+            id: numpad
+            parent: root
+            x: (root.width - width) / 2
+            y: (root.height - height) / 2
+        }
+
+        // Declaring onClosed on the NumPad instance above would replace the
+        // handler inside NumPad.qml that performs the CANCEL revert — a signal
+        // has only one handler per object. Connections adds one instead.
+        Connections {
+            target: numpad
+            function onClosed() {
+                root.unregisterDataInput(root.activeDataInput)
+            }
+        }
 
         Item {
             id: contentReadOnlyShield

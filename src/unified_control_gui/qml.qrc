@@ -12,6 +12,8 @@
     <file alias="MotionMouseArea.qml">qml/MotionMouseArea.qml</file>
     <file alias="SmartTextInput.qml">qml/SmartTextInput.qml</file>
     <file alias="SmartTextField.qml">qml/SmartTextField.qml</file>
+    <file alias="NumPad.qml">qml/NumPad.qml</file>
+    <file alias="CalendarPopup.qml">qml/CalendarPopup.qml</file>
     <file alias="ScreenshotButton.qml">qml/ScreenshotButton.qml</file>
     <file alias="GlassHighlight.qml">qml/GlassHighlight.qml</file>
     <file alias="HoverHint.qml">qml/HoverHint.qml</file>
