@@ -54,6 +54,8 @@ class VfdLogicNode(Node):
             Bool, '/system/pause_button', self.pause_cb, 10)
         self.create_subscription(
             Bool, '/system/resume_button', self.resume_cb, 10)
+        self.create_subscription(
+            Bool, '/system/stop_button', self.stop_cb, 10)
         # homing_done: cartridge publish latching (True khi homing xong, False
         # ở init + khi clear zero_offset do STOP/mode-switch/ERROR). QoS phải
         # match TRANSIENT_LOCAL để start sau vẫn nhận state cuối.
@@ -98,6 +100,38 @@ class VfdLogicNode(Node):
         self.publish_cmd(False)
         self.get_logger().warn(
             f"VFD PAUSED immediately (pre_pause_run={self.pre_pause_cmd})")
+
+    def stop_cb(self, msg):
+        """Dừng băng tải ngay khi có STOP.
+
+        PAUSE đã có đường dừng trực tiếp, STOP thì trước đây không: băng tải chỉ
+        dừng nhờ homing_done / set_mode / system_state lan tới sau đó. Node này
+        chạy ở process riêng nên các topic ấy đến sau vài ms — đủ để một
+        sensors_cb xen vào lúc gate còn mở và cho băng chạy tiếp sau khi đã bấm
+        STOP.
+
+        Vì vậy ngoài việc cắt lệnh RUN, hàm này đóng luôn hai biến gate bằng
+        đúng giá trị mà STOP chắc chắn tạo ra, nên không có cửa sổ đua:
+          - cartridge_homed=False: STOP xoá zero_offset ở cartridge node
+          - in_state1=False:       STOP đưa state_in về IDLE
+        Khi topic thật đến, chúng ghi lại cùng giá trị nên không xung đột.
+
+        Cũng phải gỡ chốt system_paused. Chốt đó chỉ được resume_cb gỡ, mà STOP
+        không phát resume — PAUSE rồi STOP rồi START sẽ khiến evaluate_logic()
+        return sớm vĩnh viễn và băng tải không bao giờ chạy lại. Cartridge và
+        robot node đều tự xoá cờ pause khi STOP; node này trước đây thì không.
+        """
+        if not msg.data:
+            return
+        self.system_paused = False
+        self.pre_pause_cmd = False
+        self.cartridge_homed = False
+        self.in_state1 = False
+        self.current_cmd = False
+        self.run_started_at = None
+        self.publish_cmd(False)
+        self.get_logger().warn(
+            "VFD STOPPED immediately (/system/stop_button) — gates closed, pause latch cleared")
 
     def resume_cb(self, msg):
         """Khôi phục RUN chỉ khi mode/homing/state và S3 vẫn cho phép."""

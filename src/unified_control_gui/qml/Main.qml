@@ -86,6 +86,13 @@ ApplicationWindow {
 
     function stopSynchronizedSystems() {
         synchronizedStopRequested()
+        // Broadcast first. stopSystem() publishes /system/stop_button, which is
+        // the shortest path to every abort: motion_executor sets abort_motion_
+        // straight from it, robot_logic_node cancels its goals, the cartridge
+        // node broadcasts servo STOP telegrams and the VFD drops the belt. The
+        // service calls below are asynchronous, so nothing is delayed by
+        // sending this one message ahead of them.
+        cartridgeController.stopSystem()
         // STOP must always abort the active motion and clear its queued
         // command.  The Robot Control tab is also used in manual mode, where
         // the previous soft-stop path could leave a paused driver command
@@ -93,15 +100,17 @@ ApplicationWindow {
         robotController.stopAndResetRobot()
         autoAiStartedSinceModeSelect = false
         selectedCartridgeMode = "manual"
-        cartridgeController.stopSystem()
     }
 
     function emergencyStopSynchronizedSystems() {
         synchronizedStopRequested()
+        // Same ordering rule as stopSynchronizedSystems: the broadcast reaches
+        // the motion abort flag and the servo STOP telegrams, so it goes out
+        // before the Dobot emergency-stop service call.
+        cartridgeController.stopSystem()
         autoAiStartedSinceModeSelect = false
         selectedCartridgeMode = "manual"
         robotController.emergencyStop(true)
-        cartridgeController.stopSystem()
     }
 
     function showCameraPageOnly() {
