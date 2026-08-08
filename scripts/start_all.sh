@@ -28,6 +28,7 @@ CAM1_AI_MODEL="${CAM1_AI_MODEL:-$HOME/models/data_output_hp1.engine}"
 CAMERA_CAPTURE_FPS="${CAMERA_CAPTURE_FPS:-25}"
 AI_MAX_FPS="${AI_MAX_FPS:-20}"
 CAMERA_DRIVER_SETTLE_SEC="${CAMERA_DRIVER_SETTLE_SEC:-10}"
+CAMERA_WEDGED_FAILURES="${CAMERA_WEDGED_FAILURES:-5}"
 CAMERA_DRIVER_PATCH_VERSION="${CAMERA_DRIVER_PATCH_VERSION:-2.0.6-camhj1-cleanup1}"
 
 # Keep Qt geometry identical to the RevPi reference display. Jetson's X server
@@ -36,6 +37,35 @@ CAMERA_DRIVER_PATCH_VERSION="${CAMERA_DRIVER_PATCH_VERSION:-2.0.6-camhj1-cleanup
 export QT_AUTO_SCREEN_SCALE_FACTOR="${QT_AUTO_SCREEN_SCALE_FACTOR:-0}"
 export QT_SCALE_FACTOR="${QT_SCALE_FACTOR:-1}"
 export QT_FONT_DPI="${QT_FONT_DPI:-96}"
+
+# ── GUI render mode (2026-08-07 GPU fault) ──
+# nvgpu logged "sm machine check err" twice with the QML GUI's GL channel as the
+# first one flagged; the recovery then tore down every GPU context on the board
+# — Xorg segfaulted back to the Ubuntu desktop, gnome-shell restarted, and both
+# the TensorRT and CUDA camera nodes died with an illegal memory access.
+#   basic    (default) single-threaded Qt Quick render loop: keeps GPU
+#            acceleration and all layer.effect/shader items working, without the
+#            threaded render loop uploading textures off the GUI thread.
+#   software drops the GUI off the GPU entirely — use for an A/B run that proves
+#            whether the GUI is the fault source. Items relying on layer.enabled
+#            (CartridgePage, MotionButton, FillHpTab) render blank in this mode.
+#   threaded previous Qt default, kept for rollback.
+GUI_RENDER_MODE="${GUI_RENDER_MODE:-basic}"
+case "$GUI_RENDER_MODE" in
+    basic|threaded)
+        export QSG_RENDER_LOOP="$GUI_RENDER_MODE"
+        unset QT_QUICK_BACKEND
+        ;;
+    software)
+        export QT_QUICK_BACKEND=software
+        unset QSG_RENDER_LOOP
+        ;;
+    *)
+        echo "❌ GUI_RENDER_MODE must be basic, software or threaded (got: $GUI_RENDER_MODE)"
+        exit 1
+        ;;
+esac
+echo "🎨 GUI render mode: $GUI_RENDER_MODE"
 
 # ── Auto-detect XAUTHORITY (cần thiết khi chạy từ SSH) ──
 if [ -z "${XAUTHORITY:-}" ]; then
@@ -516,9 +546,19 @@ camera_stack_supervisor() {
             *) retry_delay=60 ;;
         esac
 
-        echo "RECOVERING rc=$launch_rc runtime_s=$run_seconds failures=$consecutive_failures retry_s=$retry_delay" \
-            > "$CAMERA_SUPERVISOR_STATUS"
-        echo "[$(date --iso-8601=seconds)] Camera stack exited rc=$launch_rc after ${run_seconds}s; paired recovery in ${retry_delay}s"
+        # A wedged Tegra VI capture channel (STREAMON -> ENODEV) survives every
+        # restart, so retrying forever silently looks identical to a camera that
+        # is merely flapping. Keep recovering, but say plainly that only a
+        # reboot clears this one.
+        if [ "$consecutive_failures" -ge "$CAMERA_WEDGED_FAILURES" ]; then
+            echo "VI_WEDGED_REBOOT_REQUIRED rc=$launch_rc runtime_s=$run_seconds failures=$consecutive_failures retry_s=$retry_delay" \
+                > "$CAMERA_SUPERVISOR_STATUS"
+            echo "[$(date --iso-8601=seconds)] ⚠️  $consecutive_failures consecutive camera failures — Tegra VI capture channel is likely wedged (VIDIOC_STREAMON: No such device). Only a reboot clears this; still retrying every ${retry_delay}s."
+        else
+            echo "RECOVERING rc=$launch_rc runtime_s=$run_seconds failures=$consecutive_failures retry_s=$retry_delay" \
+                > "$CAMERA_SUPERVISOR_STATUS"
+            echo "[$(date --iso-8601=seconds)] Camera stack exited rc=$launch_rc after ${run_seconds}s; paired recovery in ${retry_delay}s"
+        fi
         stop_jetson_camera_nodes
         sleep "$retry_delay"
     done

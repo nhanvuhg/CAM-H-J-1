@@ -36,11 +36,13 @@ public:
           cam1_device_(declare_parameter<int>("cam1_device", 1)),
           cam0_clarity_(declare_parameter<double>("cam0_clarity", 0.45)),
           cam1_clarity_(declare_parameter<double>("cam1_clarity", 0.60)),
-          capture_fps_(declare_parameter<int>("capture_fps", 25)),
+          capture_fps_(declare_parameter<int>("capture_fps", 30)),
           exposure_(declare_parameter<int>("exposure", 43000)),
           health_grace_sec_(declare_parameter<double>("health_grace_sec", 20.0)),
           min_healthy_fps_(declare_parameter<double>("min_healthy_fps", 5.0)),
           max_unhealthy_ticks_(declare_parameter<int>("max_unhealthy_ticks", 5)),
+          max_consecutive_reconnects_(
+              declare_parameter<int>("max_consecutive_reconnects", 3)),
           started_at_(std::chrono::steady_clock::now()) {
         auto image_qos = rclcpp::SensorDataQoS().keep_last(1);
         image_publishers_[0] =
@@ -64,7 +66,7 @@ public:
                 "cam0_device and cam1_device must be distinct non-negative indexes");
         }
         if (health_grace_sec_ < 5.0 || min_healthy_fps_ < 0.1 ||
-            max_unhealthy_ticks_ < 1) {
+            max_unhealthy_ticks_ < 1 || max_consecutive_reconnects_ < 1) {
             throw std::runtime_error("invalid camera health watchdog parameters");
         }
 
@@ -114,6 +116,14 @@ private:
                     }
                     RCLCPP_INFO(get_logger(),
                                 "Both CUDA camera streams are active");
+                    // The watchdog stays disarmed until a frame actually
+                    // lands. Tearing a capture channel down between STREAMON
+                    // and its first frame leaves the Tegra VI wedged — the
+                    // kernel logs "Error turning off streaming" and every
+                    // later STREAMON returns ENODEV until the board reboots.
+                    streaming_confirmed_.store(false);
+                    last_frame_ns_[0].store(0);
+                    last_frame_ns_[1].store(0);
 
                     std::array<uint64_t, 2> window_frames{0, 0};
                     std::array<uint32_t, 2> last_sequences{0, 0};
@@ -168,6 +178,15 @@ private:
                                     std::chrono::steady_clock::now()
                                         .time_since_epoch())
                                     .count());
+                            if (!streaming_confirmed_.load() &&
+                                last_frame_ns_[0].load() > 0 &&
+                                last_frame_ns_[1].load() > 0) {
+                                // Both channels delivered: the pair is healthy
+                                // again, so arm the watchdog and forgive the
+                                // reconnects that led here.
+                                consecutive_reconnects_.store(0);
+                                streaming_confirmed_.store(true);
+                            }
                         }
 
                         // Some Jetson V4L2 sensor drivers expose the requested
@@ -203,15 +222,40 @@ private:
                 } catch (const std::exception& error) {
                     if (stopping_.load() || !rclcpp::ok()) break;
                     const int reconnect = ++reconnects_;
+                    const int consecutive = ++consecutive_reconnects_;
+                    streaming_confirmed_.store(false);
                     {
                         std::lock_guard<std::mutex> lock(status_mutex_);
                         statuses_[0] = "RECONNECTING";
                         statuses_[1] = "RECONNECTING";
+                        // Stop reporting the last good rate; no frame is
+                        // flowing while the pair is being reopened.
+                        measured_fps_[0] = 0.0;
+                        measured_fps_[1] = 0.0;
+                    }
+                    // Both sensors are closed here, so giving up is safe: the
+                    // wedging teardown only happens on an open channel.
+                    if (consecutive > max_consecutive_reconnects_) {
+                        {
+                            std::lock_guard<std::mutex> lock(status_mutex_);
+                            statuses_[0] = "FATAL_RECONNECT";
+                            statuses_[1] = "FATAL_RECONNECT";
+                        }
+                        RCLCPP_FATAL(
+                            get_logger(),
+                            "Camera pair failed %d consecutive reconnects "
+                            "(last error: %s); stopping for supervisor recovery",
+                            consecutive, error.what());
+                        stopping_.store(true);
+                        g_stop.store(true);
+                        rclcpp::shutdown();
+                        break;
                     }
                     RCLCPP_ERROR(get_logger(),
                                  "CUDA camera error: %s; paired reconnect #%d "
-                                 "in 5 seconds",
-                                 error.what(), reconnect);
+                                 "(%d/%d consecutive) in 5 seconds",
+                                 error.what(), reconnect, consecutive,
+                                 max_consecutive_reconnects_);
                     for (int i = 0; i < 50 && !stopping_.load() &&
                                         rclcpp::ok();
                          ++i) {
@@ -291,7 +335,15 @@ private:
 
         const double runtime_sec = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - started_at_).count();
-        if (runtime_sec < health_grace_sec_ || both_healthy) {
+        // Only a confirmed-streaming pair is watched. While the capture thread
+        // is opening or reopening the sensors there is no frame to measure, and
+        // a reopen takes longer (5 s backoff + 1.5 s V3Link stagger) than this
+        // watchdog's whole budget — counting ticks there used to kill a stack
+        // that was already recovering, and the resulting teardown wedged the
+        // Tegra VI until reboot. A reopen that never succeeds is bounded by
+        // max_consecutive_reconnects instead, in the capture thread.
+        if (runtime_sec < health_grace_sec_ || both_healthy ||
+            !streaming_confirmed_.load()) {
             unhealthy_ticks_ = 0;
             return;
         }
@@ -329,6 +381,7 @@ private:
     double health_grace_sec_;
     double min_healthy_fps_;
     int max_unhealthy_ticks_;
+    int max_consecutive_reconnects_;
     std::array<rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr, 2>
         image_publishers_;
     std::array<rclcpp::Publisher<std_msgs::msg::String>::SharedPtr, 2>
@@ -337,6 +390,8 @@ private:
     std::thread capture_thread_;
     std::atomic<bool> stopping_{false};
     std::atomic<int> reconnects_{0};
+    std::atomic<int> consecutive_reconnects_{0};
+    std::atomic<bool> streaming_confirmed_{false};
     std::atomic<int> unhealthy_ticks_{0};
     std::array<std::atomic<uint64_t>, 2> published_{{0, 0}};
     std::array<std::atomic<uint64_t>, 2> sequence_gaps_{{0, 0}};
