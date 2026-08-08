@@ -24,6 +24,11 @@ int main(int argc, char *argv[])
     // Add qrc:/icons path for icons
     engine.addImportPath("qrc:/");
 
+    // Single source of truth for every RevPi-backed GUI API. start_all.sh and
+    // ros2_env.sh provide REVPI_A_HOST; keep a safe default for manual starts.
+    const QString revpiAHost = qEnvironmentVariable("REVPI_A_HOST", "172.16.11.31");
+    engine.rootContext()->setContextProperty("revpiAHost", revpiAHost);
+
     auto camNode = std::make_shared<CamNode>(engine);
     camNode->loadTopicSelections();
     

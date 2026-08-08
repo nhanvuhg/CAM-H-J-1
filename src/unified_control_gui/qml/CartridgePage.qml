@@ -72,10 +72,10 @@ import QtGraphicalEffects 1.15
         readonly property color cText:   "#c7dcef"
         readonly property color cWhiteText: "#ffffff"
         readonly property color cCardTitle: "#ffffff"
-        readonly property color cTabSelectedTop: Qt.rgba(0.40, 0.63, 0.77, 0.78)
-        readonly property color cTabSelectedMid: Qt.rgba(0.40, 0.63, 0.77, 0.66)
-        readonly property color cTabSelectedBottom: Qt.rgba(0.29, 0.48, 0.60, 0.56)
-        readonly property color cTabSelectedBorder: Qt.rgba(1, 1, 1, 0.12)
+        readonly property color cTabSelectedTop: Qt.rgba(0.88, 0.95, 1.00, 0.62)
+        readonly property color cTabSelectedMid: Qt.rgba(0.82, 0.91, 0.99, 0.55)
+        readonly property color cTabSelectedBottom: Qt.rgba(0.72, 0.85, 0.96, 0.48)
+        readonly property color cTabSelectedBorder: Qt.rgba(1, 1, 1, 0.28)
         readonly property color cTabSelectedContent: "#06101d"
         readonly property color cHover:  "#40ffffff"
         // Shared liquid-glass action palette — aligned with CameraPage.
