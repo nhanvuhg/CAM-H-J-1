@@ -1435,6 +1435,17 @@ void RobotLogicNode::scaleResultCallback(const std_msgs::msg::Bool::SharedPtr ms
 void RobotLogicNode::startButtonCallback(const std_msgs::msg::Bool::SharedPtr msg)
 {
     if (!msg->data) return;
+
+    // Same rule as the service path, and it matters more here: this topic is
+    // what /api/start on the web HMI publishes, which never sees the GUI's
+    // START lock. Continue() below would hand the held trajectory back to the
+    // Dobot while the state machine stayed frozen on system_paused_.
+    if (system_paused_.load()) {
+        RCLCPP_WARN(get_logger(),
+            "[START] Rejected (/system/start_button): system is PAUSED — press RESUME or STOP");
+        return;
+    }
+
     RCLCPP_INFO(get_logger(), "[INIT] ⚡ Quick start...");
 
     if (emergency_stop_) emergency_stop_ = false;
@@ -1737,6 +1748,20 @@ void RobotLogicNode::startSystemCallback(
         if (!system_enabled_) {
             response->success = false;
             response->message = "Robot DISABLED (E-Stop). Press ENABLE first.";
+            return;
+        }
+
+        // START is not a way out of PAUSE. It used to fall straight through to
+        // the three digital outputs below, which release the gripper and the
+        // picker — pressing it while the arm was holding a cartridge or a tray
+        // mid-cycle dropped the part. It also never cleared system_paused_, so
+        // the state machine stayed frozen afterwards anyway. RESUME continues
+        // the held step; STOP ends the cycle.
+        if (system_paused_.load()) {
+            RCLCPP_WARN(get_logger(),
+                "[START] Rejected: system is PAUSED — press RESUME to continue or STOP to end the cycle");
+            response->success = false;
+            response->message = "System is PAUSED. Press RESUME to continue, or STOP to end the cycle.";
             return;
         }
 

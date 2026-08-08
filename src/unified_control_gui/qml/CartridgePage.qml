@@ -45,6 +45,13 @@ import QtGraphicalEffects 1.15
         property bool startCommandLocked: false
         property bool suppressJogEchoForManual: false
         property bool pauseLatched: false
+        // Authoritative paused state. pauseLatched alone only knows about a
+        // PAUSE pressed on this page; the web HMI and the physical panel can
+        // pause the system too, and START must be blocked in those cases as
+        // well. robot_logic_node publishes "PAUSED" for as long as the state
+        // machine is held.
+        readonly property bool systemPaused: pauseLatched
+                                             || robotController.systemStatus === "PAUSED"
         // Even a tiny infinite opacity animation keeps Qt Quick's scene graph
         // rendering at display refresh rate. Static colors still expose every
         // state while avoiding a permanently busy QSGRenderThread.
@@ -1433,15 +1440,28 @@ import QtGraphicalEffects 1.15
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 2; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "START"; iconSource: "qrc:/qml/icons/play.svg"; bg: root.cBtnPrimaryStart; bgEnd: root.cBtnPrimaryEnd; bc: root.cBtnPrimaryBorder; tc: "#ffffff"; clickEnabled: !root.startCommandLocked; onClicked: {
-                                            if (root.startCommandLocked)
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "START"; iconSource: "qrc:/qml/icons/play.svg"; bg: root.cBtnPrimaryStart; bgEnd: root.cBtnPrimaryEnd; bc: root.cBtnPrimaryBorder; tc: "#ffffff"; active: !root.systemPaused; clickEnabled: !root.startCommandLocked && !root.systemPaused; onClicked: {
+                                            if (root.startCommandLocked || root.systemPaused)
                                                 return
                                             root.startCommandLocked = true
                                             mainWindow.startSynchronizedSystems(root.currentUiMode)
                                         } }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; iconSource: "qrc:/qml/icons/step_forward.svg"; bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; onClicked: { root.pauseLatched = false; cartridgeController.resumeSystem() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; iconSource: "qrc:/qml/icons/step_forward.svg"; bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; blinking: root.systemPaused; onClicked: { root.pauseLatched = false; cartridgeController.resumeSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP"; bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: root.stopFromSystemControl() }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "PAUSE"; bg: root.cBtnWarningStart; bgEnd: root.cBtnWarningEnd; selectedBg: root.cBtnWarningStart; selectedBgEnd: root.cBtnWarningEnd; bc: root.cBtnWarningBorder; tc: "#ffffff"; selectedTc: "#ffffff"; isSelected: root.pauseLatched; onClicked: { root.pauseLatched = true; cartridgeController.pauseSystem() } }
+                                }
+
+                                // Says why START went dim, so the operator is not
+                                // left guessing at a dead button.
+                                Text {
+                                    Layout.fillWidth: true
+                                    visible: root.systemPaused
+                                    text: "⏸ Đang PAUSE — nhấn RESUME để chạy tiếp, hoặc STOP để kết thúc"
+                                    color: root.cOrange
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    wrapMode: Text.WordWrap
+                                    horizontalAlignment: Text.AlignHCenter
                                 }
                             }
                         }

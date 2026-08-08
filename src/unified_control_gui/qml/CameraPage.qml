@@ -15,6 +15,10 @@ Item {
     property string pendingStartMode: ""
     property string pendingStartUiMode: ""
     property bool pauseLatched: false
+    // Authoritative paused state — the web HMI and the physical panel can pause
+    // the system too, and START must be blocked in those cases as well.
+    readonly property bool systemPaused: pauseLatched
+                                         || robotController.systemStatus === "PAUSED"
     // Continuous shimmer forces the software-rendered Qt scene graph to draw
     // at display refresh rate. Keep production bars static; their values and
     // colors still update normally.
@@ -1104,10 +1108,23 @@ Item {
 
                     Text { text: "SYSTEM CONTROL"; color: "#ffffff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
 
+                    Text {
+                        Layout.fillWidth: true
+                        visible: cameraPageRoot.systemPaused
+                        text: "⏸ Đang PAUSE — nhấn RESUME để chạy tiếp, hoặc STOP để kết thúc"
+                        color: "#f5a623"
+                        font.pixelSize: 13
+                        font.bold: true
+                        wrapMode: Text.WordWrap
+                    }
+
                     GridLayout {
                         Layout.fillWidth: true; columns: 3; rowSpacing: 8; columnSpacing: 8
 
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: startMA.containsMouse || startMA.pressed ? Qt.lighter(cBtnPrimaryEnd, 1.06) : cBtnPrimaryEnd; border.width: 1
+                            // START is not a way out of PAUSE — RESUME or STOP.
+                            opacity: cameraPageRoot.systemPaused ? 0.4 : 1.0
+                            Behavior on opacity { NumberAnimation { duration: 120 } }
                             Behavior on border.color { ColorAnimation { duration: 110 } }
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
@@ -1144,8 +1161,9 @@ Item {
                                 shadowEnabled: false
                                 shimmerEnabled: false
                                 raiseOnHover: true
+                                enabled: !cameraPageRoot.systemPaused
                                 onClicked: {
-                                if (cameraPageRoot.startCommandLocked)
+                                if (cameraPageRoot.startCommandLocked || cameraPageRoot.systemPaused)
                                     return
                                 cameraPageRoot.startCommandLocked = true
                                 cameraPageRoot.pendingStartUiMode = cameraPageRoot.ctrlMode

@@ -2447,6 +2447,19 @@ class CartridgeSystem(Node):
         if not msg.data or self.state == SystemState.HOMING_RUNNING:
             return
 
+        # START không phải đường thoát PAUSE. Trước đây hàm này gỡ cờ pause rồi
+        # chạy tiếp, nhưng lại xoá _paused_servo_moves mà KHÔNG phát lại target
+        # — trục đang đi dở nằm im còn state machine đi tiếp như thể đã tới nơi.
+        # Robot node thì không gỡ cờ, nên hệ chạy lệch pha: cartridge tiếp tục
+        # còn robot đứng yên. RESUME phát lại target và mở đúng step; STOP kết
+        # thúc chu kỳ.
+        if self._system_paused:
+            self.get_logger().warn(
+                "[START] Bị từ chối: hệ đang PAUSE — nhấn RESUME để tiếp tục hoặc STOP để kết thúc")
+            self._notify('warn', 'Đang PAUSE',
+                         'Nhấn RESUME để chạy tiếp step đang giữ, hoặc STOP để kết thúc chu kỳ.')
+            return
+
         self._system_paused = False
         self._pause_pending = False
         self._paused_servo_moves.clear()
