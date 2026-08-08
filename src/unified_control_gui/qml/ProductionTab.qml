@@ -458,6 +458,9 @@ Item {
         anchors.top: subTabBar.bottom; anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
         anchors.topMargin: 8; anchors.leftMargin: 10; anchors.rightMargin: 10; anchors.bottomMargin: 10
         contentHeight: contentPanel.height + 10; clip: true
+        // Vertical only, so a horizontal drag is left for the page swipe in
+        // CartridgePage instead of being claimed by this Flickable.
+        flickableDirection: Flickable.VerticalFlick
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
         Rectangle {

@@ -56,7 +56,45 @@ Popup {
     padding: 0
 
     width: 340
-    height: 470
+    height: 452
+
+    // One key cell; four of these across the pad body. A Grid cannot give the
+    // zero key a double width or the action row its own height, so the keypad
+    // is laid out as explicit rows of these instead.
+    component Key: Rectangle {
+        id: keyCell
+
+        property string label: ""
+        property string kind: "digit"     // digit | aux | cancel | enter
+        property bool disabled: false
+        signal activated()
+
+        radius: 8
+        opacity: disabled ? 0.32 : 1.0
+        color: {
+            if (kind === "enter")  return keyMA.pressed ? Qt.darker(pad.cOk, 1.25) : pad.cOk
+            if (kind === "cancel") return keyMA.pressed ? Qt.darker(pad.cCancel, 1.25) : pad.cCancel
+            return keyMA.pressed ? pad.cKeyDown : pad.cKey
+        }
+        border.color: pad.cBorder
+        border.width: 1
+
+        Text {
+            anchors.centerIn: parent
+            text: keyCell.label
+            color: pad.cText
+            font.pixelSize: (keyCell.kind === "cancel" || keyCell.kind === "enter") ? 17 : 23
+            font.bold: true
+            font.letterSpacing: (keyCell.kind === "cancel" || keyCell.kind === "enter") ? 1.2 : 0
+        }
+
+        MouseArea {
+            id: keyMA
+            anchors.fill: parent
+            enabled: !keyCell.disabled
+            onClicked: keyCell.activated()
+        }
+    }
 
     background: Rectangle {
         color: pad.cBg
@@ -196,65 +234,70 @@ Popup {
                 }
             }
 
-            // ── Keys ──
-            Grid {
-                id: keyGrid
+            // ── Digit block ──
+            Column {
+                id: keyBlock
                 width: parent.width
-                columns: 4
                 spacing: 8
 
-                readonly property real keyW: (width - spacing * 3) / 4
-                readonly property real keyH: 54
+                readonly property real cell: (width - spacing * 3) / 4
+                readonly property real cellH: 54
+                // Zero spans two columns, so it swallows the gap between them.
+                readonly property real wideCell: cell * 2 + spacing
 
-                Repeater {
-                    model: ["7", "8", "9", "⌫",
-                            "4", "5", "6", "C",
-                            "1", "2", "3", "±",
-                            "0", ".", "CANCEL", "ENTER"]
+                Row {
+                    spacing: keyBlock.spacing
+                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "7"; onActivated: pad.press("7") }
+                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "8"; onActivated: pad.press("8") }
+                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "9"; onActivated: pad.press("9") }
+                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "⌫"; kind: "aux"
+                          onActivated: pad.backspace() }
+                }
+                Row {
+                    spacing: keyBlock.spacing
+                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "4"; onActivated: pad.press("4") }
+                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "5"; onActivated: pad.press("5") }
+                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "6"; onActivated: pad.press("6") }
+                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "C"; kind: "aux"
+                          onActivated: pad.clearAll() }
+                }
+                Row {
+                    spacing: keyBlock.spacing
+                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "1"; onActivated: pad.press("1") }
+                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "2"; onActivated: pad.press("2") }
+                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "3"; onActivated: pad.press("3") }
+                    Key { width: keyBlock.cell; height: keyBlock.cellH; label: "±"; kind: "aux"
+                          disabled: !pad.allowSign; onActivated: pad.press("-") }
+                }
+                Row {
+                    spacing: keyBlock.spacing
+                    Key { width: keyBlock.wideCell; height: keyBlock.cellH; label: "0"
+                          onActivated: pad.press("0") }
+                    Key { width: keyBlock.wideCell; height: keyBlock.cellH; label: "."
+                          disabled: !pad.allowDecimal; onActivated: pad.press(".") }
+                }
+            }
 
-                    delegate: Rectangle {
-                        id: key
-                        readonly property string label: modelData
-                        readonly property bool isEnter:  label === "ENTER"
-                        readonly property bool isCancel: label === "CANCEL"
-                        readonly property bool disabled:
-                            (label === "." && !pad.allowDecimal)
-                            || (label === "±" && !pad.allowSign)
+            // ── Action row ──
+            // Held apart from the digits so a mis-tap while typing cannot
+            // commit or discard the value.
+            Item { width: 1; height: 4 }
 
-                        width: keyGrid.keyW
-                        height: keyGrid.keyH
-                        radius: 8
-                        opacity: disabled ? 0.35 : 1.0
-                        color: isEnter
-                               ? (keyMA.pressed ? Qt.darker(pad.cOk, 1.25) : pad.cOk)
-                               : (isCancel
-                                  ? (keyMA.pressed ? Qt.darker(pad.cCancel, 1.25) : pad.cCancel)
-                                  : (keyMA.pressed ? pad.cKeyDown : pad.cKey))
-                        border.color: pad.cBorder
-                        border.width: 1
+            Row {
+                width: parent.width
+                spacing: 10
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: key.label
-                            color: pad.cText
-                            font.pixelSize: (key.isEnter || key.isCancel) ? 13 : 22
-                            font.bold: true
-                        }
+                readonly property real halfW: (width - spacing) / 2
 
-                        MouseArea {
-                            id: keyMA
-                            anchors.fill: parent
-                            enabled: !key.disabled
-                            onClicked: {
-                                if (key.isEnter)            pad.commit()
-                                else if (key.isCancel)      pad.revert()
-                                else if (key.label === "⌫") pad.backspace()
-                                else if (key.label === "C") pad.clearAll()
-                                else if (key.label === "±") pad.press("-")
-                                else                        pad.press(key.label)
-                            }
-                        }
-                    }
+                Key {
+                    width: parent.halfW; height: 58
+                    label: "CANCEL"; kind: "cancel"
+                    onActivated: pad.revert()
+                }
+                Key {
+                    width: parent.halfW; height: 58
+                    label: "ENTER"; kind: "enter"
+                    onActivated: pad.commit()
                 }
             }
         }

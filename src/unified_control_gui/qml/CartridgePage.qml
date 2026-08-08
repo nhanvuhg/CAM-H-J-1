@@ -1176,10 +1176,18 @@ import QtGraphicalEffects 1.15
                 id: screenSwipeHandler
                 target: null
                 acceptedButtons: Qt.LeftButton
-                // CanTakeOverFromAnything would steal the gesture from jog
-                // controls and sliders inside the pages. Taking over only from
-                // other handlers leaves item-level drags owning their input.
-                grabPermissions: PointerHandler.CanTakeOverFromHandlersOfDifferentType
+                // Pages that scroll (FillHpTab, ProductionTab) wrap their body
+                // in a Flickable, and a Flickable grabs the press as an item —
+                // without CanTakeOverFromItems the swipe never activated over
+                // those tabs at all. Stealing is still safe for the jog and
+                // slider controls: yAxis is disabled, so this only activates
+                // once the finger has travelled horizontally past the drag
+                // threshold, which a vertical scroll or a button press never
+                // does. CanTakeOverFromAnything is still avoided — it would
+                // also override handlers that legitimately hold an exclusive
+                // grab.
+                grabPermissions: PointerHandler.CanTakeOverFromItems
+                                 | PointerHandler.CanTakeOverFromHandlersOfDifferentType
                 xAxis.enabled: true
                 yAxis.enabled: false
 

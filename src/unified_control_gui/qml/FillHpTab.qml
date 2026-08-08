@@ -469,6 +469,9 @@ Item {
         contentWidth: width
         contentHeight: mainCol.implicitHeight + 24
         clip: true
+        // Vertical only, so a horizontal drag is left for the page swipe in
+        // CartridgePage instead of being claimed by this Flickable.
+        flickableDirection: Flickable.VerticalFlick
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
         onMovementEnded: {
             var targetY = Math.max(0, manualPage.y + mainCol.y - 12);
