@@ -47,10 +47,10 @@ Popup {
     // There is no future year to pick — production logs cannot exist ahead of
     // now.
     readonly property int firstYear: 2020
+    readonly property int lastYear: Math.max(firstYear, new Date().getFullYear())
     readonly property var yearList: {
         var list = []
-        var last = Math.max(firstYear, new Date().getFullYear())
-        for (var y = firstYear; y <= last; y++)
+        for (var y = firstYear; y <= lastYear; y++)
             list.push(y)
         return list
     }
@@ -88,7 +88,13 @@ Popup {
         }
         cal.selectedIso = String(iso || "")
         cal.pendingIso = ""
-        cal.viewYear = seed.getFullYear()
+        // Clamp into the wheel's range here rather than only when the wheels
+        // open. A field holding 2019 used to leave the header reading
+        // "March - 2019" while the year wheel sat on 2020 — two different
+        // answers on screen at once. The field itself is untouched; it only
+        // changes when a day is actually tapped.
+        cal.viewYear = Math.max(cal.firstYear,
+                                Math.min(cal.lastYear, seed.getFullYear()))
         cal.viewMonth = seed.getMonth()
         cal.pickerMode = false
         cal.open()
