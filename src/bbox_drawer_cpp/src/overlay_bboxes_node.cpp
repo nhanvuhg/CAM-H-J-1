@@ -9,10 +9,20 @@
 
 using vision_msgs::msg::Detection2DArray;
 
-static inline void draw_detections(cv::Mat &img, const Detection2DArray &dets, double sx, double sy)
+// min_score filters what is drawn only. The same detections still reach
+// vision_decision_node untouched, so hiding a faint box never changes a row or
+// slot decision.
+static inline void draw_detections(cv::Mat &img, const Detection2DArray &dets,
+                                   double sx, double sy, double min_score)
 {
     for (const auto &det : dets.detections) {
         if (det.bbox.size_x <= 0 || det.bbox.size_y <= 0) continue;
+        if (min_score > 0.0) {
+            // No hypothesis means no score to judge; treat it as below the bar
+            // rather than drawing an unlabelled box.
+            if (det.results.empty()) continue;
+            if (!(det.results[0].hypothesis.score >= min_score)) continue;
+        }
         double cx = det.bbox.center.position.x * sx;
         double cy = det.bbox.center.position.y * sy;
         double w  = det.bbox.size_x * sx;
@@ -89,7 +99,9 @@ public:
     using ImageMsg = sensor_msgs::msg::Image;
     using BoxesMsg = Detection2DArray;
 
-    OverlayForOneCam(const std::string &ns, const rclcpp::NodeOptions &opts = rclcpp::NodeOptions())
+    OverlayForOneCam(const std::string &ns,
+                     const rclcpp::NodeOptions &opts = rclcpp::NodeOptions(),
+                     double default_min_score = 0.0)
     : Node("overlay_"+ns, opts), ns_(ns)
     {
         image_topic_ = declare_parameter<std::string>("image_topic", "/"+ns_+"/image_raw");
@@ -97,6 +109,14 @@ public:
         output_topic_= declare_parameter<std::string>("output_topic", "/"+ns_+"/image_overlay");
         out_w_       = declare_parameter<int>("output_width",  640);
         out_h_       = declare_parameter<int>("output_height", 360);
+        // Below this score a box is not drawn. Display only — the detection is
+        // still published to vision_decision_node. Default comes from the
+        // camera, since only cam1 needs it.
+        draw_min_score_ = declare_parameter<double>("draw_min_score", default_min_score);
+        if (draw_min_score_ > 0.0) {
+            RCLCPP_INFO(get_logger(), "[%s] Hiding boxes scored below %.2f (display only)",
+                        ns_.c_str(), draw_min_score_);
+        }
 
         // Inference is intentionally slower than the camera stream. Timestamp
         // synchronization used to discard every pair when AI latency exceeded
@@ -145,7 +165,7 @@ private:
             boxes_msg = latest_boxes_;
         }
         if (boxes_msg) {
-            draw_detections(resized, *boxes_msg, sx, sy);
+            draw_detections(resized, *boxes_msg, sx, sy, draw_min_score_);
         }
         auto out_msg = cvmat_to_rosimg(resized, img_msg->header);
         pub_.publish(out_msg);
@@ -153,6 +173,10 @@ private:
 
     std::string ns_, image_topic_, boxes_topic_, output_topic_;
     int out_w_{640}, out_h_{360};
+    // double, not float: hypothesis.score is float64, and a float copy of a
+    // threshold like 0.86 rounds up, so a detection scoring exactly 0.86 fell
+    // just under its own limit and was hidden.
+    double draw_min_score_{0.0};
     rclcpp::Subscription<ImageMsg>::SharedPtr image_sub_;
     rclcpp::Subscription<BoxesMsg>::SharedPtr boxes_sub_;
     BoxesMsg::ConstSharedPtr latest_boxes_;
@@ -168,7 +192,10 @@ public:
         rclcpp::NodeOptions child_opts;
         child_opts.use_global_arguments(false);
         cam0_ = std::make_shared<OverlayForOneCam>("cam0HP", child_opts);
-        cam1_ = std::make_shared<OverlayForOneCam>("cam1HP", child_opts);
+        // Output camera: the tray itself produces detections that sit below
+        // 0.85, so anything under 0.86 is noise and is not worth drawing.
+        // Input camera keeps drawing everything.
+        cam1_ = std::make_shared<OverlayForOneCam>("cam1HP", child_opts, 0.86);
         exec_ = std::make_shared<rclcpp::executors::MultiThreadedExecutor>();
         exec_->add_node(cam0_);
         exec_->add_node(cam1_);

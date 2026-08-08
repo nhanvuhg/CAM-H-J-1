@@ -401,6 +401,15 @@ private:
     // ========================================================================
     static constexpr int    INPUT_ROW_THRESHOLD    = 8;
     static constexpr float  DETECTION_SCORE_THRESH = 0.60f;
+    // Output tray frame (cam1 class 0) only. The model scores the empty roller
+    // conveyor as a tray at around 0.83 — see the 0.83 false frame captured on
+    // 2026-08-08 with no tray present — so the tray class needs a higher bar
+    // than the cartridges do. Deliberately NOT applied to cartridge/
+    // cartridgefall: a genuine cartridge scoring between 0.60 and 0.86 must
+    // still mark its slot occupied, or the robot would place on top of it.
+    // Double, not float: hypothesis.score is float64, and a float copy of 0.86
+    // rounds up, which would reject a detection scoring exactly 0.86.
+    static constexpr double OUTPUT_TRAY_SCORE_THRESH = 0.86;
     static constexpr int    SLOT_CONFIRM_FRAMES    = 2;
     static constexpr int    INPUT_EMPTY_CONFIRM_FRAMES = 15;
     static constexpr int    INX_READY_CONFIRM_SAMPLES = 3;
@@ -840,7 +849,7 @@ private:
         for (const auto& det : msg->detections) {
             if (det.results.empty()) continue;
             const auto& h = det.results[0].hypothesis;
-            if (h.class_id == "0" && h.score >= DETECTION_SCORE_THRESH) {
+            if (h.class_id == "0" && h.score >= OUTPUT_TRAY_SCORE_THRESH) {
                 const float cx =
                     static_cast<float>(det.bbox.center.position.x);
                 const float cy =
