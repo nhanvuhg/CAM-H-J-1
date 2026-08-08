@@ -583,6 +583,12 @@ Item {
                         SmartTextInput {
                             id: inkCodeInput
                             focusHost: prodTab.focusHost
+                            // Typed by hand to filter the batch list — unlike the
+                            // scan field on the Ink System page, nothing feeds
+                            // this one, so it needs the on-screen keyboard.
+                            useTextPad: true
+                            textPadTitle: "USAGE CODE"
+                            textPadMaxLength: 32
                             anchors.fill: parent; anchors.margins: 8
                             color: cFieldText; font.pixelSize: 15; font.family: prodTab.dashboardTextFamily
                             clip: true; verticalAlignment: TextInput.AlignVCenter

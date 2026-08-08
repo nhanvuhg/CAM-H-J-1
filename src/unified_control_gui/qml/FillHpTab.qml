@@ -1223,6 +1223,12 @@ Item {
                 SmartTextInput {
                     id: compactInp
                     focusHost: tab.focusHost
+                    // Numeric setting with no validator declared, so the
+                    // keypad has to be asked for rather than inferred.
+                    useNumpad: true
+                    numpadTitle: item.label || "SETTING"
+                    numpadUnits: item.unit || ""
+                    numpadAllowSign: false
                     showFocusBorder: false
                     anchors.fill: parent
                     anchors.leftMargin: 10
@@ -2409,6 +2415,12 @@ Item {
         color: cField; border.color: cBorder; border.width: 1
         SmartTextInput {
             focusHost: tab.focusHost
+            // Read back with parseInt as a 0-100 percentage.
+            useNumpad: true
+            numpadTitle: "PWM"
+            numpadUnits: "%"
+            numpadAllowDecimal: false
+            numpadAllowSign: false
             anchors.fill: parent; anchors.margins: 6
             text: valueText
             onTextChanged: valueText = text
@@ -2439,6 +2451,11 @@ Item {
                 SmartTextInput {
                     id: inp
                     focusHost: tab.focusHost
+                    // Numeric setting, same as the compact row above.
+                    useNumpad: true
+                    numpadTitle: item.label || "SETTING"
+                    numpadUnits: item.unit || ""
+                    numpadAllowSign: false
                     anchors.fill: parent; anchors.margins: 6
                     text: currentVal
                     color: cText; font.pixelSize: 20; font.family: monoFamily
