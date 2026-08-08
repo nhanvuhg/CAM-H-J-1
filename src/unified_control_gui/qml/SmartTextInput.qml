@@ -18,6 +18,12 @@ TextInput {
     // normal caret. Set explicitly to override either way.
     property bool useNumpad: validator !== null
                              || inputMethodHints === Qt.ImhDigitsOnly
+    // On-screen alphanumeric keyboard, opt-in per field. Off by default so
+    // scanner-fed fields (ink code, lot numbers) keep taking scanner input
+    // instead of raising a keyboard that would swallow it.
+    property bool useTextPad: false
+    property string textPadTitle: ""
+    property int textPadMaxLength: 64
     property string numpadTitle: ""
     property string numpadUnits: ""
     // Probe the validator's own properties rather than its type name: only
@@ -71,8 +77,17 @@ TextInput {
     MouseArea {
         anchors.fill: parent
         z: 2
-        cursorShape: control.useNumpad ? Qt.PointingHandCursor : Qt.IBeamCursor
+        cursorShape: (control.useNumpad || control.useTextPad) ? Qt.PointingHandCursor : Qt.IBeamCursor
         onPressed: {
+            if (control.useTextPad && focusHost && focusHost.openTextPad) {
+                control.forceActiveFocus(Qt.MouseFocusReason)
+                focusHost.openTextPad(control, {
+                    title: control.textPadTitle,
+                    maxLength: control.textPadMaxLength
+                })
+                mouse.accepted = true
+                return
+            }
             if (control.useNumpad && focusHost && focusHost.openNumpad) {
                 control.forceActiveFocus(Qt.MouseFocusReason)
                 focusHost.openNumpad(control, {

@@ -333,6 +333,13 @@ import QtGraphicalEffects 1.15
             numpad.openFor(field, opts)
         }
 
+        function openTextPad(field, opts) {
+            if (!field || root.contentReadOnly)
+                return
+            registerDataInput(field)
+            textpad.openFor(field, opts)
+        }
+
         function registerDataInput(input) {
             activeDataInput = input
         }
@@ -2744,6 +2751,10 @@ import QtGraphicalEffects 1.15
                                                 SmartTextInput {
                                                     id: poseNameInput
                                                     focusHost: root
+                                                    // Panel has no physical keyboard; this name is typed by hand.
+                                                    useTextPad: true
+                                                    textPadTitle: "POSE NAME"
+                                                    textPadMaxLength: 40
                                                     anchors { fill: parent; leftMargin: 8; rightMargin: 4; topMargin: 4; bottomMargin: 4 }
                                                     color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true
                                                     clip: true; selectByMouse: true; verticalAlignment: Text.AlignVCenter
@@ -3398,6 +3409,20 @@ import QtGraphicalEffects 1.15
         // has only one handler per object. Connections adds one instead.
         Connections {
             target: numpad
+            function onClosed() {
+                root.unregisterDataInput(root.activeDataInput)
+            }
+        }
+
+        TextPad {
+            id: textpad
+            parent: root
+            x: (root.width - width) / 2
+            y: (root.height - height) / 2
+        }
+
+        Connections {
+            target: textpad
             function onClosed() {
                 root.unregisterDataInput(root.activeDataInput)
             }
