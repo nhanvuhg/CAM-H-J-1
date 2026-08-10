@@ -243,6 +243,68 @@ import QtGraphicalEffects 1.15
             return Qt.darker(colorValue, cPressGradientDarken)
         }
 
+        function servoDescription(sid) {
+            switch (sid) {
+            case 1: return qsTr("Input X axis")
+            case 2: return qsTr("Input Y axis")
+            case 3: return qsTr("Tray pusher")
+            case 4: return qsTr("Output X axis")
+            case 5: return qsTr("Output Y axis")
+            default: return ""
+            }
+        }
+
+        function sensorDescription(sid) {
+            switch (sid) {
+            case 1:  return qsTr("Belt start")
+            case 2:  return qsTr("Belt middle")
+            case 3:  return qsTr("Belt end")
+            case 4:  return qsTr("Stack scan position 1")
+            case 5:  return qsTr("Output detected")
+            case 6:  return qsTr("Check tray at output position 1")
+            case 7:  return qsTr("Tray at robot")
+            case 8:  return qsTr("Reserved")
+            case 9:  return qsTr("Cylinder 1 retracted")
+            case 10: return qsTr("Cylinder 1 extended")
+            case 13: return qsTr("Output 1 tray position 1")
+            case 14: return qsTr("Output 2 tray position 1")
+            case 15: return qsTr("Cylinder 3 retracted")
+            case 16: return qsTr("Cylinder 3 extended")
+            case 17: return qsTr("Platform")
+            case 18: return qsTr("Feed OK")
+            case 19: return qsTr("Check tray at output position 2")
+            case 20: return qsTr("Stack scan position 2")
+            case 21: return qsTr("Cylinder 2 retracted")
+            case 22: return qsTr("Cylinder 2 extended")
+            case 25: return qsTr("Cylinder 4 retracted")
+            case 26: return qsTr("Cylinder 4 extended")
+            case 27: return qsTr("Cylinder 5 retracted")
+            case 28: return qsTr("Cylinder 5 extended")
+            default: return ""
+            }
+        }
+
+        function servoLimitText(sid) {
+            switch (sid) {
+            case 1: return qsTr("Min: %1 | Max: %2").arg("-322").arg("560")
+            case 2: return qsTr("Min: %1 | Max: %2").arg("-80").arg("1025")
+            case 3: return qsTr("Min: %1 | Max: %2").arg("-25").arg("870")
+            case 4: return qsTr("Min: %1 | Max: %2").arg("-320").arg("605")
+            case 5: return qsTr("Min: %1 | Max: %2").arg("-25").arg("1025")
+            default: return ""
+            }
+        }
+
+        function modeDisplayName(mode) {
+            switch ((mode || "").toLowerCase()) {
+            case "auto": return qsTr("AUTO")
+            case "ai": return qsTr("AI MODE")
+            case "manual": return qsTr("MANUAL")
+            case "jog": return qsTr("JOG MODE")
+            default: return (mode || "").toUpperCase()
+            }
+        }
+
         function homingBusy() {
             return homingCommandLocked || cartridgeController.systemState.toLowerCase().indexOf("homing") !== -1
         }
@@ -530,14 +592,14 @@ import QtGraphicalEffects 1.15
                     }
                     HoverHint {
                         visible: backBtn.hovered
-                        label: "Quay lại"
+                        label: qsTr("Back")
                         bc: root.cServoRunEnd
                         tc: root.cServoRunText
                     }
                 }
                 ScreenshotButton {
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
-                    hintText: "Chụp ảnh"
+                    hintText: qsTr("Take screenshot")
                     onCaptureRequested: {
                         robotController.captureScreenshot()
                     }
@@ -568,7 +630,7 @@ import QtGraphicalEffects 1.15
                         }
                         HoverHint {
                             visible: restartNodesBtn.hovered
-                            label: "Restart Node"
+                            label: qsTr("Restart nodes")
                             bc: root.cServoRunEnd
                             tc: root.cServoRunText
                         }
@@ -600,7 +662,7 @@ import QtGraphicalEffects 1.15
                         }
                         HoverHint {
                             visible: restartGuiBtn.hovered
-                            label: "Restart GUI"
+                            label: qsTr("Restart GUI")
                             bc: root.cServoRunEnd
                             tc: root.cServoRunText
                         }
@@ -688,7 +750,10 @@ import QtGraphicalEffects 1.15
 
                         Text {
                             id: mpLbl
-                            text: modePill.isIdle ? "SELECT MODE" : modePill.m.toUpperCase()
+                            text: {
+                                languageController.language
+                                return modePill.isIdle ? qsTr("SELECT MODE") : root.modeDisplayName(modePill.m)
+                            }
                             color: root.cWhiteText
                             font.pixelSize: 14; font.bold: true; font.letterSpacing: 1
                             anchors.verticalCenter: parent.verticalCenter
@@ -698,7 +763,7 @@ import QtGraphicalEffects 1.15
                 Item { width: 4 }
                 MotionButton {
                     id: faultsBtn
-                    text: "CLEAR ERROR"
+                    text: qsTr("CLEAR ERROR")
                     Layout.preferredWidth: 130; Layout.preferredHeight: 50
                     hoverScale: 1.012
                     pressScale: 0.99
@@ -722,11 +787,22 @@ import QtGraphicalEffects 1.15
                         }
                         HoverHint {
                             visible: faultsBtn.hovered
-                            label: "Clear Error"
+                            label: qsTr("Clear error")
                             bc: root.cBtnClearEnd
                             tc: root.cWhiteText
                         }
                     }
+                }
+                Item { width: 4 }
+                LanguageSelector {
+                    Layout.preferredWidth: 50
+                    Layout.preferredHeight: 50
+                    panelColor: root.cBg2
+                    panelColorDeep: root.cCard
+                    borderColor: root.cBtnBaseBorder
+                    textColor: root.cBtnBaseText
+                    mutedColor: root.cDim
+                    accentColor: root.cAccent
                 }
                 Item { width: 4 }
                 MotionButton {
@@ -757,7 +833,7 @@ import QtGraphicalEffects 1.15
                         }
                         HoverHint {
                             visible: closeBtn.hovered
-                            label: "Tắt giao diện"
+                            label: qsTr("Exit application")
                             bc: root.cBtnDangerEnd
                             tc: root.cWhiteText
                         }
@@ -768,7 +844,7 @@ import QtGraphicalEffects 1.15
 
             Text {
                 anchors.centerIn: parent
-                text: "ROS2 - CARTRIDGE PROVISION SYSTEM"
+                text: qsTr("ROS2 - CARTRIDGE PROVISION SYSTEM")
                 color: root.cAccent
                 font.pixelSize: 24; font.bold: true; font.letterSpacing: 1.5
                 z: 11
@@ -794,13 +870,13 @@ import QtGraphicalEffects 1.15
             contentItem: ColumnLayout {
                 spacing: 15
                 Text {
-                    text: "⚠️ CẢNH BÁO"
+                    text: qsTr("⚠️ WARNING")
                     color: root.cWhiteText
                     font.pixelSize: 18; font.bold: true
                     Layout.alignment: Qt.AlignHCenter
                 }
                 Text {
-                    text: "Hệ thống đang chờ khay cấp khay thành phẩm.\ Bạn đã cấp khay mới chưa?"
+                    text: qsTr("The system is waiting for a finished-product tray. Has a new tray been loaded?")
                     color: root.cWhiteText
                     font.pixelSize: 14
                     horizontalAlignment: Text.AlignHCenter
@@ -811,7 +887,7 @@ import QtGraphicalEffects 1.15
                     Layout.alignment: Qt.AlignHCenter
                     spacing: 20
                     MotionButton {
-                        text: "ĐÃ CẤP KHAY"
+                        text: qsTr("TRAY LOADED")
                         font.bold: true; font.pixelSize: 12
                         Layout.preferredWidth: 120; Layout.preferredHeight: 35
                         background: Rectangle {
@@ -830,7 +906,7 @@ import QtGraphicalEffects 1.15
                         }
                     }
                     MotionButton {
-                        text: "CHỜ THÊM"
+                        text: qsTr("WAIT")
                         font.bold: true; font.pixelSize: 12
                         Layout.preferredWidth: 100; Layout.preferredHeight: 35
                         background: Rectangle {
@@ -937,7 +1013,7 @@ import QtGraphicalEffects 1.15
                 // Reset Faults shortcut (chỉ hiện khi error)
                 MotionButton {
                     visible: notifyBanner.lvl === "error"
-                    text: "Reset"
+                    text: qsTr("Reset")
                     Layout.preferredHeight: 22
                     font.pixelSize: 10; font.bold: true
                     onClicked: { cartridgeController.resetFaults(); notifyBanner.visible = false }
@@ -1084,12 +1160,12 @@ import QtGraphicalEffects 1.15
                 spacing: 0
                 Repeater {
                     model: ListModel {
-                        ListElement { t: "Control Dashboard"; k: "control" }
-                        ListElement { t: "Technical System";  k: "config"  }
-                        ListElement { t: "Robot Control";     k: "robot"   }
-                        ListElement { t: "Fill HP Control";   k: "hp"      }
-                        ListElement { t: "Ink System";        k: "ink"     }
-                        ListElement { t: "Production Output"; k: "prod"    }
+                        ListElement { k: "control" }
+                        ListElement { k: "config"  }
+                        ListElement { k: "robot"   }
+                        ListElement { k: "hp"      }
+                        ListElement { k: "ink"     }
+                        ListElement { k: "prod"    }
                     }
                     delegate: MotionButton {
                         id: tabButton
@@ -1152,7 +1228,12 @@ import QtGraphicalEffects 1.15
                             }
 
                             Text {
-                                text: model.t
+                                text: model.k === "control" ? qsTr("Control Dashboard")
+                                      : model.k === "config" ? qsTr("Technical System")
+                                      : model.k === "robot" ? qsTr("Robot Control")
+                                      : model.k === "hp" ? qsTr("Fill HP Control")
+                                      : model.k === "ink" ? qsTr("Ink System")
+                                      : qsTr("Production Output")
                                 font.pixelSize: 14
                                 font.bold: true
                                 font.letterSpacing: 0
@@ -1328,7 +1409,7 @@ import QtGraphicalEffects 1.15
                                 }
 
                                 Text {
-                                    text: "MODE SELECTION"; color: root.cCardTitle
+                                    text: qsTr("MODE SELECTION"); color: root.cCardTitle
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
@@ -1376,8 +1457,8 @@ import QtGraphicalEffects 1.15
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 2
-                                            Text { text: "AUTO"; color: autoModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                            Text { text: "Automatic"; color: autoModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: qsTr("AUTO"); color: autoModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: qsTr("Automatic"); color: autoModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
                                         }
                                     }
 
@@ -1419,8 +1500,8 @@ import QtGraphicalEffects 1.15
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 2
-                                            Text { text: "AI MODE"; color: aiModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                            Text { text: "Camera AI"; color: aiModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: qsTr("AI MODE"); color: aiModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: qsTr("Camera AI"); color: aiModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
                                         }
                                     }
 
@@ -1462,8 +1543,8 @@ import QtGraphicalEffects 1.15
                                         Column {
                                             anchors.centerIn: parent
                                             spacing: 2
-                                            Text { text: "MANUAL"; color: manualModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
-                                            Text { text: "Direct Control"; color: manualModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: qsTr("MANUAL"); color: manualModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                            Text { text: qsTr("Direct Control"); color: manualModeRect.isModeSelected ? root.cModeSelectedText : root.cWhiteText; font.pixelSize: 9; anchors.horizontalCenter: parent.horizontalCenter }
                                         }
                                     }
                                 }
@@ -1484,7 +1565,7 @@ import QtGraphicalEffects 1.15
                                 spacing: 4
 
                                 Text {
-                                    text: "SYSTEM CONTROL"; color: root.cCardTitle
+                                    text: qsTr("SYSTEM CONTROL"); color: root.cCardTitle
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
@@ -1493,16 +1574,16 @@ import QtGraphicalEffects 1.15
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 2; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "START"; iconSource: "qrc:/qml/icons/play.svg"; bg: root.cBtnPrimaryStart; bgEnd: root.cBtnPrimaryEnd; bc: root.cBtnPrimaryBorder; tc: "#ffffff"; active: !root.systemPaused && systemAlertController.canStart; clickEnabled: !root.startCommandLocked && !root.systemPaused; onClicked: {
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: qsTr("START"); iconSource: "qrc:/qml/icons/play.svg"; bg: root.cBtnPrimaryStart; bgEnd: root.cBtnPrimaryEnd; bc: root.cBtnPrimaryBorder; tc: "#ffffff"; active: !root.systemPaused && systemAlertController.canStart; clickEnabled: !root.startCommandLocked && !root.systemPaused; onClicked: {
                                             if (root.startCommandLocked || root.systemPaused)
                                                 return
                                             root.startCommandLocked = true
                                             if (!mainWindow.startSynchronizedSystems(root.currentUiMode))
                                                 root.startCommandLocked = false
                                         } }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; iconSource: "qrc:/qml/icons/step_forward.svg"; bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; blinking: root.systemPaused; onClicked: { root.pauseLatched = false; cartridgeController.resumeSystem() } }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP"; bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: root.stopFromSystemControl() }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "PAUSE"; bg: root.cBtnWarningStart; bgEnd: root.cBtnWarningEnd; selectedBg: root.cBtnWarningStart; selectedBgEnd: root.cBtnWarningEnd; bc: root.cBtnWarningBorder; tc: "#ffffff"; selectedTc: "#ffffff"; isSelected: root.pauseLatched; onClicked: { root.pauseLatched = true; cartridgeController.pauseSystem() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: qsTr("RESUME"); iconSource: "qrc:/qml/icons/step_forward.svg"; bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; blinking: root.systemPaused; onClicked: { root.pauseLatched = false; cartridgeController.resumeSystem() } }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: qsTr("STOP"); bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: root.stopFromSystemControl() }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: qsTr("PAUSE"); bg: root.cBtnWarningStart; bgEnd: root.cBtnWarningEnd; selectedBg: root.cBtnWarningStart; selectedBgEnd: root.cBtnWarningEnd; bc: root.cBtnWarningBorder; tc: "#ffffff"; selectedTc: "#ffffff"; isSelected: root.pauseLatched; onClicked: { root.pauseLatched = true; cartridgeController.pauseSystem() } }
                                 }
 
                                 // Says why START went dim, so the operator is not
@@ -1510,7 +1591,7 @@ import QtGraphicalEffects 1.15
                                 Text {
                                     Layout.fillWidth: true
                                     visible: root.systemPaused
-                                    text: "⏸ Đang PAUSE — nhấn RESUME để chạy tiếp, hoặc STOP để kết thúc"
+                                    text: qsTr("⏸ PAUSED — press RESUME to continue, or STOP to end")
                                     color: root.cOrange
                                     font.pixelSize: 12
                                     font.bold: true
@@ -1553,7 +1634,7 @@ import QtGraphicalEffects 1.15
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
-                                    text: "STATE NAVIGATION"; color: root.cCardTitle
+                                    text: qsTr("STATE NAVIGATION"); color: root.cCardTitle
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
@@ -1564,7 +1645,7 @@ import QtGraphicalEffects 1.15
 
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
-                                        lbl: "HOMING"
+                                        lbl: qsTr("HOMING")
                                         iconSource: "qrc:/qml/icons/house.svg"
                                         bg: root.cBtnHomingStart
                                         bgEnd: root.cBtnHomingEnd
@@ -1580,12 +1661,12 @@ import QtGraphicalEffects 1.15
                                             cartridgeController.gotoState("HOMING")
                                         }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 1\nFEEDING TRAY\nPOS1"; labelHorizontalAlignment: Text.AlignHCenter; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: root.state1Active(); clickEnabled: !root.state1Active(); glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE1") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 3\nFEEDING TRAY\nPOS2"; labelHorizontalAlignment: Text.AlignHCenter; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: root.state3Active(); clickEnabled: !root.state3Active(); glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE3") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: qsTr("STATE 1\nFEEDING TRAY\nPOS1"); labelHorizontalAlignment: Text.AlignHCenter; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: root.state1Active(); clickEnabled: !root.state1Active(); glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE1") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: qsTr("STATE 3\nFEEDING TRAY\nPOS2"); labelHorizontalAlignment: Text.AlignHCenter; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: root.state3Active(); clickEnabled: !root.state3Active(); glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE3") }
 
                                     CBtn {
                                         Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1
-                                        lbl: root.currentUiMode === "jog" ? "STATE MODE" : "JOG MODE"
+                                        lbl: root.currentUiMode === "jog" ? qsTr("STATE MODE") : qsTr("JOG MODE")
                                         bg: root.cServoRunStart
                                         bgEnd: root.cServoRunEnd
                                         bc: root.cServoRunBorder
@@ -1606,8 +1687,8 @@ import QtGraphicalEffects 1.15
                                             }
                                         }
                                     }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 2\nREPLACE TRAY\nPOS1"; labelHorizontalAlignment: Text.AlignHCenter; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: root.state2Active(); clickEnabled: !root.state2Active(); glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE2") }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STATE 4\nREPLACE TRAY\nPOS2"; labelHorizontalAlignment: Text.AlignHCenter; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: root.state4Active(); clickEnabled: !root.state4Active(); glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE4") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: qsTr("STATE 2\nREPLACE TRAY\nPOS1"); labelHorizontalAlignment: Text.AlignHCenter; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: root.state2Active(); clickEnabled: !root.state2Active(); glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE2") }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: qsTr("STATE 4\nREPLACE TRAY\nPOS2"); labelHorizontalAlignment: Text.AlignHCenter; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cBtnPrimaryStart; selectedBgEnd: root.cBtnPrimaryEnd; bc: root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: root.state4Active(); clickEnabled: !root.state4Active(); glassStyle: isSelected; onClicked: cartridgeController.gotoState("STATE4") }
                                 }
                             }
                         }
@@ -1630,7 +1711,7 @@ import QtGraphicalEffects 1.15
                                 Behavior on opacity { NumberAnimation { duration: 200 } }
 
                                 Text {
-                                    text: "CONTROL CYLINDER"; color: root.cCardTitle
+                                    text: qsTr("CYLINDER CONTROL"); color: root.cCardTitle
                                     font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                                 }
 
@@ -1639,17 +1720,17 @@ import QtGraphicalEffects 1.15
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 5; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL1\nPICKTRAY1\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(1, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL2\nPICKTRAY2\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(2, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL3\nHOLDOUT1\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(3, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL4\nHOLDIN2\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 26 && cartridgeController.sensorState.charAt(25) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(4, true) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL5\nHOLDOUT2\nEXTEND"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 28 && cartridgeController.sensorState.charAt(27) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(5, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: qsTr("CYL1\nPICK TRAY 1\nEXTEND"); bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 10 && cartridgeController.sensorState.charAt(9) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(1, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: qsTr("CYL2\nPICK TRAY 2\nEXTEND"); bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 22 && cartridgeController.sensorState.charAt(21) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(2, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: qsTr("CYL3\nHOLD OUT 1\nEXTEND"); bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 16 && cartridgeController.sensorState.charAt(15) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(3, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: qsTr("CYL4\nHOLD IN 2\nEXTEND"); bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 26 && cartridgeController.sensorState.charAt(25) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(4, true) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: qsTr("CYL5\nHOLD OUT 2\nEXTEND"); bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 28 && cartridgeController.sensorState.charAt(27) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(5, true) }
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL1\nPICKTRAY1\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(1, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL2\nPICKTRAY2\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(2, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL3\nHOLDOUT1\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(3, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL4\nHOLDIN2\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 25 && cartridgeController.sensorState.charAt(24) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(4, false) }
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: "CYL5\nHOLDOUT2\nRETRACT"; bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 27 && cartridgeController.sensorState.charAt(26) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(5, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: qsTr("CYL1\nPICK TRAY 1\nRETRACT"); bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 9 && cartridgeController.sensorState.charAt(8) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(1, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: qsTr("CYL2\nPICK TRAY 2\nRETRACT"); bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 21 && cartridgeController.sensorState.charAt(20) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(2, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: qsTr("CYL3\nHOLD OUT 1\nRETRACT"); bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 15 && cartridgeController.sensorState.charAt(14) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(3, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: qsTr("CYL4\nHOLD IN 2\nRETRACT"); bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 25 && cartridgeController.sensorState.charAt(24) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(4, false) }
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; radius: 8; lbl: qsTr("CYL5\nHOLD OUT 2\nRETRACT"); bg: "transparent"; bgEnd: "transparent"; selectedBg: root.cCylinderActiveStart; selectedBgEnd: root.cCylinderActiveEnd; selectedTc: root.cCylinderActiveText; bc: isSelected ? "transparent" : root.cBtnBaseBorder; tc: root.cBtnBaseText; isSelected: cartridgeController.sensorState.length >= 27 && cartridgeController.sensorState.charAt(26) === '1'; glassStyle: isSelected; selectedInset: false; onClicked: cartridgeController.cylinderCmd(5, false) }
                                 }
                             }
                         }
@@ -1669,7 +1750,7 @@ import QtGraphicalEffects 1.15
                             spacing: 4
 
                             Row { width: parent.width; height: 24; spacing: 6
-                                Text { text: "SERVO CONTROL"; color: root.cCardTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: qsTr("SERVO CONTROL"); color: root.cCardTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5; anchors.verticalCenter: parent.verticalCenter }
                                 // hidden data source — syncs jogVelMms from FAS PNU via _jog_vel topic
                                 Item {
                                     id: velDisplay
@@ -1698,11 +1779,11 @@ import QtGraphicalEffects 1.15
 
                                 Repeater {
                                     model: ListModel {
-                                        ListElement { sid: 1; sname: "InX";     sdesc: "Trục X đầu vào" }
-                                        ListElement { sid: 2; sname: "InY";     sdesc: "Trục Y đầu vào" }
-                                        ListElement { sid: 3; sname: "PutTray"; sdesc: "Đẩy khay" }
-                                        ListElement { sid: 4; sname: "OutX";    sdesc: "Trục X đầu ra" }
-                                        ListElement { sid: 5; sname: "OutY";    sdesc: "Trục Y đầu ra" }
+                                        ListElement { sid: 1; sname: "InX" }
+                                        ListElement { sid: 2; sname: "InY" }
+                                        ListElement { sid: 3; sname: "PutTray" }
+                                        ListElement { sid: 4; sname: "OutX" }
+                                        ListElement { sid: 5; sname: "OutY" }
                                     }
                                     delegate: Rectangle {
                                         id: cardItem
@@ -1780,7 +1861,7 @@ import QtGraphicalEffects 1.15
                                                             color: cardItem.servoLive ? root.cModeSelectedTop : root.cDim
                                                         }
                                                         Text {
-                                                            text: cardItem.servoLive ? "LIVE" : "OFFLINE"
+                                                            text: cardItem.servoLive ? qsTr("LIVE") : qsTr("OFFLINE")
                                                             color: cardItem.servoLive ? root.cModeSelectedTop : root.cDim
                                                             font.pixelSize: 11
                                                             font.weight: Font.DemiBold
@@ -1791,7 +1872,10 @@ import QtGraphicalEffects 1.15
                                                 }
 
                                                 Text {
-                                                    text: model.sdesc
+                                                    text: {
+                                                        languageController.language
+                                                        return root.servoDescription(model.sid)
+                                                    }
                                                     color: root.cWhiteText
                                                     font.pixelSize: 15
                                                     anchors.left: parent.left
@@ -1833,7 +1917,7 @@ import QtGraphicalEffects 1.15
                                                 width: parent.width
                                                 spacing: 8
                                                 FunctionLabel {
-                                                    lbl: "VELOCITY"
+                                                    lbl: qsTr("VELOCITY")
                                                     Layout.preferredWidth: 82
                                                     Layout.preferredHeight: cardItem.controlH
                                                 }
@@ -1864,7 +1948,7 @@ import QtGraphicalEffects 1.15
                                                 width: parent.width
                                                 spacing: 8
                                                 FunctionLabel {
-                                                    lbl: "JOG"
+                                                    lbl: qsTr("JOG")
                                                     Layout.preferredWidth: 82
                                                     Layout.preferredHeight: cardItem.controlH
                                                 }
@@ -1916,8 +2000,8 @@ import QtGraphicalEffects 1.15
                                             Row {
                                                 spacing: 6
                                                 width: parent.width
-                                                CBtn { lbl:"HOMING"; iconSource:"qrc:/qml/icons/house.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cServoRunStart; bgEnd:root.cServoRunEnd; bc:root.cServoRunBorder; tc:root.cServoRunText; glassStyle:false; active:servoRow.jogAllowed; inactiveOpacity:0.22; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
-                                                CBtn { lbl:"CLEAR"; iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cServoRunStart; bgEnd:root.cServoRunEnd; bc:root.cServoRunBorder; tc:root.cServoRunText; glassStyle:false; onClicked: cartridgeController.clearServo(model.sid) }
+                                                CBtn { lbl:qsTr("HOMING"); iconSource:"qrc:/qml/icons/house.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cServoRunStart; bgEnd:root.cServoRunEnd; bc:root.cServoRunBorder; tc:root.cServoRunText; glassStyle:false; active:servoRow.jogAllowed; inactiveOpacity:0.22; onClicked: { if(servoRow.jogAllowed) cartridgeController.homeServo(model.sid) } }
+                                                CBtn { lbl:qsTr("CLEAR"); iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; w:(parent.width - 6)/2; h:cardItem.controlH; padV:6; fontSize: 16; bg:root.cServoRunStart; bgEnd:root.cServoRunEnd; bc:root.cServoRunBorder; tc:root.cServoRunText; glassStyle:false; onClicked: cartridgeController.clearServo(model.sid) }
                                             }
 
                                             // TARGET POSITION Row (with input & RUN button)
@@ -1925,7 +2009,7 @@ import QtGraphicalEffects 1.15
                                                 width: parent.width
                                                 spacing: 8
                                                 FunctionLabel {
-                                                    lbl: "TARGET\nPOSITION"
+                                                    lbl: qsTr("TARGET\nPOSITION")
                                                     fontSize: 11
                                                     Layout.preferredWidth: 82
                                                     Layout.preferredHeight: cardItem.controlH
@@ -1966,7 +2050,7 @@ import QtGraphicalEffects 1.15
                                                         horizontalAlignment: Text.AlignHCenter 
                                                     }
                                                     CBtn {
-                                                        lbl: "RUN"
+                                                        lbl: qsTr("RUN")
                                                         Layout.preferredWidth: 80
                                                         Layout.preferredHeight: cardItem.controlH
                                                         padV: 0; fontSize: 16
@@ -1979,11 +2063,10 @@ import QtGraphicalEffects 1.15
 
                                             // Limits display
                                             Text {
-                                                text: model.sid === 1 ? "Min: -322 | Max: 560"
-                                                    : (model.sid === 2 ? "Min: -80 | Max: 1025"
-                                                    : (model.sid === 3 ? "Min: -25 | Max: 870"
-                                                    : (model.sid === 4 ? "Min: -320 | Max: 605"
-                                                    : (model.sid === 5 ? "Min: -25 | Max: 1025" : ""))))
+                                                text: {
+                                                    languageController.language
+                                                    return root.servoLimitText(model.sid)
+                                                }
                                                 color: root.cWhiteText
                                                 font.pixelSize: 13
                                                 font.bold: true
@@ -1994,7 +2077,7 @@ import QtGraphicalEffects 1.15
 
                                             // STOP button (full width safety button at bottom)
                                                 CBtn {
-                                                    lbl: "STOP"
+                                                    lbl: qsTr("STOP")
                                                     w: parent.width; h: cardItem.controlH
                                                     padV: 6
                                                     fontSize: 18
@@ -2025,9 +2108,9 @@ import QtGraphicalEffects 1.15
                             anchors.margins: 8
                             spacing: 4
                             RowLayout { width: parent.width; height: 28
-                                Text { text: "LOG ACTIVITY"; color: root.cCardTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
+                                Text { text: qsTr("ACTIVITY LOG"); color: root.cCardTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
-                                CBtn { lbl:"Clear"; iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; Layout.preferredWidth: implicitWidth; Layout.preferredHeight: implicitHeight; padV:4; padH:10; fontSize: 15; bg:root.cBtnClearStart; bgEnd:root.cBtnClearEnd; bc:root.cBtnActionBorder; tc:root.cBtnClearText; onClicked: cartridgeController.clearLog() }
+                                CBtn { lbl:qsTr("Clear"); iconSource:"qrc:/qml/icons/brush_cleaning_white.svg"; Layout.preferredWidth: implicitWidth; Layout.preferredHeight: implicitHeight; padV:4; padH:10; fontSize: 15; bg:root.cBtnClearStart; bgEnd:root.cBtnClearEnd; bc:root.cBtnActionBorder; tc:root.cBtnClearText; onClicked: cartridgeController.clearLog() }
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 28 - 4
@@ -2080,12 +2163,12 @@ import QtGraphicalEffects 1.15
 
                             // ── Tiêu đề ──
                             Text {
-                                text: "SENSOR SIGNAL"
+                                text: qsTr("SENSOR SIGNALS")
                                 color: root.cWhiteText; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                             }
 
                             // ── Status label ──
-                            Text { text: "STATUS"; color: "#bfe0f5"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1 }
+                            Text { text: qsTr("STATUS"); color: "#bfe0f5"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 1 }
 
                             // ── Grid sensor – fillHeight để tự co vừa chiều cao còn lại ──
                             GridLayout {
@@ -2098,34 +2181,34 @@ import QtGraphicalEffects 1.15
                                 Repeater {
                                     model: ListModel {
                                         // [CPX 253] Module 2: I1.0–I1.7
-                                        ListElement { sid:1;  slabel:"S1";  sdesc:"Belt start" }
-                                        ListElement { sid:2;  slabel:"S2";  sdesc:"Belt mid" }
-                                        ListElement { sid:3;  slabel:"S3";  sdesc:"Belt end" }
-                                        ListElement { sid:4;  slabel:"S4";  sdesc:"Scan Stack Pos1" }
-                                        ListElement { sid:5;  slabel:"S5";  sdesc:"Output det." }
-                                        ListElement { sid:6;  slabel:"S6";  sdesc:"Check Tray OutP1" }
-                                        ListElement { sid:7;  slabel:"S7";  sdesc:"Khay tại Robot" }
-                                        ListElement { sid:8;  slabel:"S8";  sdesc:"[Reserved]" }
+                                        ListElement { sid:1;  slabel:"S1" }
+                                        ListElement { sid:2;  slabel:"S2" }
+                                        ListElement { sid:3;  slabel:"S3" }
+                                        ListElement { sid:4;  slabel:"S4" }
+                                        ListElement { sid:5;  slabel:"S5" }
+                                        ListElement { sid:6;  slabel:"S6" }
+                                        ListElement { sid:7;  slabel:"S7" }
+                                        ListElement { sid:8;  slabel:"S8" }
                                         // [CPX 253] Module 3: I2.0–I2.7
                                         // (S11/S12 ATV Run/Fault — VFD status, không hiển thị ở grid này)
-                                        ListElement { sid:9;  slabel:"S9";  sdesc:"Cyl1 Ret" }
-                                        ListElement { sid:10; slabel:"S10"; sdesc:"Cyl1 Ext" }
-                                        ListElement { sid:13; slabel:"S13"; sdesc:"OUT1 TrayPos1" }
-                                        ListElement { sid:14; slabel:"S14"; sdesc:"OUT2 TrayPos1" }
-                                        ListElement { sid:15; slabel:"S15"; sdesc:"Cyl3 Ret" }
-                                        ListElement { sid:16; slabel:"S16"; sdesc:"Cyl3 Ext" }
+                                        ListElement { sid:9;  slabel:"S9" }
+                                        ListElement { sid:10; slabel:"S10" }
+                                        ListElement { sid:13; slabel:"S13" }
+                                        ListElement { sid:14; slabel:"S14" }
+                                        ListElement { sid:15; slabel:"S15" }
+                                        ListElement { sid:16; slabel:"S16" }
                                         // [CPX 254] Module 2: I3.0–I3.5
-                                        ListElement { sid:17; slabel:"S17"; sdesc:"Platform" }
-                                        ListElement { sid:18; slabel:"S18"; sdesc:"Feed OK" }
-                                        ListElement { sid:19; slabel:"S19"; sdesc:"Check Tray OutP2" }
-                                        ListElement { sid:20; slabel:"S20"; sdesc:"Scan Stack Pos2" }
-                                        ListElement { sid:21; slabel:"S21"; sdesc:"Cyl2 Ret" }
-                                        ListElement { sid:22; slabel:"S22"; sdesc:"Cyl2 Ext" }
+                                        ListElement { sid:17; slabel:"S17" }
+                                        ListElement { sid:18; slabel:"S18" }
+                                        ListElement { sid:19; slabel:"S19" }
+                                        ListElement { sid:20; slabel:"S20" }
+                                        ListElement { sid:21; slabel:"S21" }
+                                        ListElement { sid:22; slabel:"S22" }
                                         // [CPX 254] Module 4: I4.0–I4.1
-                                        ListElement { sid:25; slabel:"S25"; sdesc:"Cyl4 Ret" }
-                                        ListElement { sid:26; slabel:"S26"; sdesc:"Cyl4 Ext" }
-                                        ListElement { sid:27; slabel:"S27"; sdesc:"Cyl5 Ret" }
-                                        ListElement { sid:28; slabel:"S28"; sdesc:"Cyl5 Ext" }
+                                        ListElement { sid:25; slabel:"S25" }
+                                        ListElement { sid:26; slabel:"S26" }
+                                        ListElement { sid:27; slabel:"S27" }
+                                        ListElement { sid:28; slabel:"S28" }
                                     }
                                     delegate: Rectangle {
                                         id: sBtn
@@ -2164,6 +2247,9 @@ import QtGraphicalEffects 1.15
                                         }
                                         Column {
                                             anchors.centerIn: parent
+                                            // Bó hẹp trong ô để mô tả dài (vd "Kiểm tra khay tại
+                                            // vị trí đầu ra 1") xuống dòng thay vì tràn ra ngoài.
+                                            width: sBtn.width - 8
                                             spacing: 0
                                             Text {
                                                 text: model.slabel
@@ -2172,10 +2258,17 @@ import QtGraphicalEffects 1.15
                                                 anchors.horizontalCenter: parent.horizontalCenter
                                             }
                                             Text {
-                                                text: model.sdesc
+                                                text: {
+                                                    languageController.language
+                                                    return root.sensorDescription(model.sid)
+                                                }
                                                 color: sBtn.on_ ? root.cSensorActiveText : root.cSensorIdleText; font.pixelSize: 10; font.bold: true
-                                                anchors.horizontalCenter: parent.horizontalCenter
-                                                visible: model.sdesc !== ""
+                                                width: parent.width
+                                                horizontalAlignment: Text.AlignHCenter
+                                                wrapMode: Text.WordWrap
+                                                maximumLineCount: 2
+                                                elide: Text.ElideRight
+                                                visible: text !== ""
                                             }
                                             Rectangle {
                                                 id: dotIndicator
@@ -2254,6 +2347,46 @@ import QtGraphicalEffects 1.15
                     page2Root.p2FilteredLog = filtered
                 }
 
+                function servoParameterLabel(key) {
+                    switch (key) {
+                    case "inx_home": return qsTr("InX Home")
+                    case "inx_target2": return qsTr("InX Target")
+                    case "inx_output_stack": return qsTr("InX Output Position")
+                    case "iny_home": return qsTr("InY Home")
+                    case "iny_target2": return qsTr("InY Place")
+                    case "iny_safe_zone": return qsTr("InY Safe Zone")
+                    case "servo3_target2": return qsTr("S3 Feed")
+                    case "outx_home": return qsTr("OutX Home")
+                    case "outx_target2": return qsTr("OutX Target 2")
+                    case "outx_target3": return qsTr("OutX Target 3")
+                    case "outy_target1": return qsTr("OutY Target 1")
+                    case "outy_pick_pos": return qsTr("OutY Pick")
+                    case "target_scanoutp2": return qsTr("OutY Scan Target")
+                    case "outy_scan_arm_mm": return qsTr("OutY S20 Arm Limit")
+                    default: return key
+                    }
+                }
+
+                function servoParameterDescription(key) {
+                    switch (key) {
+                    case "inx_home": return qsTr("S1 home")
+                    case "inx_target2": return qsTr("S1 tray pickup (500 mm)")
+                    case "inx_output_stack": return qsTr("Place output tray")
+                    case "iny_home": return qsTr("S2 home")
+                    case "iny_target2": return qsTr("Robot place position (200 mm)")
+                    case "iny_safe_zone": return qsTr("Safe zone")
+                    case "servo3_target2": return qsTr("Feed position (400 mm)")
+                    case "outx_home": return qsTr("S4 home")
+                    case "outx_target2": return qsTr("Pick output tray")
+                    case "outx_target3": return qsTr("Place tray at robot")
+                    case "outy_target1": return qsTr("Raise tray to safe position")
+                    case "outy_pick_pos": return qsTr("Lower to pick tray")
+                    case "target_scanoutp2": return qsTr("S20 scan stop point")
+                    case "outy_scan_arm_mm": return qsTr("S20 activation limit")
+                    default: return ""
+                    }
+                }
+
                 Connections {
                     target: cartridgeController
                     function onConfigDataChanged() { page2Root.reloadConfig() }
@@ -2275,21 +2408,21 @@ import QtGraphicalEffects 1.15
                     ConfigZoneCard {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        title: "Pos 1: Input Zones (InY)"
+                        title: qsTr("Position 1: Input Zones (InY)")
                         configKey: "iny_input_zones"
                         configSource: page2Root.parsedConfig
                     }
                     ConfigZoneCard {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        title: "Pos 1: Output Zones (InY)"
+                        title: qsTr("Position 1: Output Zones (InY)")
                         configKey: "iny_output_zones"
                         configSource: page2Root.parsedConfig
                     }
                     ConfigZoneCard {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        title: "Pos 2: Output Zones (OutY)"
+                        title: qsTr("Position 2: Output Zones (OutY)")
                         configKey: "outy_output_zones"
                         configSource: page2Root.parsedConfig
                     }
@@ -2303,20 +2436,20 @@ import QtGraphicalEffects 1.15
                         HoverHandler { onHoveredChanged: parent.border.color = hovered ? root.cHover : root.cBorder }
 
                         property var servoParams: [
-                            { key:"inx_home",        label:"InX Home",      desc:"S1 home" },
-                            { key:"inx_target2",     label:"InX Target",    desc:"S1 lấy khay (500mm)" },
-                            { key:"inx_output_stack",label:"InX OutPos",    desc:"Đặt khay output" },
-                            { key:"iny_home",        label:"InY Home",      desc:"S2 home" },
-                            { key:"iny_target2",     label:"InY Place",     desc:"Robot place (200mm)" },
-                            { key:"iny_safe_zone",   label:"InY SafeZone",  desc:"Safe zone" },
-                            { key:"servo3_target2",  label:"S3 Feed",       desc:"Feed pos (400mm)" },
-                            { key:"outx_home",       label:"OutX Home",     desc:"S4 home" },
-                            { key:"outx_target2",    label:"OutX Target2",  desc:"Lấy khay output" },
-                            { key:"outx_target3",    label:"OutX Target3",  desc:"Đặt khay robot" },
-                            { key:"outy_target1",    label:"OutY Target1",  desc:"Nâng khay (safe)" },
-                            { key:"outy_pick_pos",   label:"OutY Pick",     desc:"Hạ gắp khay" },
-                            { key:"target_scanoutp2",label:"OUTY TgtScan",  desc:"Điểm dừng quét S20" },
-                            { key:"outy_scan_arm_mm",label:"OUTY Arm S20",  desc:"Giới hạn kích hoạt S20" }
+                            { key:"inx_home" },
+                            { key:"inx_target2" },
+                            { key:"inx_output_stack" },
+                            { key:"iny_home" },
+                            { key:"iny_target2" },
+                            { key:"iny_safe_zone" },
+                            { key:"servo3_target2" },
+                            { key:"outx_home" },
+                            { key:"outx_target2" },
+                            { key:"outx_target3" },
+                            { key:"outy_target1" },
+                            { key:"outy_pick_pos" },
+                            { key:"target_scanoutp2" },
+                            { key:"outy_scan_arm_mm" }
                         ]
 
                         Flickable {
@@ -2330,11 +2463,13 @@ import QtGraphicalEffects 1.15
                                 width: parent.width
                                 spacing: 4
 
-                                Text { text: "SERVO KEY POSITIONS (mm)"; color: root.cCardTitle; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
+                                Text { text: qsTr("SERVO KEY POSITIONS (mm)"); color: root.cCardTitle; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
                                 Row { width: parent.width; height: 24; spacing: parent.width * 0.015
-                                    Repeater { model: ["Parameter","Value","Description"]
+                                    Repeater { model: ["parameter", "value", "description"]
                                         delegate: Text {
-                                            text: modelData
+                                            text: modelData === "parameter" ? qsTr("Parameter")
+                                                  : modelData === "value" ? qsTr("Value")
+                                                  : qsTr("Description")
                                             color: root.cWhiteText
                                             font.pixelSize: 14; font.bold: true
                                             width: index===0 ? parent.width * 0.40 : index===1 ? parent.width * 0.22 : parent.width * 0.35
@@ -2362,7 +2497,10 @@ import QtGraphicalEffects 1.15
                                             width: parent.width
                                             spacing: parent.width * 0.015
                                             Text {
-                                                text: modelData.label
+                                                text: {
+                                                    languageController.language
+                                                    return page2Root.servoParameterLabel(modelData.key)
+                                                }
                                                 color: root.cWhiteText
                                                 font { pixelSize: 18; bold: true }
                                                 width: parent.width * 0.40
@@ -2390,7 +2528,10 @@ import QtGraphicalEffects 1.15
                                                 }
                                             }
                                             Text {
-                                                text: modelData.desc
+                                                text: {
+                                                    languageController.language
+                                                    return page2Root.servoParameterDescription(modelData.key)
+                                                }
                                                 color: root.cWhiteText
                                                 font.pixelSize: 16
                                                 elide: Text.ElideRight
@@ -2404,7 +2545,7 @@ import QtGraphicalEffects 1.15
                                 }
 
                                 Row { spacing: 8; topPadding: 8
-                                    CBtn { lbl:"Save All"; iconSource:"icons/download.svg"; padV:10; padH:22; fontSize: 18; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
+                                    CBtn { lbl:qsTr("Save All"); iconSource:"icons/download.svg"; padV:10; padH:22; fontSize: 18; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
                                         onClicked: {
                                             var updates = ({})
                                             for (var i = 0; i < servoRepeater2.count; i++) {
@@ -2424,7 +2565,7 @@ import QtGraphicalEffects 1.15
                                             cartridgeController.saveConfigBatch(JSON.stringify(updates))
                                         }
                                     }
-	                                    CBtn { lbl:"↺ Reset"; padV:10; padH:18; fontSize: 18; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText; onClicked: cartridgeController.getConfig() }
+	                                    CBtn { lbl:qsTr("↺ Reset"); padV:10; padH:18; fontSize: 18; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText; onClicked: cartridgeController.getConfig() }
                                 }
                             }
                         }
@@ -2455,9 +2596,9 @@ import QtGraphicalEffects 1.15
                             spacing: 4
                             RowLayout {
                                 width: parent.width; height: 18
-                                Text { text: "CONFIG LOG"; color: root.cCardTitle; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
+                                Text { text: qsTr("CONFIGURATION LOG"); color: root.cCardTitle; font.pixelSize: 11; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
-                                CBtn { lbl:"Clear"; Layout.preferredWidth: implicitWidth; Layout.preferredHeight: implicitHeight; padV:3; padH:8; fontSize: 14; bg:root.cBtnClearStart; bgEnd:root.cBtnClearEnd; bc:root.cBtnActionBorder; tc:root.cBtnClearText; onClicked: cartridgeController.clearLog() }
+                                CBtn { lbl:qsTr("Clear"); Layout.preferredWidth: implicitWidth; Layout.preferredHeight: implicitHeight; padV:3; padH:8; fontSize: 14; bg:root.cBtnClearStart; bgEnd:root.cBtnClearEnd; bc:root.cBtnActionBorder; tc:root.cBtnClearText; onClicked: cartridgeController.clearLog() }
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 22
@@ -2537,7 +2678,7 @@ import QtGraphicalEffects 1.15
                                 font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter
                             }
                             Text {
-                                text: "LOCKED — " + page3Root.currentMode.toUpperCase() + " MODE"
+                                text: qsTr("LOCKED — %1 MODE").arg(page3Root.currentMode.toUpperCase())
                                 color: root.cWhiteText
                                 font.pixelSize: page3Root.labelFont; font.bold: true; font.letterSpacing: 1
                                 anchors.verticalCenter: parent.verticalCenter
@@ -2584,7 +2725,7 @@ import QtGraphicalEffects 1.15
                                         spacing: 6
                                         Row { spacing: 6
                                             Rectangle { width: 4; height: 16; radius: 1; color: root.cCardTitle; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "CARTESIAN (mm)"; color: root.cCardTitle; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5 }
+                                            Text { text: qsTr("CARTESIAN (mm)"); color: root.cCardTitle; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5 }
                                         }
                                         Repeater {
                                             id: cartRep
@@ -2689,7 +2830,7 @@ import QtGraphicalEffects 1.15
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                     Text {
-                                                        text: "GET POSE"
+                                                        text: qsTr("GET POSE")
                                                         color: root.cWhiteText
                                                         font.pixelSize: page3Root.labelFont
                                                         font.bold: true
@@ -2725,7 +2866,7 @@ import QtGraphicalEffects 1.15
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                     Text {
-                                                        text: "SEND MovL"
+                                                        text: qsTr("SEND MovL")
                                                         color: root.cWhiteText
                                                         font.pixelSize: page3Root.labelFont
                                                         font.bold: true
@@ -2749,7 +2890,7 @@ import QtGraphicalEffects 1.15
                                         spacing: 6
                                         Row { spacing: 6
                                             Rectangle { width: 4; height: 16; radius: 1; color: root.cCardTitle; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "JOINT (deg)"; color: root.cCardTitle; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5 }
+                                            Text { text: qsTr("JOINT (deg)"); color: root.cCardTitle; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5 }
                                         }
                                         Repeater {
                                             id: jointRep
@@ -2846,7 +2987,7 @@ import QtGraphicalEffects 1.15
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                     Text {
-                                                        text: "GET ANGLES"
+                                                        text: qsTr("GET ANGLES")
                                                         color: root.cWhiteText
                                                         font.pixelSize: page3Root.labelFont
                                                         font.bold: true
@@ -2886,7 +3027,7 @@ import QtGraphicalEffects 1.15
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                     Text {
-                                                        text: "SEND MovJ"
+                                                        text: qsTr("SEND MovJ")
                                                         color: root.cWhiteText
                                                         font.pixelSize: page3Root.labelFont
                                                         font.bold: true
@@ -2899,7 +3040,7 @@ import QtGraphicalEffects 1.15
 
                                         // ── SAVE TO YAML ─────────────────────
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder; opacity: 0.5 }
-                                        Text { text: "SAVE POSE TO YAML"; color: root.cCardTitle; font.pixelSize: page3Root.helperFont; font.bold: true; font.letterSpacing: 0.8 }
+                                        Text { text: qsTr("SAVE POSE TO YAML"); color: root.cCardTitle; font.pixelSize: page3Root.helperFont; font.bold: true; font.letterSpacing: 0.8 }
 
                                         Row { spacing: 4; width: parent.width
                                             // Name / comment input
@@ -2910,7 +3051,7 @@ import QtGraphicalEffects 1.15
                                                 // Placeholder hint
                                                 Text {
                                                     anchors { fill: parent; leftMargin: 8; verticalCenter: parent.verticalCenter }
-                                                    text: poseNameInput.text.length === 0 ? "---  Type pose name  ---" : ""
+                                                    text: poseNameInput.text.length === 0 ? qsTr("---  Type pose name  ---") : ""
                                                     color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true
                                                     verticalAlignment: Text.AlignVCenter
                                                 }
@@ -2919,7 +3060,7 @@ import QtGraphicalEffects 1.15
                                                     focusHost: root
                                                     // Panel has no physical keyboard; this name is typed by hand.
                                                     useTextPad: true
-                                                    textPadTitle: "POSE NAME"
+                                                    textPadTitle: qsTr("POSE NAME")
                                                     textPadMaxLength: 40
                                                     anchors { fill: parent; leftMargin: 8; rightMargin: 4; topMargin: 4; bottomMargin: 4 }
                                                     color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true
@@ -2954,7 +3095,7 @@ import QtGraphicalEffects 1.15
                                                         anchors.verticalCenter: parent.verticalCenter
                                                     }
                                                     Text {
-                                                        text: "SAVE"
+                                                        text: qsTr("SAVE")
                                                         color: root.cWhiteText
                                                         font.pixelSize: page3Root.helperFont
                                                         font.bold: true
@@ -2964,7 +3105,7 @@ import QtGraphicalEffects 1.15
                                                 Text {
                                                     anchors.centerIn: parent
                                                     visible: savePoseBtn.saving
-                                                    text: "✓ SAVED"
+                                                    text: qsTr("✓ SAVED")
                                                     color: root.cWhiteText
                                                     font.pixelSize: page3Root.helperFont
                                                     font.bold: true
@@ -3009,7 +3150,7 @@ import QtGraphicalEffects 1.15
                                         }
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder; opacity: 0.5 }
-                                        Text { text: "LOAD SAVED POSE"; color: root.cCardTitle; font.pixelSize: page3Root.helperFont; font.bold: true; font.letterSpacing: 0.8 }
+                                        Text { text: qsTr("LOAD SAVED POSE"); color: root.cCardTitle; font.pixelSize: page3Root.helperFont; font.bold: true; font.letterSpacing: 0.8 }
 
                                         Rectangle {
                                             id: savedPosesLoaderRect
@@ -3045,7 +3186,7 @@ import QtGraphicalEffects 1.15
                                                 }
 
                                                 Text {
-                                                    text: " LIST POSITION (" + savedPosesLoaderRect.savedPoses.length + ")"
+                                                    text: qsTr("LIST POSITIONS (%1)").arg(savedPosesLoaderRect.savedPoses.length)
                                                     color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
@@ -3081,7 +3222,7 @@ import QtGraphicalEffects 1.15
                                         spacing: 6
                                         Row { spacing: 6
                                             Rectangle { width: 4; height: 16; radius: 1; color: root.cCardTitle; anchors.verticalCenter: parent.verticalCenter }
-                                            Text { text: "I/O CONTROL"; color: root.cCardTitle; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5 }
+                                            Text { text: qsTr("I/O CONTROL"); color: root.cCardTitle; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5 }
                                         }
 
                                         // Step Value
@@ -3097,10 +3238,10 @@ import QtGraphicalEffects 1.15
                                                 GradientStop { position: 0.0; color: continuousJogBtn.selected ? (continuousJogMA.pressed ? root.pressGradientColor(root.cGetButton) : root.cGetButton) : (continuousJogMA.pressed ? root.pressGradientColor(root.cDashButton) : root.cDashButton) }
                                                 GradientStop { position: 1.0; color: continuousJogBtn.selected ? (continuousJogMA.pressed ? root.pressGradientColor(root.cGetButtonEnd) : root.cGetButtonEnd) : (continuousJogMA.pressed ? root.pressGradientColor(root.cDashButtonEnd) : root.cDashButtonEnd) }
                                             }
-                                            Text { anchors.centerIn: parent; text: "CONTINUOUS JOG"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
+                                            Text { anchors.centerIn: parent; text: qsTr("CONTINUOUS JOG"); color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                             MotionMouseArea { id: continuousJogMA; anchors.fill: parent; onClicked: robotController.setJogContinuous(true) }
                                         }
-                                        Text { text: "STEP VALUE"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
+                                        Text { text: qsTr("STEP VALUE"); color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row { spacing: 4; width: parent.width
                                             Repeater {
                                                 model: [0.1, 1, 5, 10]
@@ -3128,7 +3269,7 @@ import QtGraphicalEffects 1.15
                                         }
 
                                         // Hardware Speed (read-only from Dobot)
-                                        Text { text: "HW SPEED"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
+                                        Text { text: qsTr("HARDWARE SPEED"); color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Rectangle {
                                             width: parent.width; height: 36; radius: 5
                                             color: "transparent"; border.color: root.cFunctionFieldBorder; border.width: 1
@@ -3141,7 +3282,7 @@ import QtGraphicalEffects 1.15
                                                 anchors { fill: parent; leftMargin: 10; rightMargin: 10 }
                                                 spacing: 6
                                                 Text {
-                                                    text: "⚙ Dobot:"
+                                                    text: qsTr("Dobot:")
                                                     color: root.cWhiteText; font.pixelSize: page3Root.labelFont
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
@@ -3154,7 +3295,7 @@ import QtGraphicalEffects 1.15
                                         }
 
                                         // Set Speed (interactive slider)
-                                        Text { text: "SET SPEED %"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
+                                        Text { text: qsTr("SET SPEED %"); color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row { spacing: 4; width: parent.width; height: 36
                                             Slider {
                                                 id: speedSlider
@@ -3181,33 +3322,33 @@ import QtGraphicalEffects 1.15
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
                                         // Gripper DO1 — valve 5/3: GRIPPING (ch0=T,ch1=F) / RELEASING (ch0=F,ch1=T)
-                                        Text { text: "GRIPPER (DO1)"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
+                                        Text { text: qsTr("GRIPPER (DO1)"); color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row {
                                             id: rowGripper
                                             property bool isOn: robotController.gripperOn
                                             spacing: 6; width: parent.width
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "GRIPPING"; activeChoice: rowGripper.isOn; onClicked: robotController.setDigitalOutput(1, true) }
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "RELEASING"; activeChoice: !rowGripper.isOn; onClicked: robotController.setDigitalOutput(1, false) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: qsTr("GRIPPING"); activeChoice: rowGripper.isOn; onClicked: robotController.setDigitalOutput(1, true) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: qsTr("RELEASING"); activeChoice: !rowGripper.isOn; onClicked: robotController.setDigitalOutput(1, false) }
                                         }
 
                                         // Picker DO2 — valve 5/3: PICKING (ch2=T,ch3=F) / RELEASING (ch2=F,ch3=T)
-                                        Text { text: "PICKER (DO2)"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
+                                        Text { text: qsTr("PICKER (DO2)"); color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row {
                                             id: rowPicker
                                             property bool isOn: robotController.pickerOn
                                             spacing: 6; width: parent.width
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "PICKING"; activeChoice: rowPicker.isOn; onClicked: robotController.setDigitalOutput(2, true) }
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "RELEASING"; activeChoice: !rowPicker.isOn; onClicked: robotController.setDigitalOutput(2, false) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: qsTr("PICKING"); activeChoice: rowPicker.isOn; onClicked: robotController.setDigitalOutput(2, true) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: qsTr("RELEASING"); activeChoice: !rowPicker.isOn; onClicked: robotController.setDigitalOutput(2, false) }
                                         }
 
                                         // Cyl loadcell DO6 — sau khi đổi dây khí: true = RELEASING/mở (nhả), false = GRIPPING/kẹp
-                                        Text { text: "CYL LOADCELL (DO6)"; color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
+                                        Text { text: qsTr("LOAD CELL CYLINDER (DO6)"); color: root.cWhiteText; font.pixelSize: page3Root.labelFont; font.bold: true }
                                         Row {
                                             id: rowCylLoadcell
                                             property bool isOn: robotController.cylLoadcellOn
                                             spacing: 6; width: parent.width
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "GRIPPING"; activeChoice: !rowCylLoadcell.isOn; onClicked: robotController.setDigitalOutput(6, false) }
-                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: "RELEASING"; activeChoice: rowCylLoadcell.isOn; onClicked: robotController.setDigitalOutput(6, true) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: qsTr("GRIPPING"); activeChoice: !rowCylLoadcell.isOn; onClicked: robotController.setDigitalOutput(6, false) }
+                                            IoToggleButton { width: (parent.width - 6) / 2; height: 42; lbl: qsTr("RELEASING"); activeChoice: rowCylLoadcell.isOn; onClicked: robotController.setDigitalOutput(6, true) }
                                         }
 
                                         Rectangle { width: parent.width; height: 1; color: root.cBorder }
@@ -3215,7 +3356,7 @@ import QtGraphicalEffects 1.15
                                         // System actions — tỉ lệ + bo góc đồng bộ CameraPage SYSTEM CONTROL:
                                         // ENABLE trên cùng, STOP + CLEAR ERROR cạnh nhau, EMERGENCY dưới cùng.
                                         CBtn {
-                                            lbl: "ENABLE"
+                                            lbl: qsTr("ENABLE")
                                             w: parent.width; h: 52
                                             fontSize: 15
                                             bg: root.cBtnPrimaryStart; bgEnd: root.cBtnPrimaryEnd; bc: root.cBtnPrimaryBorder; tc: "#ffffff"
@@ -3225,14 +3366,14 @@ import QtGraphicalEffects 1.15
                                         Row {
                                             spacing: 6; width: parent.width
                                             CBtn {
-                                                lbl: "STOP"
+                                                lbl: qsTr("STOP")
                                                 w: (parent.width - 6) / 2; h: 52
                                                 fontSize: 15
                                                 bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"
                                                 onClicked: mainWindow.stopSynchronizedSystems()
                                             }
                                             CBtn {
-                                                lbl: "CLEAR ERROR"
+                                                lbl: qsTr("CLEAR ERROR")
                                                 w: (parent.width - 6) / 2; h: 52
                                                 fontSize: 13
                                                 bg: root.cBtnClearStart; bgEnd: root.cBtnClearEnd; bc: root.cBtnActionBorder; tc: root.cBtnClearText
@@ -3266,7 +3407,7 @@ import QtGraphicalEffects 1.15
                                 anchors.centerIn: parent; spacing: 14
                                 
                                 Text {
-                                    text: "🔒 MANUAL CONTROL LOCKED\nRobot đang chạy — không thể JOG"
+                                    text: qsTr("🔒 MANUAL CONTROL LOCKED\nRobot is running — JOG is unavailable")
                                     color: root.cWhiteText; font.pixelSize: 16; font.bold: true
                                     horizontalAlignment: Text.AlignHCenter; lineHeight: 1.5
                                     anchors.horizontalCenter: parent.horizontalCenter
@@ -3277,7 +3418,7 @@ import QtGraphicalEffects 1.15
                                     anchors.horizontalCenter: parent.horizontalCenter
 
                                     CBtn {
-                                        lbl: "STOP"
+                                        lbl: qsTr("STOP")
                                         w: 150; h: 48
                                         fontSize: 15
                                         bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"
@@ -3285,7 +3426,7 @@ import QtGraphicalEffects 1.15
                                     }
 
                                     CBtn {
-                                        lbl: "ENABLE"
+                                        lbl: qsTr("ENABLE")
                                         w: 150; h: 48
                                         fontSize: 15
                                         bg: root.cBtnPrimaryStart; bgEnd: root.cBtnPrimaryEnd; bc: root.cBtnPrimaryBorder; tc: "#ffffff"
@@ -3293,7 +3434,7 @@ import QtGraphicalEffects 1.15
                                     }
 
                                     CBtn {
-                                        lbl: "CLEAR ERROR"
+                                        lbl: qsTr("CLEAR ERROR")
                                         w: 170; h: 48
                                         fontSize: 13
                                         bg: root.cBtnClearStart; bgEnd: root.cBtnClearEnd; bc: root.cBtnActionBorder; tc: root.cBtnClearText
@@ -3315,9 +3456,9 @@ import QtGraphicalEffects 1.15
                             spacing: 4
                             RowLayout {
                                 width: parent.width; height: 18
-                                Text { text: "ROBOT LOG"; color: root.cCardTitle; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5 }
+                                Text { text: qsTr("ROBOT LOG"); color: root.cCardTitle; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5 }
                                 Item { Layout.fillWidth: true }
-                                CBtn { lbl:"Clear"; Layout.preferredWidth: implicitWidth; Layout.preferredHeight: implicitHeight; padV:3; padH:8; fontSize:14; bg:root.cBtnClearStart; bgEnd:root.cBtnClearEnd; bc:root.cBtnActionBorder; tc:root.cBtnClearText; onClicked:robotController.clearLog() }
+                                CBtn { lbl:qsTr("Clear"); Layout.preferredWidth: implicitWidth; Layout.preferredHeight: implicitHeight; padV:3; padH:8; fontSize:14; bg:root.cBtnClearStart; bgEnd:root.cBtnClearEnd; bc:root.cBtnActionBorder; tc:root.cBtnClearText; onClicked:robotController.clearLog() }
                             }
                             Rectangle {
                                 width: parent.width; height: parent.height - 22
@@ -3382,7 +3523,7 @@ import QtGraphicalEffects 1.15
                             Item {
                                 width: parent.width; height: 34
                                 Text {
-                                    text: "📋 CHỌN TOẠ ĐỘ ROBOT ĐÃ LƯU"
+                                    text: qsTr("📋 SELECT A SAVED ROBOT POSE")
                                     color: root.cWhiteText; font.pixelSize: page3Root.titleFont; font.bold: true; font.letterSpacing: 1.5
                                     anchors.verticalCenter: parent.verticalCenter
                                     anchors.left: parent.left
@@ -3429,7 +3570,7 @@ import QtGraphicalEffects 1.15
                                                 spacing: 4
                                                 
                                                 Text {
-                                                    text: modelData.name ? modelData.name : "Không có tên/ghi chú"
+                                                    text: modelData.name ? modelData.name : qsTr("No name or note")
                                                     color: root.cWhiteText; font.pixelSize: 22; font.bold: true
                                                     elide: Text.ElideRight
                                                 }
@@ -3477,7 +3618,7 @@ import QtGraphicalEffects 1.15
                                                 
                                                 Text {
                                                     anchors.centerIn: parent
-                                                    text: "APPLY"
+                                                    text: qsTr("APPLY")
                                                     color: root.cWhiteText
                                                     font.pixelSize: 16; font.bold: true; font.letterSpacing: 1
                                                 }
@@ -3630,7 +3771,7 @@ import QtGraphicalEffects 1.15
 
                     Text {
                         Layout.fillWidth: true
-                        text: root.operatorTechnicalLocked ? "TECHNICAL VIEW ONLY" : "VIEWER MODE"
+                        text: root.operatorTechnicalLocked ? qsTr("TECHNICAL VIEW ONLY") : qsTr("VIEWER MODE")
                         color: root.operatorTechnicalLocked ? root.cOrange : root.cAccent
                         font.pixelSize: 14
                         font.bold: true
@@ -3639,7 +3780,7 @@ import QtGraphicalEffects 1.15
 
                     Text {
                         Layout.fillWidth: true
-                        text: "Viewing enabled, controls locked"
+                        text: qsTr("Viewing enabled, controls locked")
                         color: root.cText
                         font.pixelSize: 11
                         elide: Text.ElideRight
@@ -3942,8 +4083,10 @@ import QtGraphicalEffects 1.15
                 Text { text: cfgCard.title; color: root.cCardTitle; font.pixelSize: 15; font.bold: true; font.letterSpacing: 1.5 }
 
                 Row { width: parent.width
-                    Repeater { model: ["Row","Position (mm)","Mô tả"]
-                        delegate: Text { text: modelData; color: root.cWhiteText; font.pixelSize: 11; font.bold: true
+                    Repeater { model: ["row", "position", "description"]
+                        delegate: Text { text: modelData === "row" ? qsTr("Row")
+                                              : modelData === "position" ? qsTr("Position (mm)")
+                                              : qsTr("Description"); color: root.cWhiteText; font.pixelSize: 11; font.bold: true
                             width: index===0?46:index===1?94:parent.width-140
                             font.capitalization: Font.AllUppercase; font.letterSpacing: 1 } }
                 }
@@ -3984,7 +4127,7 @@ import QtGraphicalEffects 1.15
                             }
                             Item { width: 4 }
                             Text {
-                                text: modelData===10?"Top":modelData===1?"Bot":""
+                                text: modelData === 10 ? qsTr("Top") : modelData === 1 ? qsTr("Bottom") : ""
                                 color: root.cWhiteText; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter
                             }
                         }
@@ -3993,7 +4136,7 @@ import QtGraphicalEffects 1.15
                 }
 
                 Row { spacing: 6; topPadding: 8
-                    CBtn { lbl:"Save"; iconSource:"icons/download.svg"; padV:8; padH:18; fontSize: 17; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
+                    CBtn { lbl:qsTr("Save"); iconSource:"icons/download.svg"; padV:8; padH:18; fontSize: 17; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
                         onClicked: {
                             var positions = {}
                             for (var i = 0; i < cfgRepeater.count; i++) {
@@ -4003,7 +4146,7 @@ import QtGraphicalEffects 1.15
 	                            cartridgeController.saveConfig(cfgCard.configKey, JSON.stringify(positions))
                         }
                     }
-	                    CBtn { lbl:"↺ Reset"; padV:8; padH:14; fontSize: 17; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText
+	                    CBtn { lbl:qsTr("↺ Reset"); padV:8; padH:14; fontSize: 17; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText
 	                        onClicked: cartridgeController.getConfig()
 	                    }
                 }
@@ -4036,11 +4179,11 @@ import QtGraphicalEffects 1.15
                     Text { text: cfgZoneCard.title; color: root.cCardTitle; font.pixelSize: 18; font.bold: true; font.letterSpacing: 1.5 }
 
                     Row { width: parent.width; height: 24; spacing: parent.width * 0.02
-                        Text { text: "Row"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.12; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
-                        Text { text: "Max"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
-                        Text { text: "Min"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
-                        Text { text: "Target"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
-                        Text { text: "Loc"; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
+                        Text { text: qsTr("Row"); color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.12; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
+                        Text { text: qsTr("Max"); color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
+                        Text { text: qsTr("Min"); color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
+                        Text { text: qsTr("Target"); color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.23; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
+                        Text { text: qsTr("Location"); color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; font.capitalization: Font.AllUppercase }
                     }
                     Rectangle { width: parent.width; height: 1; color: root.cBorder }
 
@@ -4073,14 +4216,14 @@ import QtGraphicalEffects 1.15
 	                                    SmartTextInput { id: tgtInp; focusHost: root; anchors { fill: parent; margins: 3 } text: "0.0"; font.pixelSize: 18; font.family: "monospace"; font.bold: true; color: root.cWhiteText; horizontalAlignment: TextInput.AlignHCenter; verticalAlignment: TextInput.AlignVCenter; validator: DoubleValidator { bottom: -9999; top: 9999; decimals: 1 }
 	                                        Connections { target: page2Root; function onConfigRevisionChanged() { var tbl = page2Root.parsedConfig[cfgZoneCard.configKey]; tgtInp.text = (tbl && tbl[String(modelData)] !== undefined) ? String(tbl[String(modelData)][2]) : "" } } } }
 
-                                Text { text: modelData===10?"Top":modelData===1?"Bot":""; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
+                                Text { text: modelData === 10 ? qsTr("Top") : modelData === 1 ? qsTr("Bottom") : ""; color: root.cWhiteText; font.pixelSize: 14; font.bold: true; width: parent.width * 0.10; height: parent.height; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; anchors.verticalCenter: parent.verticalCenter }
                             }
                             Rectangle { width: parent.width; height: 1; color: "#0c1726"; anchors.bottom: parent.bottom }
                         }
                     }
 
                     Row { spacing: 8; topPadding: 8
-                        CBtn { lbl:"Save"; iconSource:"icons/download.svg"; padV:10; padH:22; fontSize: 18; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
+                        CBtn { lbl:qsTr("Save"); iconSource:"icons/download.svg"; padV:10; padH:22; fontSize: 18; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
                             onClicked: {
                                 var positions = {}
                                 for (var i = 0; i < cfgZoneRepeater.count; i++) {
@@ -4097,7 +4240,7 @@ import QtGraphicalEffects 1.15
                                 cartridgeController.saveConfig(cfgZoneCard.configKey, JSON.stringify(positions))
                             }
                         }
-	                        CBtn { lbl:"↺ Reset"; padV:10; padH:18; fontSize: 18; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText
+	                        CBtn { lbl:qsTr("↺ Reset"); padV:10; padH:18; fontSize: 18; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText
 	                            onClicked: cartridgeController.getConfig()
 	                        }
                     }
@@ -4197,7 +4340,7 @@ import QtGraphicalEffects 1.15
             anchors.fill: parent; anchors.margins: 14; spacing: 7
 
             Text {
-                text: "Đặt tốc độ JOG"
+                text: qsTr("Set JOG speed")
                 color: root.cWhiteText; font.pixelSize: 14; font.bold: true
                 width: parent.width; horizontalAlignment: Text.AlignHCenter
             }
@@ -4220,7 +4363,7 @@ import QtGraphicalEffects 1.15
             }
 
             Text {
-                text: "max 80 mm/s — chỉ áp dụng JOG"
+                text: qsTr("Maximum 80 mm/s — applies to JOG only")
                 color: root.cWhiteText; font.pixelSize: 9
                 width: parent.width; horizontalAlignment: Text.AlignHCenter
             }
@@ -4254,7 +4397,7 @@ import QtGraphicalEffects 1.15
             Rectangle {
                 width: parent.width; height: 38; radius: 6
                 color: root.cBg; border.color: root.cBorder
-                Text { anchors.centerIn: parent; text: "Hủy"; color: root.cWhiteText; font.pixelSize: 13 }
+                Text { anchors.centerIn: parent; text: qsTr("Cancel"); color: root.cWhiteText; font.pixelSize: 13 }
                 MotionMouseArea { anchors.fill: parent; onClicked: velPopup.close() }
             }
         }
@@ -4270,12 +4413,12 @@ import QtGraphicalEffects 1.15
         Column {
             anchors.centerIn: parent; spacing: 30
             Text {
-                text: "⚠️ CẢNH BÁO CHƯA CÓ KHAY THÀNH PHẨM"
+                text: qsTr("⚠️ FINISHED-PRODUCT TRAY MISSING")
                 color: root.cWhiteText; font.pixelSize: 22; font.bold: true
                 anchors.horizontalCenter: parent.horizontalCenter
             }
             Text {
-                text: "Hệ thống đang chờ khay Output lâu hơn 200s.\nĐã cấp khay chưa?"
+                text: qsTr("The system has waited more than 200 seconds for an output tray.\nHas a tray been loaded?")
                 color: root.cWhiteText; font.pixelSize: 18; horizontalAlignment: Text.AlignHCenter
                 anchors.horizontalCenter: parent.horizontalCenter
             }
@@ -4283,12 +4426,12 @@ import QtGraphicalEffects 1.15
                 spacing: 40; anchors.horizontalCenter: parent.horizontalCenter
                 Rectangle {
                     width: 130; height: 46; radius: 6; color: "#b53527"
-                    Text { anchors.centerIn: parent; text: "NO"; color: root.cWhiteText; font.bold: true; font.pixelSize: 16 }
+                    Text { anchors.centerIn: parent; text: qsTr("NO"); color: root.cWhiteText; font.bold: true; font.pixelSize: 16 }
                     MotionMouseArea { anchors.fill: parent; onClicked: { outTrayPopup.close(); outTrayTimer.restart(); } }
                 }
                 Rectangle {
                     width: 130; height: 46; radius: 6; color: "#1f9e86"
-                    Text { anchors.centerIn: parent; text: "YES"; color: root.cWhiteText; font.bold: true; font.pixelSize: 16 }
+                    Text { anchors.centerIn: parent; text: qsTr("YES"); color: root.cWhiteText; font.bold: true; font.pixelSize: 16 }
                     MotionMouseArea { anchors.fill: parent; onClicked: { robotController.simulateOutputTrayReady(); outTrayPopup.close(); } }
                 }
             }

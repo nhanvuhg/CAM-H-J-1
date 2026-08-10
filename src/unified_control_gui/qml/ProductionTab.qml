@@ -51,7 +51,9 @@ Item {
 
     property int pendingRequests: 0
     property bool apiOnline: false
-    property string apiError: ""
+    property string apiErrorCode: ""
+    property string apiErrorDetail: ""
+    readonly property string apiError: apiErrorMessage(apiErrorCode, apiErrorDetail)
     property string lastSync: ""
     property bool initialized: false
     property bool initializing: false
@@ -72,6 +74,55 @@ Item {
  
     // ── Sub-tab navigation ──
     property int activeSection: 0   // 0=today, 1=byDate, 2=ink, 3=alerts, 4=events
+
+    function apiErrorMessage(code, detail) {
+        if (code === "timeout")
+            return qsTr("API did not respond within 6 seconds")
+        if (code === "invalid_json")
+            return qsTr("The API returned invalid JSON data")
+        if (code === "http")
+            return qsTr("The API returned HTTP %1").arg(detail)
+        if (code === "connection")
+            return qsTr("Cannot connect to the Production Output API")
+        return ""
+    }
+
+    function clearApiError() {
+        apiErrorCode = ""
+        apiErrorDetail = ""
+    }
+
+    // Translate only stable enum-like values at the display boundary. The
+    // rows keep the backend payload unchanged for coloring and behavior.
+    function stableTokenText(value, kind) {
+        var raw = value === undefined || value === null ? "" : String(value)
+        var token = raw.trim().toUpperCase()
+
+        if (kind === "result") {
+            if (token === "PASS") return qsTr("PASS")
+            if (token === "FAIL") return qsTr("FAIL")
+            if (token === "OK") return qsTr("OK")
+            if (token === "NG") return qsTr("NG")
+        } else if (kind === "level") {
+            if (token === "ERROR") return qsTr("ERROR")
+            if (token === "WARNING" || token === "WARN") return qsTr("WARNING")
+            if (token === "INFO") return qsTr("INFO")
+        } else if (kind === "area") {
+            if (token === "ROBOT") return qsTr("ROBOT")
+            if (token === "FEEDER") return qsTr("FEEDER")
+            if (token === "SCALE") return qsTr("SCALE")
+            if (token === "VFD") return "VFD"
+            if (token === "CAMERA") return qsTr("CAMERA")
+            if (token === "FILL_HP") return qsTr("FILL HP")
+        } else if (kind === "mode") {
+            if (token === "AUTO") return qsTr("AUTO")
+            if (token === "MANUAL") return qsTr("MANUAL")
+            if (token === "AI") return "AI"
+            if (token === "JOG") return "JOG"
+        }
+
+        return raw
+    }
  
     // ── API ──
     function expireApiRequests() {
@@ -99,12 +150,15 @@ Item {
             return true
         }
 
-        function failRequest(message) {
+        function failRequest(code, detail) {
             if (!finishRequest())
                 return
             apiOnline = false
-            if (!apiError)
-                apiError = message + "  (RevPi A " + apiHost + ":8090)"
+            if (!apiErrorCode) {
+                apiErrorCode = code
+                apiErrorDetail = detail === undefined ? "" : String(detail)
+            }
+            var message = apiErrorMessage(code, detail)
             console.warn("ProductionTab:", message, path)
             if (errorCallback)
                 errorCallback(message)
@@ -114,7 +168,7 @@ Item {
         requestToken = {
             deadline: Date.now() + 6000,
             expire: function() {
-                failRequest("API không phản hồi sau 6 giây")
+                failRequest("timeout")
                 xhr.abort()
             }
         }
@@ -128,7 +182,7 @@ Item {
                 try {
                     parsed = JSON.parse(xhr.responseText)
                 } catch (e) {
-                    failRequest("Dữ liệu JSON không hợp lệ")
+                    failRequest("invalid_json")
                     return
                 }
                 if (!finishRequest())
@@ -138,10 +192,10 @@ Item {
                 lastSync = Qt.formatTime(new Date(), "HH:mm:ss")
                 callback(parsed)
             } else {
-                failRequest("API trả về HTTP " + xhr.status)
+                failRequest("http", xhr.status)
             }
         }
-        xhr.onerror = function() { failRequest("Không kết nối được API Production Output") }
+        xhr.onerror = function() { failRequest("connection") }
         xhr.open("GET", apiBase + path)
         xhr.send()
     }
@@ -184,7 +238,7 @@ Item {
         if (initialized || initializing)
             return
         initializing = true
-        apiError = ""
+        clearApiError()
         apiGet("/api/time", function(d) {
             initializing = false
             initialized = true
@@ -200,7 +254,7 @@ Item {
 
     function loadAllData(clearError) {
         if (clearError === undefined || clearError)
-            apiError = ""
+            clearApiError()
         apiOnline = false
         loadToday()
         loadDate()
@@ -302,7 +356,7 @@ Item {
                 ColorOverlay { anchors.fill: productionHeaderIcon; source: productionHeaderIcon; color: cCyan }
             }
             Text {
-                text: "PRODUCTION & RUNTIME"
+                text: qsTr("PRODUCTION & RUNTIME")
                 color: cTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
             }
             Item { Layout.fillWidth: true }
@@ -318,8 +372,10 @@ Item {
             }
             Text {
                 text: pendingRequests > 0
-                      ? "Synchronizing RevPi A…"
-                      : (apiError ? "RevPi A offline" : (lastSync ? "Synced " + lastSync : "Waiting for RevPi A"))
+                      ? qsTr("Synchronizing RevPi A…")
+                      : (apiError ? qsTr("RevPi A offline")
+                                  : (lastSync ? qsTr("Synced %1").arg(lastSync)
+                                              : qsTr("Waiting for RevPi A")))
                 color: apiError ? cBad : (apiOnline ? cOk : cMuted)
                 font.pixelSize: 13; font.bold: true
             }
@@ -346,7 +402,7 @@ Item {
                         }
                         ColorOverlay { anchors.fill: reloadIcon; source: reloadIcon; color: cTitle }
                     }
-                    Text { text: "Reload"; color: cTitle; font.pixelSize: 14; font.bold: true }
+                    Text { text: qsTr("Reload"); color: cTitle; font.pixelSize: 14; font.bold: true }
                 }
                 MotionMouseArea { id: reloadMA; anchors.fill: parent; onClicked: loadAllData() }
             }
@@ -365,12 +421,13 @@ Item {
         RowLayout {
             anchors.fill: parent; anchors.leftMargin: 14; anchors.rightMargin: 8; spacing: 12
             Text {
-                text: "Production Output chưa thể đồng bộ: " + apiError
+                text: qsTr("Production Output could not synchronize: %1  (RevPi A %2:8090)")
+                      .arg(apiError).arg(apiHost)
                 color: cTitle; font.pixelSize: 14; font.bold: true
                 Layout.fillWidth: true; wrapMode: Text.Wrap
             }
             ActionBtn {
-                label: "Retry"
+                label: qsTr("Retry")
                 Layout.preferredWidth: 88
                 onClicked: loadAllData()
             }
@@ -393,11 +450,11 @@ Item {
             spacing: 6
             Repeater {
                 model: [
-                    {idx: 0, lbl: "Today", icon: "qrc:/qml/icons/schedule.svg"},
-                    {idx: 1, lbl: "By Date", icon: "qrc:/qml/icons/database_search.svg"},
-                    {idx: 2, lbl: "Ink Batch", icon: "qrc:/qml/icons/droplet.svg"},
-                    {idx: 3, lbl: "Operator Alerts", icon: "qrc:/qml/icons/message_circle_warning.svg"},
-                    {idx: 4, lbl: "Stop Errors", icon: "qrc:/qml/icons/octagon_x_lucide.svg"}
+                    {idx: 0, lbl: qsTr("Today"), icon: "qrc:/qml/icons/schedule.svg"},
+                    {idx: 1, lbl: qsTr("By Date"), icon: "qrc:/qml/icons/database_search.svg"},
+                    {idx: 2, lbl: qsTr("Ink Batch"), icon: "qrc:/qml/icons/droplet.svg"},
+                    {idx: 3, lbl: qsTr("Operator Alerts"), icon: "qrc:/qml/icons/message_circle_warning.svg"},
+                    {idx: 4, lbl: qsTr("Stop Errors"), icon: "qrc:/qml/icons/octagon_x_lucide.svg"}
                 ]
                 Rectangle {
                     id: subTabButton
@@ -482,24 +539,25 @@ Item {
                 Layout.fillWidth: true; spacing: 14
 
                 Text {
-                    text: "TODAY  —  " + prodTab.todayDate
+                    text: qsTr("TODAY — %1").arg(prodTab.todayDate)
                     color: cTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5
                 }
 
                 // Stat row
                 RowLayout {
                     Layout.fillWidth: true; spacing: 10
-                    StatCard { Layout.fillWidth: true; num: todayData.count;           lbl: "Filled Batches";   accent: cAccent }
-                    StatCard { Layout.fillWidth: true; num: todayData.total_volume_ml; lbl: "Total Volume (ml)"; accent: cCyan }
-                    StatCard { Layout.fillWidth: true; num: todayData.ok;              lbl: "OK";              accent: cOk }
-                    StatCard { Layout.fillWidth: true; num: todayData.ng;              lbl: "NG";               accent: cBad }
-                    StatCard { Layout.fillWidth: true; num: todayRuntime.toFixed(1);   lbl: "Runtime (min)";    accent: cWarn }
+                    StatCard { Layout.fillWidth: true; num: todayData.count;           lbl: qsTr("Filled Batches");    accent: cAccent }
+                    StatCard { Layout.fillWidth: true; num: todayData.total_volume_ml; lbl: qsTr("Total Volume (ml)"); accent: cCyan }
+                    StatCard { Layout.fillWidth: true; num: todayData.ok;              lbl: qsTr("OK");                accent: cOk }
+                    StatCard { Layout.fillWidth: true; num: todayData.ng;              lbl: qsTr("NG");                accent: cBad }
+                    StatCard { Layout.fillWidth: true; num: todayRuntime.toFixed(1);   lbl: qsTr("Runtime (min)");     accent: cWarn }
                 }
 
                 // Table
                 DataTable {
                     Layout.fillWidth: true
-                    headers: ["No.", "Time", "Machine", "Volume (ml)", "Result"]
+                    headers: [qsTr("No."), qsTr("Time"), qsTr("Machine"), qsTr("Volume (ml)"), qsTr("Result")]
+                    resultColumn: 4
                     colWidths: [0.8, 2.0, 1.5, 2.0, 1.2]
                     rows: buildFillRows(todayData.items)
                 }
@@ -512,31 +570,32 @@ Item {
                 visible: activeSection === 1
                 Layout.fillWidth: true; spacing: 14
 
-                Text { text: "PRODUCTION BY DATE"; color: cTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
+                Text { text: qsTr("PRODUCTION BY DATE"); color: cTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
 
                 RowLayout {
                     spacing: 10
-                    Text { text: "From Date:"; color: cSection; font.pixelSize: 15; font.bold: true }
+                    Text { text: qsTr("From Date:"); color: cSection; font.pixelSize: 15; font.bold: true }
                     DateBox { id: dateFromInput; onDateApplied: loadDate() }
-                    Text { text: "To Date:"; color: cSection; font.pixelSize: 15; font.bold: true }
+                    Text { text: qsTr("To Date:"); color: cSection; font.pixelSize: 15; font.bold: true }
                     DateBox { id: dateToInput;   onDateApplied: loadDate() }
-                    ActionBtn { label: "View"; onClicked: loadDate() }
+                    ActionBtn { label: qsTr("View"); onClicked: loadDate() }
                 }
 
                 RowLayout {
                     Layout.fillWidth: true; spacing: 10
-                    StatCard { Layout.fillWidth: true; num: dateData.count;           lbl: "Batches";          accent: cAccent }
-                    StatCard { Layout.fillWidth: true; num: dateData.total_volume_ml; lbl: "Volume (ml)";      accent: cCyan }
-                    StatCard { Layout.fillWidth: true; num: dateData.ok;              lbl: "OK";               accent: cOk }
-                    StatCard { Layout.fillWidth: true; num: dateData.ng;              lbl: "NG";               accent: cBad }
-                    StatCard { Layout.fillWidth: true; num: dateRuntime.toFixed(1);   lbl: "Runtime (min)";    accent: cWarn }
+                    StatCard { Layout.fillWidth: true; num: dateData.count;           lbl: qsTr("Batches");       accent: cAccent }
+                    StatCard { Layout.fillWidth: true; num: dateData.total_volume_ml; lbl: qsTr("Volume (ml)");   accent: cCyan }
+                    StatCard { Layout.fillWidth: true; num: dateData.ok;              lbl: qsTr("OK");            accent: cOk }
+                    StatCard { Layout.fillWidth: true; num: dateData.ng;              lbl: qsTr("NG");            accent: cBad }
+                    StatCard { Layout.fillWidth: true; num: dateRuntime.toFixed(1);   lbl: qsTr("Runtime (min)"); accent: cWarn }
                 }
 
                 // Detail table (single day)
                 DataTable {
                     visible: rangeDays.length === 0
                     Layout.fillWidth: true
-                    headers: ["No.", "Time", "Machine", "Volume (ml)", "Result"]
+                    headers: [qsTr("No."), qsTr("Time"), qsTr("Machine"), qsTr("Volume (ml)"), qsTr("Result")]
+                    resultColumn: 4
                     colWidths: [0.8, 2.0, 1.5, 2.0, 1.2]
                     rows: buildFillRows(dateData.items)
                 }
@@ -545,7 +604,7 @@ Item {
                 DataTable {
                     visible: rangeDays.length > 0
                     Layout.fillWidth: true
-                    headers: ["Date", "Batches Count", "Volume (ml)"]
+                    headers: [qsTr("Date"), qsTr("Batches Count"), qsTr("Volume (ml)")]
                     colWidths: [2.0, 1.5, 2.0]
                     rows: {
                         var r = []
@@ -565,13 +624,13 @@ Item {
                 visible: activeSection === 2
                 Layout.fillWidth: true; spacing: 14
 
-                Text { text: "INK BATCH BY DATE"; color: cTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
+                Text { text: qsTr("INK BATCH BY DATE"); color: cTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
 
                 RowLayout {
                     spacing: 10
-                    Text { text: "Date:"; color: cSection; font.pixelSize: 15; font.bold: true }
+                    Text { text: qsTr("Date:"); color: cSection; font.pixelSize: 15; font.bold: true }
                     DateBox { id: inkDateInput;  onDateApplied: loadInk() }
-                    Text { text: "Usage Code:"; color: cSection; font.pixelSize: 15; font.bold: true }
+                    Text { text: qsTr("Usage Code:"); color: cSection; font.pixelSize: 15; font.bold: true }
                     Rectangle {
                         width: 180; height: 44; radius: 8
                         color: "transparent"; border.color: cFieldBorder; border.width: 1
@@ -587,33 +646,34 @@ Item {
                             // scan field on the Ink System page, nothing feeds
                             // this one, so it needs the on-screen keyboard.
                             useTextPad: true
-                            textPadTitle: "USAGE CODE"
+                            textPadTitle: qsTr("USAGE CODE")
                             textPadMaxLength: 32
                             anchors.fill: parent; anchors.margins: 8
                             color: cFieldText; font.pixelSize: 15; font.family: prodTab.dashboardTextFamily
                             clip: true; verticalAlignment: TextInput.AlignVCenter
                             Text {
                                 visible: !parent.text && !parent.activeFocus
-                                text: "All profiles"
+                                text: qsTr("All profiles")
                                 color: cMuted; font.pixelSize: 14
                                 anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                             }
                         }
                     }
-                    ActionBtn { label: "View"; onClicked: loadInk() }
+                    ActionBtn { label: qsTr("View"); onClicked: loadInk() }
                 }
  
                 RowLayout {
                     Layout.fillWidth: true; spacing: 10
-                    StatCard { Layout.fillWidth: true; num: inkData.batches;      lbl: "Ink Batches Count";  accent: cAccent }
-                    StatCard { Layout.fillWidth: true; num: inkData.total_g || 0; lbl: "Total Weight (g)";   accent: cCyan }
+                    StatCard { Layout.fillWidth: true; num: inkData.batches;      lbl: qsTr("Ink Batches Count"); accent: cAccent }
+                    StatCard { Layout.fillWidth: true; num: inkData.total_g || 0; lbl: qsTr("Total Weight (g)");  accent: cCyan }
                 }
  
                 DataTable {
                     Layout.fillWidth: true
-                    headers: ["Time", "Operator", "Usage Code", "Ink Name",
-                              "Lot PI", "Lot CI", "Density", "Mode", "Volume (ml)",
-                              "Chamber Pressure", "8-Cartridge Pressures", "g Used", "g Left"]
+                    headers: [qsTr("Time"), qsTr("Operator"), qsTr("Usage Code"), qsTr("Ink Name"),
+                              qsTr("Lot PI"), qsTr("Lot CI"), qsTr("Density"), qsTr("Mode"), qsTr("Volume (ml)"),
+                              qsTr("Chamber Pressure"), qsTr("8-Cartridge Pressures"), qsTr("g Used"), qsTr("g Left")]
+                    modeColumn: 7
                     colWidths: [1.3, 1.0, 1.0, 1.0, 1.2, 0.8, 0.8, 0.9, 0.9, 0.9, 2.8, 0.8, 0.8]
                     rows: {
                         var r = []
@@ -650,26 +710,30 @@ Item {
                 visible: activeSection === 3
                 Layout.fillWidth: true; spacing: 14
 
-                Text { text: "OPERATOR ALERTS BY DATE"; color: cTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
+                Text { text: qsTr("OPERATOR ALERTS BY DATE"); color: cTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
 
                 RowLayout {
                     spacing: 10
-                    Text { text: "Date:"; color: cSection; font.pixelSize: 15; font.bold: true }
+                    Text { text: qsTr("Date:"); color: cSection; font.pixelSize: 15; font.bold: true }
                     DateBox { id: alertsDateInput; onDateApplied: loadAlerts() }
-                    ActionBtn { label: "View"; onClicked: loadAlerts() }
+                    ActionBtn { label: qsTr("View"); onClicked: loadAlerts() }
                 }
 
                 RowLayout {
                     Layout.fillWidth: true; spacing: 10
-                    StatCard { Layout.fillWidth: true; num: alertsData.count || 0;    lbl: "Alert Events"; accent: cAccent }
-                    StatCard { Layout.fillWidth: true; num: alertsData.opened || 0;   lbl: "Opened";       accent: cWarn }
-                    StatCard { Layout.fillWidth: true; num: alertsData.resolved || 0; lbl: "Resolved";     accent: cOk }
+                    StatCard { Layout.fillWidth: true; num: alertsData.count || 0;    lbl: qsTr("Alert Events"); accent: cAccent }
+                    StatCard { Layout.fillWidth: true; num: alertsData.opened || 0;   lbl: qsTr("Opened");       accent: cWarn }
+                    StatCard { Layout.fillWidth: true; num: alertsData.resolved || 0; lbl: qsTr("Resolved");     accent: cOk }
                 }
 
                 DataTable {
                     Layout.fillWidth: true
-                    headers: ["Time", "Machine", "Operator", "Event", "Level", "Area",
-                              "Mode", "Fill", "Dosing", "CR", "Detail", "Resolution"]
+                    headers: [qsTr("Time"), qsTr("Machine"), qsTr("Operator"), qsTr("Event"), qsTr("Level"), qsTr("Area"),
+                              qsTr("Mode"), qsTr("Fill"), qsTr("Dosing"), "CR", qsTr("Detail"), qsTr("Resolution")]
+                    eventColumn: 3
+                    levelColumn: 4
+                    areaColumn: 5
+                    modeColumn: 6
                     colWidths: [1.2, 0.9, 1.0, 0.9, 0.8, 0.9, 0.9, 0.8, 0.8, 0.8, 2.8, 2.2]
                     rows: buildAlertRows(alertsData.items)
                 }
@@ -682,31 +746,34 @@ Item {
                 visible: activeSection === 4
                 Layout.fillWidth: true; spacing: 14
 
-                Text { text: "SYSTEM STOP ERRORS BY DATE"; color: cTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
+                Text { text: qsTr("SYSTEM STOP ERRORS BY DATE"); color: cTitle; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
 
                 RowLayout {
                     spacing: 10
-                    Text { text: "Date:"; color: cSection; font.pixelSize: 15; font.bold: true }
+                    Text { text: qsTr("Date:"); color: cSection; font.pixelSize: 15; font.bold: true }
                     DateBox { id: eventsDateInput; onDateApplied: loadEvents() }
-                    ActionBtn { label: "View"; onClicked: loadEvents() }
+                    ActionBtn { label: qsTr("View"); onClicked: loadEvents() }
                 }
 
                 RowLayout {
                     Layout.fillWidth: true; spacing: 10
-                    StatCard { Layout.fillWidth: true; num: eventsData.count || 0; lbl: "Stop Events"; accent: cAccent }
-                    StatCard { Layout.fillWidth: true; num: eventsData.error || 0; lbl: "Errors";      accent: cBad }
-                    StatCard { Layout.fillWidth: true; num: eventsData.warn || 0;  lbl: "Warnings";    accent: cWarn }
+                    StatCard { Layout.fillWidth: true; num: eventsData.count || 0; lbl: qsTr("Stop Events"); accent: cAccent }
+                    StatCard { Layout.fillWidth: true; num: eventsData.error || 0; lbl: qsTr("Errors");      accent: cBad }
+                    StatCard { Layout.fillWidth: true; num: eventsData.warn || 0;  lbl: qsTr("Warnings");    accent: cWarn }
                 }
 
                 DataTable {
                     Layout.fillWidth: true
-                    headers: ["Time", "Machine", "Operator", "Level", "Area", "Mode",
-                              "Fill", "Dosing", "CR", "Detail", "Action"]
+                    headers: [qsTr("Time"), qsTr("Machine"), qsTr("Operator"), qsTr("Level"), qsTr("Area"), qsTr("Mode"),
+                              qsTr("Fill"), qsTr("Dosing"), "CR", qsTr("Detail"), qsTr("Action")]
                     // Action carries the repair instruction and is the reason
                     // an operator opens this table, so it gets the widest
                     // share and wraps rather than eliding.
                     colWidths: [1.2, 0.9, 1.0, 0.8, 0.9, 0.9, 0.8, 0.8, 0.8, 2.2, 4.2]
-                    wrapColumns: ["Action"]
+                    levelColumn: 3
+                    areaColumn: 4
+                    modeColumn: 5
+                    wrapColumnIndexes: [10]
                     rows: buildEventRows(eventsData.items)
                 }
             }
@@ -850,7 +917,7 @@ Item {
     // ── Action button ──
     component ActionBtn: Rectangle {
         id: actionBtn
-        property string label: "Xem"
+        property string label: qsTr("View")
         signal clicked()
         width: 80; height: 44; radius: 8
         enabled: pendingRequests === 0
@@ -871,14 +938,29 @@ Item {
         property var headers: []
         property var colWidths: [] // weights
         property var rows: []
-        // Header names whose cells wrap onto several lines and grow the row
-        // instead of being cut off with an ellipsis. Empty by default, so every
-        // other table keeps its fixed 36 px rows.
-        property var wrapColumns: []
+        // Semantic behavior is indexed separately from translated header text,
+        // so changing languages cannot alter result colors or wrapping.
+        property int resultColumn: -1
+        property int levelColumn: -1
+        property int eventColumn: -1
+        property int areaColumn: -1
+        property int modeColumn: -1
+        property var wrapColumnIndexes: []
+
+        function displayCell(value, index) {
+            if (index === resultColumn)
+                return prodTab.stableTokenText(value, "result")
+            if (index === levelColumn)
+                return prodTab.stableTokenText(value, "level")
+            if (index === areaColumn)
+                return prodTab.stableTokenText(value, "area")
+            if (index === modeColumn)
+                return prodTab.stableTokenText(value, "mode")
+            return value
+        }
 
         function wrapsColumn(index) {
-            var hdr = headers.length > index ? headers[index] : ""
-            return wrapColumns.indexOf(hdr) >= 0
+            return wrapColumnIndexes.indexOf(index) >= 0
         }
  
         color: "transparent"
@@ -964,7 +1046,7 @@ Item {
                 color: "transparent"
                 Text {
                     anchors.centerIn: parent
-                    text: "— No Data Available —"
+                    text: qsTr("— No Data Available —")
                     color: cMuted
                     font.pixelSize: 16
                     font.italic: true
@@ -1014,25 +1096,23 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     wrapMode: cellItem.wraps ? Text.WordWrap : Text.NoWrap
                                     maximumLineCount: cellItem.wraps ? 3 : 1
-                                    text: modelData
+                                    text: tableRoot.displayCell(modelData, index)
                                     color: {
-                                        var hdr = headers.length > index ? headers[index] : ""
                                         var value = String(modelData).toUpperCase()
-                                        if (hdr === "Result" || hdr === "Kết quả") {
-                                            return value === "NG" ? cBad : cOk
+                                        if (index === tableRoot.resultColumn) {
+                                            return value === "NG" || value === "FAIL" ? cBad : cOk
                                         }
-                                        if (hdr === "Level")
-                                            return value === "ERROR" ? cBad : (value === "WARN" ? cWarn : cText)
-                                        if (hdr === "Event")
+                                        if (index === tableRoot.levelColumn)
+                                            return value === "ERROR" ? cBad : ((value === "WARN" || value === "WARNING") ? cWarn : cText)
+                                        if (index === tableRoot.eventColumn)
                                             return value === "RESOLVED" ? cOk : cWarn
                                         return cText
                                     }
                                     font.pixelSize: 13
                                     font.family: prodTab.dashboardTextFamily
-                                    font.bold: {
-                                        var hdr = headers.length > index ? headers[index] : ""
-                                        return hdr === "Result" || hdr === "Kết quả" || hdr === "Level" || hdr === "Event"
-                                    }
+                                    font.bold: index === tableRoot.resultColumn
+                                               || index === tableRoot.levelColumn
+                                               || index === tableRoot.eventColumn
                                     horizontalAlignment: cellItem.wraps ? Text.AlignLeft : Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                     elide: Text.ElideRight

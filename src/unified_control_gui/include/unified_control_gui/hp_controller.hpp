@@ -66,9 +66,10 @@ public:
     double pwmDebug() const { return pwm_debug_; }
     int basePwmStatus() const { return base_pwm_status_; }
     QVariantList cartridgePressures() const { return cartridge_pressures_; }
-    QVariantList alertHistory() const { return alert_history_; }
+    QVariantList alertHistory() const;
 
     void addAlert(const QString &title, const QString &text, const QString &sev = "info");
+    void refreshTranslations();
 
 public slots:
     // Control interfaces
@@ -168,6 +169,8 @@ private:
     int base_pwm_status_{0};
     QVariantList cartridge_pressures_;
     QVariantList alert_history_;
+
+    QString localizedAlertText(const QString &text) const;
 };
 
 #endif // HP_CONTROLLER_HPP

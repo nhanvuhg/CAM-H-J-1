@@ -1,4 +1,5 @@
 #include "unified_control_gui/cartridge_controller.hpp"
+#include <QCoreApplication>
 #include <QDebug>
 #include <QDateTime>
 #include <QJsonDocument>
@@ -173,13 +174,13 @@ void CartridgeController::setJogVelocity(const QString &velocity_ms)
 void CartridgeController::homeServo(int id)
 {
     publishString(jog_pub_, QString("home %1").arg(id));
-    addLog(QString("Homing servo %1").arg(id), "info");
+    addTranslatedLog(QT_TR_NOOP("Homing servo %1"), {QString::number(id)});
 }
 
 void CartridgeController::clearServo(int id)
 {
     publishString(jog_pub_, QString("clear %1").arg(id));
-    addLog(QString("Clear fault servo %1").arg(id), "info");
+    addTranslatedLog(QT_TR_NOOP("Clear fault on servo %1"), {QString::number(id)});
 }
 
 void CartridgeController::moveServo(int id, double position)
@@ -188,20 +189,27 @@ void CartridgeController::moveServo(int id, double position)
         double min_val = -322.0;
         double max_val = 560.0;
         if (position < min_val || position > max_val) {
-            addLog(QString("LỖI: Trục S1 (InX) vượt giới hạn [%2, %3] mm (Nhập: %1)").arg(position).arg(min_val).arg(max_val), "err");
+            addTranslatedLog(QT_TR_NOOP(
+                "ERROR: S1 (InX) axis exceeds limits [%2, %3] mm (entered: %1)"),
+                {QString::number(position), QString::number(min_val), QString::number(max_val)},
+                "err");
             return;
         }
     } else if (id == 2) {
         double min_val = -80.0;
         double max_val = 1025.0;
         if (position < min_val || position > max_val) {
-            addLog(QString("LỖI: Trục S2 (InY) vượt giới hạn [%2, %3] mm (Nhập: %1)").arg(position).arg(min_val).arg(max_val), "err");
+            addTranslatedLog(QT_TR_NOOP(
+                "ERROR: S2 (InY) axis exceeds limits [%2, %3] mm (entered: %1)"),
+                {QString::number(position), QString::number(min_val), QString::number(max_val)},
+                "err");
             return;
         }
     }
 
     publishString(jog_pub_, QString("%1 move %2").arg(id).arg(position));
-    addLog(QString("Move S%1 → %2mm").arg(id).arg(position), "ok");
+    addTranslatedLog(QT_TR_NOOP("Move S%1 → %2 mm"),
+                     {QString::number(id), QString::number(position)}, "ok");
 }
 
 // ── System Control ────────────────────────────────────────────────
@@ -213,7 +221,7 @@ void CartridgeController::setMode(const QString &mode)
         current_mode_ = mode;
         emit currentModeChanged();
     }
-    addLog(QString("Mode: %1").arg(mode.toUpper()), "ok");
+    addTranslatedLog(QT_TR_NOOP("Mode: %1"), {mode.toUpper()}, "ok");
 }
 
 void CartridgeController::gotoState(const QString &state)
@@ -236,12 +244,13 @@ void CartridgeController::gotoState(const QString &state)
     };
 
     if (activeForState(normalized)) {
-        addLog(QString("Ignore duplicate active state: %1").arg(normalized), "warn");
+        addTranslatedLog(QT_TR_NOOP("Ignore duplicate active state: %1"),
+                         {normalized}, "warn");
         return;
     }
 
     if (normalized == last_goto_state_ && now - last_goto_state_ms_ < 800) {
-        addLog(QString("Debounce state: %1").arg(normalized), "warn");
+        addTranslatedLog(QT_TR_NOOP("Debounce state: %1"), {normalized}, "warn");
         return;
     }
 
@@ -249,32 +258,32 @@ void CartridgeController::gotoState(const QString &state)
     last_goto_state_ms_ = now;
 
     publishString(goto_state_pub_, normalized);
-    addLog(QString("Goto state: %1").arg(normalized), "info");
+    addTranslatedLog(QT_TR_NOOP("Go to state: %1"), {normalized});
 }
 
 void CartridgeController::setTargetRow(int row)
 {
     publishString(set_target_row_pub_, QString::number(row));
-    addLog(QString("Set Target Row: %1").arg(row), "ok");
+    addTranslatedLog(QT_TR_NOOP("Set target row: %1"), {QString::number(row)}, "ok");
 }
 
 void CartridgeController::startSystem()
 {
     publishBool(start_button_pub_, true);
-    addLog("System START", "ok");
+    addTranslatedLog(QT_TR_NOOP("System START"), {}, "ok");
 }
 
 void CartridgeController::stopSystem()
 {
     publishBool(stop_button_pub_, true);
-    addLog("System STOP", "err");
+    addTranslatedLog(QT_TR_NOOP("System STOP"), {}, "err");
 }
 
 void CartridgeController::softStop()
 {
     // Soft STOP: dừng motion + chuyển MANUAL, GIỮ NGUYÊN state + CPX
     publishBool(soft_stop_pub_, true);
-    addLog("Soft STOP (keep state)", "warn");
+    addTranslatedLog(QT_TR_NOOP("Soft STOP (keep state)"), {}, "warn");
 }
 
 void CartridgeController::pauseSystem()
@@ -286,9 +295,11 @@ void CartridgeController::pauseSystem()
         auto req = std::make_shared<std_srvs::srv::SetBool::Request>();
         req->data = true;
         robot_pause_client_->async_send_request(req);
-        addLog("PAUSE → cartridge + robot (instant motion hold)", "info");
+        addTranslatedLog(QT_TR_NOOP(
+            "PAUSE → cartridge + robot (instant motion hold)"));
     } else {
-        addLog("PAUSE → cartridge (robot pause service offline)", "warn");
+        addTranslatedLog(QT_TR_NOOP(
+            "PAUSE → cartridge (robot pause service offline)"), {}, "warn");
     }
 }
 
@@ -300,29 +311,30 @@ void CartridgeController::resumeSystem()
         auto req = std::make_shared<std_srvs::srv::SetBool::Request>();
         req->data = false;
         robot_pause_client_->async_send_request(req);
-        addLog("RESUME → cartridge + robot", "ok");
+        addTranslatedLog(QT_TR_NOOP("RESUME → cartridge + robot"), {}, "ok");
     } else {
-        addLog("RESUME → cartridge (robot pause service offline)", "warn");
+        addTranslatedLog(QT_TR_NOOP(
+            "RESUME → cartridge (robot pause service offline)"), {}, "warn");
     }
 }
 
 void CartridgeController::hmiResume()
 {
     // Legacy no-op — giữ để các QML chưa update không crash. New code dùng resumeSystem().
-    addLog("HMI Resume (legacy no-op)", "info");
+    addTranslatedLog(QT_TR_NOOP("HMI Resume (legacy no-op)"));
 }
 
 void CartridgeController::resetFaults()
 {
     // Gửi ABORT_TO_JOG để về JOG an toàn
     publishString(goto_state_pub_, "ABORT_TO_JOG");
-    addLog("Reset faults → ABORT_TO_JOG", "info");
+    addTranslatedLog(QT_TR_NOOP("Reset faults → ABORT_TO_JOG"));
 }
 
 void CartridgeController::abortToJog()
 {
     publishString(goto_state_pub_, "ABORT_TO_JOG");
-    addLog("ABORT → JOG mode", "info");
+    addTranslatedLog(QT_TR_NOOP("ABORT → JOG mode"));
 }
 
 // ── Robot signal simulation (nút STATE 2 / STATE 4) ───────────────
@@ -330,19 +342,19 @@ void CartridgeController::abortToJog()
 void CartridgeController::simulateDoneTrayInput()
 {
     publishBool(done_tray_input_pub_, true);
-    addLog("Simulate: done_tray_input (trigger State 2)", "info");
+    addTranslatedLog(QT_TR_NOOP("Simulate: done_tray_input (trigger State 2)"));
 }
 
 void CartridgeController::simulateDoneTrayOutput()
 {
     publishBool(done_tray_output_pub_, true);
-    addLog("Simulate: done_tray_output (trigger State 4)", "info");
+    addTranslatedLog(QT_TR_NOOP("Simulate: done_tray_output (trigger State 4)"));
 }
 
 void CartridgeController::acceptState2OutputFull()
 {
     publishString(gui_confirm_pub_, "S2_OUTPUT_FULL_ACCEPT");
-    addLog("STATE 2: recheck S4 output stack", "info");
+    addTranslatedLog(QT_TR_NOOP("STATE 2: recheck the S4 output stack"));
 }
 
 void CartridgeController::confirmOutput()
@@ -357,7 +369,13 @@ void CartridgeController::cylinderCmd(int cylId, bool extend)
 {
     QString cmd = QString("%1 %2").arg(cylId).arg(extend ? "extend" : "retract");
     publishString(cyl_cmd_pub_, cmd);
-    addLog(QString("Cyl%1 %2").arg(cylId).arg(extend ? "EXTEND" : "RETRACT"), "info");
+    if (extend) {
+        addTranslatedLog(QT_TR_NOOP("Cylinder %1 EXTEND"),
+                         {QString::number(cylId)});
+    } else {
+        addTranslatedLog(QT_TR_NOOP("Cylinder %1 RETRACT"),
+                         {QString::number(cylId)});
+    }
 }
 
 // ── Config ────────────────────────────────────────────────────────
@@ -375,7 +393,7 @@ void CartridgeController::saveConfig(const QString &key, const QString &jsonData
     QString payload = QString::fromUtf8(
         QJsonDocument(obj).toJson(QJsonDocument::Compact));
     publishString(update_config_pub_, payload);
-    addLog(QString("Config saved: %1").arg(key), "ok");
+    addTranslatedLog(QT_TR_NOOP("Configuration saved: %1"), {key}, "ok");
 }
 
 void CartridgeController::saveConfigBatch(const QString &jsonData)
@@ -383,13 +401,14 @@ void CartridgeController::saveConfigBatch(const QString &jsonData)
     QJsonParseError parseError;
     const QJsonDocument updatesDoc = QJsonDocument::fromJson(jsonData.toUtf8(), &parseError);
     if (parseError.error != QJsonParseError::NoError || !updatesDoc.isObject()) {
-        addLog("Config batch rejected: invalid JSON", "err");
+        addTranslatedLog(QT_TR_NOOP("Configuration batch rejected: invalid JSON"),
+                         {}, "err");
         return;
     }
 
     const QJsonObject updates = updatesDoc.object();
     if (updates.isEmpty()) {
-        addLog("Config unchanged: nothing to save", "info");
+        addTranslatedLog(QT_TR_NOOP("Configuration unchanged: nothing to save"));
         return;
     }
 
@@ -397,7 +416,8 @@ void CartridgeController::saveConfigBatch(const QString &jsonData)
     payload["updates"] = updates;
     publishString(update_config_pub_, QString::fromUtf8(
         QJsonDocument(payload).toJson(QJsonDocument::Compact)));
-    addLog(QString("Config batch sent: %1 values").arg(updates.size()), "info");
+    addTranslatedLog(QT_TR_NOOP("Configuration batch sent: %1 value(s)"),
+                     {QString::number(updates.size())});
 }
 
 // ── Log ───────────────────────────────────────────────────────────
@@ -411,6 +431,46 @@ void CartridgeController::addLog(const QString &msg, const QString &type)
     log_entries_.prepend(entry);
     if (log_entries_.size() > 200)
         log_entries_.removeLast();
+    emit logEntriesChanged();
+}
+
+void CartridgeController::addTranslatedLog(
+    const char *source, const QStringList &args, const QString &type)
+{
+    QVariantMap entry;
+    entry["time"] = QDateTime::currentDateTime().toString("HH:mm:ss");
+    entry["type"] = type;
+    entry["_source"] = QString::fromUtf8(source);
+    entry["_args"] = args;
+    log_entries_.prepend(entry);
+    if (log_entries_.size() > 200)
+        log_entries_.removeLast();
+    emit logEntriesChanged();
+}
+
+QVariantList CartridgeController::logEntries() const
+{
+    QVariantList localized;
+    localized.reserve(log_entries_.size());
+    for (const QVariant &value : log_entries_) {
+        QVariantMap entry = value.toMap();
+        const QString source = entry.take("_source").toString();
+        const QStringList args = entry.take("_args").toStringList();
+        if (!source.isEmpty()) {
+            const QByteArray sourceUtf8 = source.toUtf8();
+            QString message = QCoreApplication::translate(
+                "CartridgeController", sourceUtf8.constData());
+            for (const QString &argument : args)
+                message = message.arg(argument);
+            entry["msg"] = message;
+        }
+        localized.append(entry);
+    }
+    return localized;
+}
+
+void CartridgeController::refreshTranslations()
+{
     emit logEntriesChanged();
 }
 

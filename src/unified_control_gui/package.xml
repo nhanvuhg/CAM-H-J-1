@@ -9,12 +9,17 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
+  <depend>ament_index_cpp</depend>
+  <build_depend>qttools5-dev</build_depend>
+  <build_depend>qttools5-dev-tools</build_depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
   <depend>dobot_msgs_v3</depend>
   <depend>cv_bridge</depend>
   <depend>image_transport</depend>
+
+  <test_depend>ament_cmake_pytest</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

@@ -20,6 +20,46 @@
 #include <sstream>
 #include <thread>
 
+namespace {
+
+// Workspace suy ra lúc chạy thay vì hardcode. Binary được cài ở
+// <WS>/install/unified_control_gui/lib/unified_control_gui nên lùi 4 cấp là <WS>.
+QString resolveWorkspaceRoot()
+{
+    const QString fromEnv =
+        QProcessEnvironment::systemEnvironment().value("ROS2_WS");
+    if (!fromEnv.isEmpty() && QDir(fromEnv).exists()) {
+        return QDir(fromEnv).absolutePath();
+    }
+
+    QDir dir(QCoreApplication::applicationDirPath());
+    bool climbed = true;
+    for (int i = 0; i < 4 && climbed; ++i) climbed = dir.cdUp();
+    if (climbed && (dir.exists("install") || dir.exists("src"))) {
+        return dir.absolutePath();
+    }
+
+    return QDir::home().filePath("ros2_ws");
+}
+
+// Script restart được cài cạnh binary; vẫn giữ fallback sang cây nguồn để chạy
+// được cả khi workspace chưa install.
+QString resolveScriptPath(const QString &name)
+{
+    const QString ws = resolveWorkspaceRoot();
+    const QStringList candidates = {
+        QDir(QCoreApplication::applicationDirPath()).filePath(name),
+        ws + "/install/unified_control_gui/lib/unified_control_gui/" + name,
+        ws + "/src/unified_control_gui/scripts/" + name,
+    };
+    for (const QString &path : candidates) {
+        if (QFile::exists(path)) return path;
+    }
+    return QString();
+}
+
+}  // namespace
+
 RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     : QObject(parent)
     , node_(node)
@@ -365,13 +405,13 @@ void RobotController::callServiceAsync(rclcpp::Client<std_srvs::srv::SetBool>::S
     auto request = std::make_shared<std_srvs::srv::SetBool::Request>();
     request->data = value;
     client->async_send_request(request);
-    emit serviceCallResult(true, "Request sent");
+    emit serviceCallResult(true, tr("Request sent"));
 }
 
 QString RobotController::captureScreenshot()
 {
     if (screenshot_process_) {
-        const QString message = "Screenshot already in progress";
+        const QString message = tr("Screenshot already in progress");
         qWarning() << message;
         emit serviceCallResult(false, message);
         return QString();
@@ -379,7 +419,7 @@ QString RobotController::captureScreenshot()
 
     const QString outputDir = QDir::home().filePath("PicturesGUI");
     if (!QDir().mkpath(outputDir)) {
-        const QString message = "Cannot create screenshot directory: " + outputDir;
+        const QString message = tr("Cannot create screenshot directory: %1").arg(outputDir);
         qWarning() << message;
         emit serviceCallResult(false, message);
         return QString();
@@ -416,7 +456,7 @@ QString RobotController::captureScreenshot()
     } else {
         // Do not fall back to gnome-screenshot on Jetson: that path caused a
         // reproducible display/GPU reset. Failing closed is safer.
-        const QString message = "Screenshot failed: scrot is not installed";
+        const QString message = tr("Screenshot failed: scrot is not installed");
         qWarning() << message;
         emit serviceCallResult(false, message);
         screenshot_process_ = nullptr;
@@ -429,7 +469,7 @@ QString RobotController::captureScreenshot()
             if (screenshot_process_ != process) return;
             screenshot_process_ = nullptr;
             QFile::remove(outputPath);
-            const QString message = QString("Screenshot process error (%1): %2")
+            const QString message = tr("Screenshot process error (%1): %2")
                 .arg(static_cast<int>(error)).arg(process->errorString());
             qWarning() << message;
             emit serviceCallResult(false, message);
@@ -450,11 +490,11 @@ QString RobotController::captureScreenshot()
                          && outputInfo.size() > 0;
             if (ok) {
                 qDebug() << "Screenshot saved asynchronously:" << outputPath;
-                emit serviceCallResult(true, "Screenshot saved: " + outputPath);
+                emit serviceCallResult(true, tr("Screenshot saved: %1").arg(outputPath));
             } else {
                 QFile::remove(outputPath);
                 const QString message = err.isEmpty()
-                    ? QString("Screenshot failed (exit=%1)").arg(exitCode)
+                    ? tr("Screenshot failed (exit=%1)").arg(exitCode)
                     : err;
                 qWarning() << message;
                 emit serviceCallResult(false, message);
@@ -469,7 +509,7 @@ QString RobotController::captureScreenshot()
         screenshot_process_ = nullptr;
         process->kill();
         QFile::remove(outputPath);
-        const QString message = "Screenshot timed out after 10 seconds";
+        const QString message = tr("Screenshot timed out after 10 seconds");
         qWarning() << message;
         emit serviceCallResult(false, message);
         process->deleteLater();
@@ -483,14 +523,12 @@ QString RobotController::captureScreenshot()
 
 QString RobotController::restartSystemNodes()
 {
-    QString scriptPath = "/home/pi/ros2_ws/install/unified_control_gui/lib/unified_control_gui/restart_system_nodes.sh";
-    if (!QFile::exists(scriptPath)) {
-        scriptPath = "/home/pi/ros2_ws/src/unified_control_gui/scripts/restart_system_nodes.sh";
-    }
+    const QString workspace = resolveWorkspaceRoot();
+    const QString scriptPath = resolveScriptPath("restart_system_nodes.sh");
 
-    if (!QFile::exists(scriptPath)) {
-        const QString message = "Restart script not found";
-        qWarning() << message << scriptPath;
+    if (scriptPath.isEmpty()) {
+        const QString message = tr("Restart script not found");
+        qWarning() << message << workspace;
         emit serviceCallResult(false, message);
         return QString();
     }
@@ -499,22 +537,26 @@ QString RobotController::restartSystemNodes()
     if (!env.contains("DISPLAY") || env.value("DISPLAY").isEmpty()) {
         env.insert("DISPLAY", ":0");
     }
-    env.insert("ROS2_WS", "/home/pi/ros2_ws");
+    env.insert("ROS2_WS", workspace);
 
+    // Phải dùng overload non-static: bản static bỏ qua process environment nên
+    // ROS2_WS/DISPLAY set ở trên sẽ không tới được script.
     QProcess process;
+    process.setProgram("/bin/bash");
+    process.setArguments(QStringList() << scriptPath);
     process.setProcessEnvironment(env);
-    process.setWorkingDirectory("/home/pi/ros2_ws");
+    process.setWorkingDirectory(workspace);
 
     qint64 pid = 0;
-    const bool started = process.startDetached("/bin/bash", QStringList() << scriptPath, "/home/pi/ros2_ws", &pid);
+    const bool started = process.startDetached(&pid);
     if (!started) {
-        const QString message = "Cannot start restart script";
+        const QString message = tr("Cannot start restart script");
         qWarning() << message << scriptPath;
         emit serviceCallResult(false, message);
         return QString();
     }
 
-    const QString message = QString("Restarting system nodes (PID %1)").arg(pid);
+    const QString message = tr("Restarting system nodes (PID %1)").arg(pid);
     qDebug() << message;
     emit serviceCallResult(true, message);
     return message;
@@ -532,7 +574,7 @@ QString RobotController::restartGui()
             flag.close();
         }
 
-        const QString message = "Restarting GUI";
+        const QString message = tr("Restarting GUI");
         qDebug() << message;
         emit serviceCallResult(true, message);
         QTimer::singleShot(150, QCoreApplication::instance(), []() {
@@ -541,29 +583,38 @@ QString RobotController::restartGui()
         return message;
     }
 
-    QString scriptPath = "/home/pi/ros2_ws/install/unified_control_gui/lib/unified_control_gui/restart_gui.sh";
-    if (!QFile::exists(scriptPath)) {
-        scriptPath = "/home/pi/ros2_ws/src/unified_control_gui/scripts/restart_gui.sh";
-    }
-    if (!QFile::exists(scriptPath)) {
-        const QString message = "Restart GUI script not found";
-        qWarning() << message << scriptPath;
+    const QString workspace = resolveWorkspaceRoot();
+    const QString scriptPath = resolveScriptPath("restart_gui.sh");
+    if (scriptPath.isEmpty()) {
+        const QString message = tr("Restart GUI script not found");
+        qWarning() << message << workspace;
         emit serviceCallResult(false, message);
         return QString();
     }
+
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    if (!env.contains("DISPLAY") || env.value("DISPLAY").isEmpty()) {
+        env.insert("DISPLAY", ":0");
+    }
+    env.insert("ROS2_WS", workspace);
+
+    QProcess process;
+    process.setProgram("/bin/bash");
+    process.setArguments(QStringList() << scriptPath
+                                       << QString::number(QCoreApplication::applicationPid()));
+    process.setProcessEnvironment(env);
+    process.setWorkingDirectory(workspace);
 
     qint64 pid = 0;
-    const QString oldPid = QString::number(QCoreApplication::applicationPid());
-    const bool started = QProcess::startDetached("bash", QStringList() << scriptPath << oldPid,
-                                                 "/home/pi/ros2_ws", &pid);
+    const bool started = process.startDetached(&pid);
     if (!started) {
-        const QString message = "Cannot start Restart GUI script";
+        const QString message = tr("Cannot start Restart GUI script");
         qWarning() << message << scriptPath;
         emit serviceCallResult(false, message);
         return QString();
     }
 
-    const QString message = QString("Restarting GUI (PID %1)").arg(pid);
+    const QString message = tr("Restarting GUI (PID %1)").arg(pid);
     qDebug() << message;
     emit serviceCallResult(true, message);
     return message;
@@ -1545,7 +1596,7 @@ void RobotController::saveJointPose(const QString& name, double j1, double j2, d
 
     QFile file(yaml_path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        emit jointPoseSaved(false, "Cannot open YAML: " + yaml_path);
+        emit jointPoseSaved(false, tr("Cannot open YAML: %1").arg(yaml_path));
         return;
     }
     QString content = QString::fromUtf8(file.readAll());
@@ -1565,7 +1616,7 @@ void RobotController::saveJointPose(const QString& name, double j1, double j2, d
     // Find insertion point: last "- \"J," entry in the joints list
     int lastJIdx = content.lastIndexOf(QRegularExpression("      - \"J,"));
     if (lastJIdx < 0) {
-        emit jointPoseSaved(false, "Could not find joint pose list in YAML");
+        emit jointPoseSaved(false, tr("Could not find the joint pose list in YAML"));
         return;
     }
     // Find end of that line
@@ -1576,14 +1627,16 @@ void RobotController::saveJointPose(const QString& name, double j1, double j2, d
     content.insert(lineEnd + 1, newLine + "\n");
 
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
-        emit jointPoseSaved(false, "Cannot write YAML: " + yaml_path);
+        emit jointPoseSaved(false, tr("Cannot write YAML: %1").arg(yaml_path));
         return;
     }
     file.write(content.toUtf8());
     file.close();
 
-    QString msg = QString("Saved: \"%1\" → J(%.2f,%.2f,%.2f,%.2f,%.2f,%.2f)")
-        .arg(name).arg(j1).arg(j2).arg(j3).arg(j4).arg(j5).arg(j6);
+    const QString msg = tr("Saved: \"%1\" → J(%2, %3, %4, %5, %6, %7)")
+        .arg(name)
+        .arg(j1, 0, 'f', 2).arg(j2, 0, 'f', 2).arg(j3, 0, 'f', 2)
+        .arg(j4, 0, 'f', 2).arg(j5, 0, 'f', 2).arg(j6, 0, 'f', 2);
     qDebug() << "saveJointPose:" << msg;
     emit jointPoseSaved(true, msg);
 }
@@ -1633,7 +1686,7 @@ QVariantList RobotController::getSavedPoses()
                     if (parts.size() >= 6) {
                         QVariantMap map;
                         if (name.isEmpty()) {
-                            name = QString("Pose (index %1)").arg(list.size());
+                            name = tr("Pose (index %1)").arg(list.size());
                         }
                         map["name"] = name;
                         map["j1"] = parts[0].toDouble();

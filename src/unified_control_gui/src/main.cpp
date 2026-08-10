@@ -11,6 +11,7 @@
 #include "unified_control_gui/hp_controller.hpp"
 #include "unified_control_gui/auth_controller.hpp"
 #include "unified_control_gui/system_alert_controller.hpp"
+#include "unified_control_gui/language_controller.hpp"
 #include <thread>
 
 int main(int argc, char *argv[])
@@ -20,7 +21,12 @@ int main(int argc, char *argv[])
 
     rclcpp::init(argc, argv);
     QGuiApplication app(argc, argv);
+    QCoreApplication::setOrganizationName("RYNAN Technologies");
+    QCoreApplication::setApplicationName("UnifiedControlGUI");
     QQmlApplicationEngine engine;
+
+    auto languageController = new LanguageController(&engine, &app);
+    engine.rootContext()->setContextProperty("languageController", languageController);
 
     // Add qrc:/icons path for icons
     engine.addImportPath("qrc:/");
@@ -34,15 +40,21 @@ int main(int argc, char *argv[])
     camNode->loadTopicSelections();
     
     engine.rootContext()->setContextProperty("camNode", camNode.get());
+    QObject::connect(languageController, &LanguageController::languageChanged,
+                     camNode.get(), &CamNode::refreshTranslations);
 
     auto robotController = new RobotController(camNode);
     engine.rootContext()->setContextProperty("robotController", robotController);
 
     auto cartridgeController = new CartridgeController(camNode);
     engine.rootContext()->setContextProperty("cartridgeController", cartridgeController);
+    QObject::connect(languageController, &LanguageController::languageChanged,
+                     cartridgeController, &CartridgeController::refreshTranslations);
 
     auto systemAlertController = new SystemAlertController(camNode);
     engine.rootContext()->setContextProperty("systemAlertController", systemAlertController);
+    QObject::connect(languageController, &LanguageController::languageChanged,
+                     systemAlertController, &SystemAlertController::refreshTranslations);
     systemAlertController->setScaleIgnored(robotController->ignoreScale());
     QObject::connect(robotController, &RobotController::ignoreScaleChanged,
                      systemAlertController, [robotController, systemAlertController]() {
@@ -55,9 +67,13 @@ int main(int argc, char *argv[])
     auto hpNode = std::make_shared<rclcpp::Node>("hp_controller_node");
     auto hpController = new HpController(hpNode);
     engine.rootContext()->setContextProperty("hpController", hpController);
+    QObject::connect(languageController, &LanguageController::languageChanged,
+                     hpController, &HpController::refreshTranslations);
 
     auto authController = new AuthController(&app);
     engine.rootContext()->setContextProperty("authController", authController);
+    QObject::connect(languageController, &LanguageController::languageChanged,
+                     authController, &AuthController::refreshTranslations);
 
     // Load QML from the current user's workspace so Pi and Jetson render the
     // same live source tree. Fall back to qrc for installed-only deployments.

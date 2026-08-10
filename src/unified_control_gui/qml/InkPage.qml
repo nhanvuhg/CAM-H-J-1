@@ -60,7 +60,7 @@ Item {
 
                     MotionButton {
     opacity: down ? 0.8 : 1.0
-                        text: "◂   BACK"
+                        text: qsTr("◂   BACK")
                         Layout.preferredHeight: 50
                         Layout.preferredWidth: 120
                         font.pixelSize: 18; font.bold: true
@@ -79,7 +79,7 @@ Item {
                         Layout.fillWidth: true
                         Text {
                             anchors.centerIn: parent
-                            text: "LOADCELL & INK SYSTEM"
+                            text: qsTr("LOADCELL & INK SYSTEM")
                             font.pixelSize: 24; font.bold: true; color: "#67d0ff"
                         }
                     }
@@ -111,7 +111,7 @@ Item {
                     anchors.margins: 20
                     spacing: 12
 
-                    Text { text: "LIVE WEIGHT DISPLAY"; color: "#67d0ff"; font.pixelSize: 22; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: qsTr("LIVE WEIGHT DISPLAY"); color: "#67d0ff"; font.pixelSize: 22; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                     
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#163a52" }
                     
@@ -119,13 +119,15 @@ Item {
                         Layout.alignment: Qt.AlignHCenter
                         spacing: 20
                         Text {
-                            text: "● LOADCELL: " + scaleController.loadcellStatus
+                            text: qsTr("● LOADCELL: %1").arg(scaleController.loadcellStatus)
                             color: (scaleController.loadcellStatus == "OK" || scaleController.loadcellStatus == "SIM") ? "#3ed0b4" : "#f0735c"
                             font.pixelSize: 16
                             font.bold: true
                         }
                         Text {
-                            text: "Scale node: ● " + (scaleController.scaleNodeConnected ? "CONNECTED" : "DISCONNECTED")
+                            text: qsTr("Scale node: ● %1").arg(
+                                      scaleController.scaleNodeConnected
+                                      ? qsTr("CONNECTED") : qsTr("DISCONNECTED"))
                             color: scaleController.scaleNodeConnected ? "#3ed0b4" : "#f0735c"
                             font.pixelSize: 16
                             font.bold: true
@@ -153,7 +155,7 @@ Item {
                         Layout.fillWidth: true
                         spacing: 8
                         
-                        Text { text: "Status:"; color: "#9fb3c8"; font.pixelSize: 16 }
+                        Text { text: qsTr("Status:"); color: "#9fb3c8"; font.pixelSize: 16 }
                         Rectangle {
                             width: 140; height: 35; radius: 6
                             color: {
@@ -169,8 +171,8 @@ Item {
                         
                         Item { Layout.fillWidth: true }
                         
-                        Text { text: "Profile:"; color: "#9fb3c8"; font.pixelSize: 16 }
-                        Text { text: scaleController.activeProfile === "" ? "NOT SELECTED" : scaleController.activeProfile; color: "#67d0ff"; font.pixelSize: 18; font.bold: true }
+                        Text { text: qsTr("Profile:"); color: "#9fb3c8"; font.pixelSize: 16 }
+                        Text { text: scaleController.activeProfile === "" ? qsTr("NOT SELECTED") : scaleController.activeProfile; color: "#67d0ff"; font.pixelSize: 18; font.bold: true }
                     }
 
                     RowLayout {
@@ -181,7 +183,7 @@ Item {
                         
                         MotionButton {
     opacity: down ? 0.8 : 1.0
-                            text: "TARE"
+                            text: qsTr("TARE")
                             Layout.fillWidth: true; Layout.preferredHeight: 50; Layout.maximumHeight: 50
                             font.pixelSize: 16; font.bold: true
                             onClicked: scaleController.tare()
@@ -196,7 +198,7 @@ Item {
                         }
                         MotionButton {
     opacity: down ? 0.8 : 1.0
-                            text: "RESET TARE"
+                            text: qsTr("RESET TARE")
                             Layout.fillWidth: true; Layout.preferredHeight: 50; Layout.maximumHeight: 50
                             font.pixelSize: 16; font.bold: true
                             onClicked: scaleController.resetTare()
@@ -209,9 +211,9 @@ Item {
                     // ── MOVED: CALIBRATE SCALE ──
                     RowLayout {
                         Layout.fillWidth: true
-                        Text { text: "CALIBRATE SCALE"; color: "#67d0ff"; font.pixelSize: 18; font.bold: true }
+                        Text { text: qsTr("CALIBRATE SCALE"); color: "#67d0ff"; font.pixelSize: 18; font.bold: true }
                         Item { Layout.fillWidth: true }
-                        Text { text: "Status: " + scaleController.calStatus; color: "#f5a623"; font.pixelSize: 14; font.bold: true }
+                        Text { text: qsTr("Status: %1").arg(scaleController.calStatus); color: "#f5a623"; font.pixelSize: 14; font.bold: true }
                     }
 
                     Rectangle {
@@ -223,14 +225,14 @@ Item {
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 10
                             ColumnLayout {
-                                Text { text: "STEP 1 — Empty Scale"; color: "#ecc45a"; font.pixelSize: 14; font.bold: true }
-                                Text { text: "Ensure NOTHING is on the scale."; color: "#c7dcef"; font.pixelSize: 12 }
+                                Text { text: qsTr("STEP 1 — Empty Scale"); color: "#ecc45a"; font.pixelSize: 14; font.bold: true }
+                                Text { text: qsTr("Ensure NOTHING is on the scale."); color: "#c7dcef"; font.pixelSize: 12 }
                             }
                             Item { Layout.fillWidth: true }
                             MotionButton {
                                 id: setZeroBtn
     opacity: down ? 0.8 : 1.0
-                                text: "SET ZERO"
+                                text: qsTr("SET ZERO")
                                 Layout.preferredWidth: 120; Layout.preferredHeight: 35
                                 font.pixelSize: 14; font.bold: true
                                 onClicked: scaleController.startCalibration()
@@ -260,22 +262,22 @@ Item {
                                     spacing: 2
                                     Text {
                                         text: {
-                                            if (scaleController.calStatus === "WAITING_WEIGHT") return "STEP 2 — Place Standard Weight (Point 1/4)";
-                                            if (scaleController.calStatus === "CONTINUE_CAL_2/5") return "STEP 3 — Place Next Weight (Point 2/4)";
-                                            if (scaleController.calStatus === "CONTINUE_CAL_3/5") return "STEP 4 — Place Next Weight (Point 3/4)";
-                                            if (scaleController.calStatus === "CONTINUE_CAL_4/5") return "STEP 5 — Place Final Weight (Point 4/4)";
-                                            return "STEP 2 — Place Standard Weight";
+                                            if (scaleController.calStatus === "WAITING_WEIGHT") return qsTr("STEP 2 — Place Standard Weight (Point 1/4)");
+                                            if (scaleController.calStatus === "CONTINUE_CAL_2/5") return qsTr("STEP 3 — Place Next Weight (Point 2/4)");
+                                            if (scaleController.calStatus === "CONTINUE_CAL_3/5") return qsTr("STEP 4 — Place Next Weight (Point 3/4)");
+                                            if (scaleController.calStatus === "CONTINUE_CAL_4/5") return qsTr("STEP 5 — Place Final Weight (Point 4/4)");
+                                            return qsTr("STEP 2 — Place Standard Weight");
                                         }
                                         color: "#ecc45a"
                                         font.pixelSize: 13; font.bold: true
                                     }
                                     Text {
                                         text: {
-                                            if (scaleController.calStatus === "WAITING_WEIGHT") return "Suggested: 100g";
-                                            if (scaleController.calStatus === "CONTINUE_CAL_2/5") return "Suggested: 250g";
-                                            if (scaleController.calStatus === "CONTINUE_CAL_3/5") return "Suggested: 500g";
-                                            if (scaleController.calStatus === "CONTINUE_CAL_4/5") return "Suggested: 1000g";
-                                            return "Enter known weight below";
+                                            if (scaleController.calStatus === "WAITING_WEIGHT") return qsTr("Suggested: 100 g");
+                                            if (scaleController.calStatus === "CONTINUE_CAL_2/5") return qsTr("Suggested: 250 g");
+                                            if (scaleController.calStatus === "CONTINUE_CAL_3/5") return qsTr("Suggested: 500 g");
+                                            if (scaleController.calStatus === "CONTINUE_CAL_4/5") return qsTr("Suggested: 1000 g");
+                                            return qsTr("Enter the known weight below");
                                         }
                                         color: "#9fb3c8"; font.pixelSize: 11
                                     }
@@ -312,7 +314,7 @@ Item {
                                 Layout.fillWidth: true; spacing: 6
                                 TextField {
                                     id: tfCalW
-                                    placeholderText: "Enter value (g)"; placeholderTextColor: "#9fb3c8"
+                                    placeholderText: qsTr("Enter value (g)"); placeholderTextColor: "#9fb3c8"
                                     Layout.fillWidth: true; Layout.preferredHeight: 45
                                     font.pixelSize: 24; font.bold: true; color: "#f5a623"
                                     horizontalAlignment: TextInput.AlignHCenter
@@ -334,7 +336,7 @@ Item {
                                 MotionButton {
                                     id: applyStep2Btn
     opacity: down ? 0.8 : 1.0
-                                    text: scaleController.calStatus === "CONTINUE_CAL_4/5" ? "FINISH" : "APPLY"
+                                    text: scaleController.calStatus === "CONTINUE_CAL_4/5" ? qsTr("FINISH") : qsTr("APPLY")
                                     Layout.preferredWidth: 120; Layout.preferredHeight: 45
                                     font.pixelSize: 18; font.bold: true
                                     onClicked: {
@@ -358,7 +360,7 @@ Item {
 
                     Rectangle { Layout.fillWidth: true; height: 2; color: "#163a52" }
 
-                    Text { text: "PRODUCTION RESULTS"; color: "#67d0ff"; font.pixelSize: 18; font.bold: true; font.letterSpacing: 2; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: qsTr("PRODUCTION RESULTS"); color: "#67d0ff"; font.pixelSize: 18; font.bold: true; font.letterSpacing: 2; Layout.alignment: Qt.AlignHCenter }
 
                     // ── STAT CARDS ROW ──
                     RowLayout {
@@ -369,9 +371,9 @@ Item {
                             color: "#081627"; border.color: "#36b6ff"; border.width: 2
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-                                Text { text: "TOTAL"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: qsTr("TOTAL"); color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
                                 Text { text: scaleController.totalBatch.toString(); color: "#fff"; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "batch"; color: "#74899f"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: qsTr("batch"); color: "#74899f"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                         // PASS card
@@ -380,9 +382,9 @@ Item {
                             color: "#0a2418"; border.color: "#3ed0b4"; border.width: 2
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-                                Text { text: "✓ PASS"; color: "#3ed0b4"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: qsTr("✓ PASS"); color: "#3ed0b4"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
                                 Text { text: scaleController.passBatch.toString(); color: "#3ed0b4"; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "batch"; color: "#0a2e24"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: qsTr("batch"); color: "#0a2e24"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                         // FAIL card
@@ -391,9 +393,9 @@ Item {
                             color: "#220c0b"; border.color: "#f0735c"; border.width: 2
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-                                Text { text: "✗ FAIL"; color: "#f5a394"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: qsTr("✗ FAIL"); color: "#f5a394"; font.pixelSize: 14; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
                                 Text { text: scaleController.failBatch.toString(); color: "#f0735c"; font.pixelSize: 40; font.bold: true; font.family: "monospace"; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "batch"; color: "#b53527"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: qsTr("batch"); color: "#b53527"; font.pixelSize: 12; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                     }
@@ -407,13 +409,13 @@ Item {
                             border.color: scaleController.consecFails >= 3 ? "#f0735c" : "#14263c"; border.width: 1
                             RowLayout {
                                 anchors.centerIn: parent; spacing: 8
-                                Text { text: "⚠ CONSECUTIVE FAILS:"; color: "#9fb3c8"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
+                                Text { text: qsTr("⚠ CONSECUTIVE FAILS:"); color: "#9fb3c8"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
                                 Text { text: scaleController.consecFails.toString(); color: scaleController.consecFails >= 3 ? "#f0735c" : "#f5a623"; font.pixelSize: 28; font.bold: true; font.family: "monospace" }
                             }
                         }
                         MotionButton {
     opacity: down ? 0.8 : 1.0
-                            text: "RESET BATCH"
+                            text: qsTr("RESET BATCH")
                             Layout.preferredWidth: 130; Layout.preferredHeight: 48
                             font.pixelSize: 16; font.bold: true
                             onClicked: scaleController.resetBatch()
@@ -443,7 +445,7 @@ Item {
                     spacing: 15
 
                     // Title
-                    Text { text: "INK PROFILES"; color: "#67d0ff"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: qsTr("INK PROFILES"); color: "#67d0ff"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
                     
                     // ── MỤC CHỌN MỰC TƯƠNG TỰ 'SELECT MODE' ──
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#14263c"; opacity: 0.5 }
@@ -455,7 +457,7 @@ Item {
                         // Cột 1: Chọn Mực
                         ColumnLayout {
                             Layout.fillWidth: true
-                            Text { text: "SELECT INK PROFILE"; color: "#67d0ff"; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1 }
+                            Text { text: qsTr("SELECT INK PROFILE"); color: "#67d0ff"; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1 }
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 36; radius: 4
                                 color: "#06101d"; border.color: "#f5a623"; border.width: 1
@@ -477,13 +479,13 @@ Item {
                                                 width: parent.width; height: 30; color: "#0c1726"
                                                 Row {
                                                     anchors.fill: parent; spacing: 0
-                                                    Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
+                                                    Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("No."); color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: "#14263c" }
-                                                    Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "INK NAME"; color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
+                                                    Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("INK NAME"); color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: "#14263c" }
-                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "CART WEIGHT"; color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
+                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("CART WEIGHT"); color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: "#14263c" }
-                                                    Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DEL"; color: "#f0735c"; font.pixelSize: 11; font.bold: true } }
+                                                    Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("DEL"); color: "#f0735c"; font.pixelSize: 11; font.bold: true } }
                                                 }
                                             }
                                             Rectangle { width: parent.width; height: 2; color: "#f5a623" }
@@ -526,7 +528,7 @@ Item {
                         // Cột 2: Chọn Vỏ
                         ColumnLayout {
                             Layout.fillWidth: true
-                            Text { text: "SELECT CARTRIDGE TYPE"; color: "#67d0ff"; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1 }
+                            Text { text: qsTr("SELECT CARTRIDGE TYPE"); color: "#67d0ff"; font.pixelSize: 13; font.bold: true; font.letterSpacing: 1 }
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 36; radius: 4
                                 color: "#06101d"; border.color: "#f5a623"; border.width: 1
@@ -547,13 +549,13 @@ Item {
                                                 width: parent.width; height: 30; color: "#0c1726"
                                                 Row {
                                                     anchors.fill: parent; spacing: 0
-                                                    Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
+                                                    Item { width: parent.width * 0.12; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("No."); color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: "#14263c" }
-                                                    Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "CART NAME"; color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
+                                                    Item { width: parent.width * 0.48 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("CART NAME"); color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: "#14263c" }
-                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DENSITY"; color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
+                                                    Item { width: parent.width * 0.28 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("DENSITY"); color: "#67d0ff"; font.pixelSize: 12; font.bold: true } }
                                                     Rectangle { width: 1; height: parent.height; color: "#14263c" }
-                                                    Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DEL"; color: "#f0735c"; font.pixelSize: 11; font.bold: true } }
+                                                    Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("DEL"); color: "#f0735c"; font.pixelSize: 11; font.bold: true } }
                                                 }
                                             }
                                             Rectangle { width: parent.width; height: 2; color: "#f5a623" }
@@ -605,15 +607,15 @@ Item {
 
                             // Row 1
                             RowLayout {
-                                Text { text: "INK NAME:"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true }
+                                Text { text: qsTr("INK NAME:"); color: "#9fb3c8"; font.pixelSize: 14; font.bold: true }
                                 Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).name : "--"; color: "#f5a623"; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
-                                Text { text: "DENSITY:"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true }
+                                Text { text: qsTr("DENSITY:"); color: "#9fb3c8"; font.pixelSize: 14; font.bold: true }
                                 Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).density.toFixed(2) + " g" : "--"; color: "#f5a623"; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
-                                Text { text: "RELATIVE ERROR (g):"; color: "#67d0ff"; font.pixelSize: 14; font.bold: true }
+                                Text { text: qsTr("RELATIVE ERROR (g):"); color: "#67d0ff"; font.pixelSize: 14; font.bold: true }
                                 Rectangle {
                                     width: 70; height: 35; color: "#06101d"; border.color: "#67d0ff"; border.width: 1; radius: 4
                                     TextInput {
@@ -628,15 +630,15 @@ Item {
 
                             // Row 2
                             RowLayout {
-                                Text { text: "CARTRIDGE TYPE:"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true }
+                                Text { text: qsTr("CARTRIDGE TYPE:"); color: "#9fb3c8"; font.pixelSize: 14; font.bold: true }
                                 Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).name : "--"; color: "#f5a623"; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
-                                Text { text: "CART WEIGHT:"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true }
+                                Text { text: qsTr("CART WEIGHT:"); color: "#9fb3c8"; font.pixelSize: 14; font.bold: true }
                                 Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).density.toFixed(2) + " g" : "--"; color: "#f5a623"; font.pixelSize: 18; font.bold: true; font.family: "monospace" }
                             }
                             RowLayout {
-                                Text { text: "ML FILL (ml):"; color: "#67d0ff"; font.pixelSize: 14; font.bold: true }
+                                Text { text: qsTr("ML FILL (ml):"); color: "#67d0ff"; font.pixelSize: 14; font.bold: true }
                                 Rectangle {
                                     width: 70; height: 35; color: "#06101d"; border.color: "#67d0ff"; border.width: 1; radius: 4
                                     TextInput {
@@ -666,7 +668,7 @@ Item {
 
                             // Row 3: Current ML Fill
                             RowLayout {
-                                Text { text: "CURRENT ML FILL:"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true }
+                                Text { text: qsTr("CURRENT ML FILL:"); color: "#9fb3c8"; font.pixelSize: 14; font.bold: true }
                                 Rectangle {
                                     width: 80; height: 35; color: "#06101d"; border.color: "#36b6ff"; border.width: 1; radius: 4
                                     Text {
@@ -681,7 +683,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                                 MotionButton {
     opacity: down ? 0.8 : 1.0
-                                    text: "APPLY TARGET (RUN)"
+                                    text: qsTr("APPLY TARGET (RUN)")
                                     Layout.preferredHeight: 50; Layout.preferredWidth: 240
                                     background: Rectangle { color: "#36b6ff"; radius: 5 }
                                     contentItem: Text { text: parent.text; font.pixelSize: 16; font.bold: true; color: "#000"; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
@@ -700,7 +702,7 @@ Item {
                                 }
                                 MotionButton {
     opacity: down ? 0.8 : 1.0
-                                    text: "CLEAR SELECTION"
+                                    text: qsTr("CLEAR SELECTION")
                                     Layout.preferredHeight: 50; Layout.preferredWidth: 160
                                     background: Rectangle { color: "#2c0c0b"; border.color: "#f0735c"; border.width: 1; radius: 5 }
                                     contentItem: Text { text: parent.text; font.pixelSize: 13; font.bold: true; color: "#f0735c"; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
@@ -721,21 +723,21 @@ Item {
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 65; color: "#04080f"; border.color: "#163a52"; border.width: 1; radius: 6
                             Column { anchors.centerIn: parent; spacing: 2
-                                Text { text: "TOTAL BATCH (g)"; color: "#9fb3c8"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: qsTr("TOTAL BATCH (g)"); color: "#9fb3c8"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                 Text { text: scaleController.totalBatchWeight.toFixed(2); color: "#1f86e0"; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
                             }
                         }
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 65; color: "#04080f"; border.color: "#f5a623"; border.width: 1; radius: 6
                             Column { anchors.centerIn: parent; spacing: 2
-                                Text { text: "MIN WEIGHT (g)"; color: "#f5a623"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: qsTr("MIN WEIGHT (g)"); color: "#f5a623"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                 Text { text: scaleController.minWeight.toFixed(2); color: "#f5a623"; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
                             }
                         }
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 65; color: "#04080f"; border.color: "#3ed0b4"; border.width: 1; radius: 6
                             Column { anchors.centerIn: parent; spacing: 2
-                                Text { text: "MAX WEIGHT (g)"; color: "#3ed0b4"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+                                Text { text: qsTr("MAX WEIGHT (g)"); color: "#3ed0b4"; font.pixelSize: 13; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                 Text { text: scaleController.maxWeight.toFixed(2); color: "#3ed0b4"; font.pixelSize: 22; font.bold: true; font.family: "monospace"; anchors.horizontalCenter: parent.horizontalCenter }
                             }
                         }
@@ -745,7 +747,7 @@ Item {
 
                     // --- ROW 4: CREATE PROFILE ---
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#14263c"; opacity: 0.5 }
-                    Text { text: "CREATE NEW PROFILE"; color: "#67d0ff"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
+                    Text { text: qsTr("CREATE NEW PROFILE"); color: "#67d0ff"; font.pixelSize: 20; font.bold: true; font.letterSpacing: 1.5 }
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -756,13 +758,13 @@ Item {
                             Layout.fillWidth: true; Layout.preferredHeight: 180; color: "transparent"; border.color: "#163a52"; border.width: 2; radius: 6
                             GridLayout {
                                 anchors.fill: parent; anchors.margins: 15; columns: 2; columnSpacing: 15; rowSpacing: 15
-                                Text { text: "INK NAME"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "CART WEIGHT (g)"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: qsTr("INK NAME"); color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: qsTr("CART WEIGHT (g)"); color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                                 
                                 Rectangle {
                                     Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#06101d"; border.color: "#67d0ff"; border.width: 2; radius: 4
                                     TextInput { id: newInkName; anchors.fill: parent; anchors.margins: 4; color: "#fff"; font.pixelSize: 18; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true }
-                                    Text { anchors.centerIn: parent; text: "--Type Ink Name--"; color: "#74899f"; font.pixelSize: 15; font.italic: true; visible: newInkName.text.length === 0 && !newInkName.activeFocus }
+                                    Text { anchors.centerIn: parent; text: qsTr("--Type Ink Name--"); color: "#74899f"; font.pixelSize: 15; font.italic: true; visible: newInkName.text.length === 0 && !newInkName.activeFocus }
                                 }
                                 Rectangle {
                                     Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#06101d"; border.color: "#67d0ff"; border.width: 2; radius: 4
@@ -771,7 +773,7 @@ Item {
                                 
                                 MotionButton {
     opacity: down ? 0.8 : 1.0
-                                    text: "SAVE INK"
+                                    text: qsTr("SAVE INK")
                                     Layout.preferredHeight: 45; Layout.fillWidth: true; Layout.columnSpan: 2; background: Rectangle { color: "#04080f"; border.color: "#67d0ff"; border.width: 2; radius: 6 }
                                     contentItem: Text { text: parent.text; color: "#67d0ff"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
                                     onClicked: {
@@ -790,13 +792,13 @@ Item {
                             Layout.fillWidth: true; Layout.preferredHeight: 180; color: "transparent"; border.color: "#163a52"; border.width: 2; radius: 6
                             GridLayout {
                                 anchors.fill: parent; anchors.margins: 15; columns: 2; columnSpacing: 15; rowSpacing: 15
-                                Text { text: "CART NAME"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-                                Text { text: "DENSITY (g)"; color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: qsTr("CART NAME"); color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                                Text { text: qsTr("DENSITY (g)"); color: "#9fb3c8"; font.pixelSize: 14; font.bold: true; Layout.alignment: Qt.AlignHCenter }
                                 
                                 Rectangle {
                                     Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#06101d"; border.color: "#67d0ff"; border.width: 2; radius: 4
                                     TextInput { id: newCartName; anchors.fill: parent; anchors.margins: 4; color: "#fff"; font.pixelSize: 18; font.bold: true; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter; clip: true }
-                                    Text { anchors.centerIn: parent; text: "--Type Cart Name--"; color: "#74899f"; font.pixelSize: 15; font.italic: true; visible: newCartName.text.length === 0 && !newCartName.activeFocus }
+                                    Text { anchors.centerIn: parent; text: qsTr("--Type Cart Name--"); color: "#74899f"; font.pixelSize: 15; font.italic: true; visible: newCartName.text.length === 0 && !newCartName.activeFocus }
                                 }
                                 Rectangle {
                                     Layout.fillWidth: true; Layout.preferredHeight: 40; color: "#06101d"; border.color: "#67d0ff"; border.width: 2; radius: 4
@@ -805,7 +807,7 @@ Item {
                                 
                                 MotionButton {
     opacity: down ? 0.8 : 1.0
-                                    text: "SAVE CART"
+                                    text: qsTr("SAVE CART")
                                     Layout.preferredHeight: 45; Layout.fillWidth: true; Layout.columnSpan: 2; background: Rectangle { color: "#04080f"; border.color: "#67d0ff"; border.width: 2; radius: 6 }
                                     contentItem: Text { text: parent.text; color: "#67d0ff"; font.pixelSize: 16; font.bold: true; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
                                     onClicked: {
@@ -842,13 +844,13 @@ Item {
             anchors.leftMargin: 12; anchors.rightMargin: 8
             spacing: 10
             Text {
-                text: "⚠  TEMPO NOT YET TARED — press TARE to clear drift"
+                text: qsTr("⚠  SCALE NOT YET TARED — press TARE to clear drift")
                 color: "#0c1726"; font.pixelSize: 16; font.bold: true
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
             MotionButton {
-                text: "TARE"
+                text: qsTr("TARE")
                 Layout.preferredWidth: 80; Layout.preferredHeight: 28
                 font.pixelSize: 13; font.bold: true
                 background: Rectangle { color: "#ffffff"; radius: 4 }
@@ -873,12 +875,12 @@ Item {
         background: Rectangle { color: "#f0735c"; radius: 10 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 20
-            Text { text: "WARNING: OVERLOAD!"; color: "#fff"; font.pixelSize: 26; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-            Text { text: "Scale load exceeds maximum limit. Check immediately."; color: "#fff"; font.pixelSize: 18; Layout.alignment: Qt.AlignHCenter }
+            Text { text: qsTr("WARNING: OVERLOAD!"); color: "#fff"; font.pixelSize: 26; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+            Text { text: qsTr("Scale load exceeds the maximum limit. Check immediately."); color: "#fff"; font.pixelSize: 18; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
             MotionButton {
     opacity: down ? 0.8 : 1.0
-                text: "ACKNOWLEDGE"
+                text: qsTr("ACKNOWLEDGE")
                 Layout.alignment: Qt.AlignHCenter
                 font.pixelSize: 18; font.bold: true
                 onClicked: { scaleController.ackOverload(); overloadPopup.close() }
@@ -897,15 +899,15 @@ Item {
         background: Rectangle { color: "#f5a623"; radius: 10 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 20
-            Text { text: "Zero Drift Warning"; color: "#fff"; font.pixelSize: 26; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-            Text { text: "Loadcell zero drift detected. Re-tare recommended."; color: "#fff"; font.pixelSize: 18; Layout.alignment: Qt.AlignHCenter }
+            Text { text: qsTr("Zero Drift Warning"); color: "#fff"; font.pixelSize: 26; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+            Text { text: qsTr("Loadcell zero drift detected. Re-tare is recommended."); color: "#fff"; font.pixelSize: 18; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 20
                 MotionButton {
                     opacity: down ? 0.8 : 1.0
-                    text: "TARE NOW"
+                    text: qsTr("TARE NOW")
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 45
                     font.pixelSize: 18; font.bold: true
@@ -915,7 +917,7 @@ Item {
                 }
                 MotionButton {
                     opacity: down ? 0.8 : 1.0
-                    text: "NO"
+                    text: qsTr("NO")
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 45
                     font.pixelSize: 18; font.bold: true
@@ -946,7 +948,7 @@ Item {
         background: Rectangle { color: "#06101d"; radius: 12; border.color: "#67d0ff"; border.width: 2 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 15; spacing: 8
-            Text { text: "ENTER VALUE (g)"; color: "#67d0ff"; font.pixelSize: 16; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+            Text { text: qsTr("ENTER VALUE (g)"); color: "#67d0ff"; font.pixelSize: 16; font.bold: true; Layout.alignment: Qt.AlignHCenter }
             Rectangle {
                 Layout.fillWidth: true; Layout.preferredHeight: 50; radius: 6
                 color: "#081627"; border.color: "#f5a623"; border.width: 2
@@ -1008,7 +1010,7 @@ Item {
                 Layout.fillWidth: true; spacing: 10
                 MotionButton {
     opacity: down ? 0.8 : 1.0
-                    text: "CANCEL"; Layout.fillWidth: true; Layout.preferredHeight: 44
+                    text: qsTr("CANCEL"); Layout.fillWidth: true; Layout.preferredHeight: 44
                     font.pixelSize: 14; font.bold: true
                     onClicked: numpadPopup.close()
                     background: Rectangle { radius: 6; color: "#2c0c0b"; border.color: "#f0735c" }
@@ -1016,7 +1018,7 @@ Item {
                 }
                 MotionButton {
     opacity: down ? 0.8 : 1.0
-                    text: "OK"; Layout.fillWidth: true; Layout.preferredHeight: 44
+                    text: qsTr("OK"); Layout.fillWidth: true; Layout.preferredHeight: 44
                     font.pixelSize: 14; font.bold: true
                     onClicked: {
                         if (inkPageRoot.numpadTarget) {

@@ -10,7 +10,7 @@ Item {
     implicitHeight: width * 9 / 16 + 45
     height: implicitHeight
 
-    property string cameraName: "Camera"
+    property string cameraName: qsTr("Camera")
     property string topic: "/camera/image_raw"
     property string providerId: "cam"
     property int camIndex: 0

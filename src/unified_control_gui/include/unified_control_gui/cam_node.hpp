@@ -28,6 +28,7 @@ public:
     Q_INVOKABLE void refreshTopics();
     Q_INVOKABLE void saveTopicSelections();
     Q_INVOKABLE void loadTopicSelections();
+    void refreshTranslations();
 
     QVariantList cameraList() const;
 

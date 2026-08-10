@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
@@ -37,7 +38,7 @@ public:
     QString servoPositions()   const { return servo_positions_; }
     QString configData()       const { return config_data_; }
     QString lastNotification() const { return last_notification_; }
-    QVariantList logEntries()  const { return log_entries_; }
+    QVariantList logEntries()  const;
     QString sensorState()      const { return sensor_state_; }
     QString stateIn()          const { return state_in_; }
     QString stateOut()         const { return state_out_; }
@@ -79,6 +80,7 @@ public slots:
 
     // Log
     void clearLog();
+    void refreshTranslations();
 
 signals:
     void systemStateChanged();
@@ -141,6 +143,8 @@ private:
     void publishString(rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub, const QString &data);
     void publishBool(rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub, bool value);
     void addLog(const QString &msg, const QString &type = "info");
+    void addTranslatedLog(const char *source, const QStringList &args = {},
+                          const QString &type = "info");
 };
 
 #endif // CARTRIDGE_CONTROLLER_HPP

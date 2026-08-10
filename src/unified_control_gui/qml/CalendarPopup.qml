@@ -37,9 +37,14 @@ Popup {
     readonly property color cCell:     "#07131f"
     readonly property color cCellDown: "#123241"
 
-    readonly property var monthNames: ["January", "February", "March", "April",
-                                       "May", "June", "July", "August",
-                                       "September", "October", "November", "December"]
+    // Keep localized display names separate from the numeric month used by
+    // date arithmetic. The binding is rebuilt when the translator changes.
+    readonly property var monthNames: [qsTr("January"), qsTr("February"),
+                                       qsTr("March"), qsTr("April"),
+                                       qsTr("May"), qsTr("June"),
+                                       qsTr("July"), qsTr("August"),
+                                       qsTr("September"), qsTr("October"),
+                                       qsTr("November"), qsTr("December")]
 
     // Range offered by the year wheel: 2020 through the current year, which is
     // 2020-2026 today. Bounded by the clock rather than a literal 2026 so the
@@ -214,7 +219,9 @@ Popup {
                 spacing: 4
                 visible: !cal.pickerMode
                 Repeater {
-                    model: ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+                    model: [qsTr("Mon"), qsTr("Tue"), qsTr("Wed"),
+                            qsTr("Thu"), qsTr("Fri"), qsTr("Sat"),
+                            qsTr("Sun")]
                     delegate: Text {
                         width: (parent.width - 6 * 4) / 7
                         horizontalAlignment: Text.AlignHCenter
@@ -373,7 +380,7 @@ Popup {
                 border.color: cal.cBorder; border.width: 1
                 Text {
                     anchors.centerIn: parent
-                    text: cal.pickerMode ? "DONE" : "TODAY"
+                    text: cal.pickerMode ? qsTr("DONE") : qsTr("TODAY")
                     color: cal.cText; font.pixelSize: 13; font.bold: true
                     font.letterSpacing: 1.1
                 }

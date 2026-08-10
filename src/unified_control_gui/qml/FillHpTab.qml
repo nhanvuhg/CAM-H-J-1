@@ -112,32 +112,32 @@ Item {
     }
     function getSensorLabel(key) {
         var mapping = {
-            "start_button": "Start button",
-            "stop_button": "Stop button",
-            "optical_sensor": "Optical sensor",
-            "ball_feed_down": "Ball feed down",
-            "ball_feed_up": "Ball feed up",
-            "ball_push_down": "Ball push down",
-            "ball_push_up": "Ball push up",
-            "chamber_open": "Chamber open",
-            "chamber_closed": "Chamber closed",
-            "seal_pin_down": "Seal pin down",
-            "seal_pin_up": "Seal pin up",
-            "fix_cylinder_down": "Fix cyl down",
-            "fix_cylinder_up": "Fix cyl up",
-            "ball_box_empty": "Ball box empty",
-            "safety_i_4_i04": "Safety I_4_i04",
-            "safety_i_5_i04": "Safety I_5_i04",
-            "safety_area_clear": "Safety area clear"
+            "start_button": qsTr("Start button"),
+            "stop_button": qsTr("Stop button"),
+            "optical_sensor": qsTr("Optical sensor"),
+            "ball_feed_down": qsTr("Ball feed down"),
+            "ball_feed_up": qsTr("Ball feed up"),
+            "ball_push_down": qsTr("Ball push down"),
+            "ball_push_up": qsTr("Ball push up"),
+            "chamber_open": qsTr("Chamber open"),
+            "chamber_closed": qsTr("Chamber closed"),
+            "seal_pin_down": qsTr("Seal pin down"),
+            "seal_pin_up": qsTr("Seal pin up"),
+            "fix_cylinder_down": qsTr("Fix cylinder down"),
+            "fix_cylinder_up": qsTr("Fix cylinder up"),
+            "ball_box_empty": qsTr("Ball box empty"),
+            "safety_i_4_i04": qsTr("Safety I_4_i04"),
+            "safety_i_5_i04": qsTr("Safety I_5_i04"),
+            "safety_area_clear": qsTr("Safety area clear")
         };
         if (mapping[key] !== undefined) {
             return mapping[key];
         }
         if (key.indexOf("mag_") === 0) {
-            return "Mag " + key.substring(4);
+            return qsTr("Mag %1").arg(key.substring(4));
         }
         if (key.indexOf("tube_") === 0) {
-            return "Tube " + key.substring(5);
+            return qsTr("Tube %1").arg(key.substring(5));
         }
         return key;
     }
@@ -161,7 +161,8 @@ Item {
     }
     function getCartridgeStats() {
         var list = hpController.cartridgePressures;
-        if (!list || list.length === 0) return "Min 0.0   Avg 0.0   Max\n0.0 mbar";
+        if (!list || list.length === 0)
+            return qsTr("Min %1   Avg %2   Max\n%3 mbar").arg("0.0").arg("0.0").arg("0.0");
         var minVal = Number.MAX_VALUE;
         var maxVal = -Number.MAX_VALUE;
         var sum = 0.0;
@@ -175,9 +176,11 @@ Item {
                 count++;
             }
         }
-        if (count === 0) return "Min 0.0   Avg 0.0   Max\n0.0 mbar";
+        if (count === 0)
+            return qsTr("Min %1   Avg %2   Max\n%3 mbar").arg("0.0").arg("0.0").arg("0.0");
         var avgVal = sum / count;
-        return "Min " + minVal.toFixed(1) + "   Avg " + avgVal.toFixed(1) + "   Max\n" + maxVal.toFixed(1) + " mbar";
+        return qsTr("Min %1   Avg %2   Max\n%3 mbar")
+            .arg(minVal.toFixed(1)).arg(avgVal.toFixed(1)).arg(maxVal.toFixed(1));
     }
     // Parse valveState format "v1=open:on,v2=ink:on,..." -> { v1: {label, state} }
     function parseValveState(rawStr) {
@@ -295,60 +298,60 @@ Item {
     // ---- Static models ported from PAGE 4 (DO NOT change id/statusKey/a/b
     //      — must match hp_controller publishManual topic format) ----
     property var valveModel: [
-        { id: "valve1",        statusKey: "v1",      label: "V1 (Main)",       a: "open",    b: "close" },
-        { id: "valve2",        statusKey: "v2",      label: "V2 (Air/Ink)",    a: "air",     b: "ink" },
-        { id: "valve4",        statusKey: "v4",      label: "V4 (Main Air)",   a: "on",      b: "off" },
-        { id: "valve5",        statusKey: "v5",      label: "V5 (Tank ret)",   a: "open",    b: "close" },
-        { id: "valve6",        statusKey: "v6",      label: "V6 (Clean)",      a: "open",    b: "close" },
-        { id: "valve7",        statusKey: "v7",      label: "V7 (Purge Ink)",  a: "on",      b: "off" },
-        { id: "valve8",        statusKey: "v8",      label: "V8 (Purge Air)",  a: "on",      b: "off" },
-        { id: "valve9",        statusKey: "v9",      label: "V9 (Waste/Ch)",   a: "chamber", b: "waste" },
-        { id: "valve_chamber", statusKey: "vchamber",label: "V Chamber",       a: "on",      b: "off" },
-        { id: "vacuum",        statusKey: "pump",    label: "Vacuum Pump",     a: "on",      b: "off" }
+        { id: "valve1",        statusKey: "v1",      label: qsTr("V1 (Main)"),       a: "open",    b: "close" },
+        { id: "valve2",        statusKey: "v2",      label: qsTr("V2 (Air/Ink)"),    a: "air",     b: "ink" },
+        { id: "valve4",        statusKey: "v4",      label: qsTr("V4 (Main Air)"),   a: "on",      b: "off" },
+        { id: "valve5",        statusKey: "v5",      label: qsTr("V5 (Tank return)"), a: "open",    b: "close" },
+        { id: "valve6",        statusKey: "v6",      label: qsTr("V6 (Clean)"),      a: "open",    b: "close" },
+        { id: "valve7",        statusKey: "v7",      label: qsTr("V7 (Purge Ink)"),  a: "on",      b: "off" },
+        { id: "valve8",        statusKey: "v8",      label: qsTr("V8 (Purge Air)"),  a: "on",      b: "off" },
+        { id: "valve9",        statusKey: "v9",      label: qsTr("V9 (Waste/Chamber)"), a: "chamber", b: "waste" },
+        { id: "valve_chamber", statusKey: "vchamber",label: qsTr("V Chamber"),       a: "on",      b: "off" },
+        { id: "vacuum",        statusKey: "pump",    label: qsTr("Vacuum Pump"),     a: "on",      b: "off" }
     ]
     property var cylinderModel: [
-        { id: "chamber",   statusKey: "cyl_ch",   label: "Chamber Cyl",   a: "close", b: "open" },
-        { id: "cartridge", statusKey: "cyl_cart", label: "Cartridge Cyl", a: "down",  b: "up" },
-        { id: "ball_feed", statusKey: "cyl_bf",   label: "Ball Feed Cyl", a: "up",    b: "down" },
-        { id: "ball_push", statusKey: "cyl_bp",   label: "Ball Push Cyl", a: "up",    b: "down" },
-        { id: "seal_pin",  statusKey: "cyl_seal", label: "Seal Pin Cyl",  a: "up",    b: "down" },
-        { id: "fix_cyl",   statusKey: "cyl_fix",  label: "Fix Cylinder",  a: "up",    b: "down" }
+        { id: "chamber",   statusKey: "cyl_ch",   label: qsTr("Chamber Cylinder"),   a: "close", b: "open" },
+        { id: "cartridge", statusKey: "cyl_cart", label: qsTr("Cartridge Cylinder"), a: "down",  b: "up" },
+        { id: "ball_feed", statusKey: "cyl_bf",   label: qsTr("Ball Feed Cylinder"), a: "up",    b: "down" },
+        { id: "ball_push", statusKey: "cyl_bp",   label: qsTr("Ball Push Cylinder"), a: "up",    b: "down" },
+        { id: "seal_pin",  statusKey: "cyl_seal", label: qsTr("Seal Pin Cylinder"),  a: "up",    b: "down" },
+        { id: "fix_cyl",   statusKey: "cyl_fix",  label: qsTr("Fix Cylinder"),       a: "up",    b: "down" }
     ]
     property var settingGroups: [
-        { id: "auto", label: "Auto", items: [
-            { topic: "cart_fix",          type: "threshold", label: "Cart Fix Pressure", min: 0,    max: 1200, unit: "mbar" },
-            { topic: "chamber_vac",       type: "threshold", label: "Chamber Vacuum",    min: 0,    max: 1200, unit: "mbar" },
-            { topic: "chamber_leak",      type: "threshold", label: "Chamber Leak",      min: 0,    max: 1200, unit: "mbar" },
-            { topic: "cart_vac",          type: "threshold", label: "Cartridge Vacuum",  min: 0,    max: 1200, unit: "mbar" },
-            { topic: "cart_leak",         type: "threshold", label: "Cartridge Leak",    min: 0,    max: 1200, unit: "mbar" },
-            { topic: "pressure_balance",  type: "threshold", label: "Pressure Balance",  min: 0,    max: 1200, unit: "mbar" },
-            { topic: "waste_ink_drain_duration", type: "float", label: "Waste Ink Drain Time", min: 0, max: 120, unit: "s" },
-            { topic: "chamber_vent",      type: "threshold", label: "Chamber Vent",      min: 0,    max: 1200, unit: "mbar" },
-            { topic: "fill_compensation", type: "float",     label: "Fill Compensation", min: -999, max: 999,  unit: "ml" }
+        { id: "auto", label: qsTr("Auto"), items: [
+            { topic: "cart_fix",          type: "threshold", label: qsTr("Cart Fix Pressure"), min: 0,    max: 1200, unit: "mbar" },
+            { topic: "chamber_vac",       type: "threshold", label: qsTr("Chamber Vacuum"),    min: 0,    max: 1200, unit: "mbar" },
+            { topic: "chamber_leak",      type: "threshold", label: qsTr("Chamber Leak"),      min: 0,    max: 1200, unit: "mbar" },
+            { topic: "cart_vac",          type: "threshold", label: qsTr("Cartridge Vacuum"),  min: 0,    max: 1200, unit: "mbar" },
+            { topic: "cart_leak",         type: "threshold", label: qsTr("Cartridge Leak"),    min: 0,    max: 1200, unit: "mbar" },
+            { topic: "pressure_balance",  type: "threshold", label: qsTr("Pressure Balance"),  min: 0,    max: 1200, unit: "mbar" },
+            { topic: "waste_ink_drain_duration", type: "float", label: qsTr("Waste Ink Drain Time"), min: 0, max: 120, unit: "s" },
+            { topic: "chamber_vent",      type: "threshold", label: qsTr("Chamber Vent"),      min: 0,    max: 1200, unit: "mbar" },
+            { topic: "fill_compensation", type: "float",     label: qsTr("Fill Compensation"), min: -999, max: 999,  unit: "ml" }
         ]},
-        { id: "clean", label: "Clean", items: [
-            { topic: "cr_cart_vac",         type: "threshold", label: "Cartridge Vacuum", min: 0, max: 1200, unit: "mbar" },
-            { topic: "cr_cart_leak",        type: "threshold", label: "Cartridge Leak",   min: 0, max: 1200, unit: "mbar" },
-            { topic: "cr_pressure_balance", type: "threshold", label: "Pressure Balance", min: 0, max: 1200, unit: "mbar" },
-            { topic: "cr_volume",           type: "float",     label: "CR Volume",        min: 0, max: 9999, unit: "ml" },
-            { topic: "cr_flow_rate",        type: "float",     label: "CR Flow",          min: 0, max: 100,  unit: "ml/s" },
-            { topic: "cr_loading_rate",     type: "float",     label: "CR Loading",       min: 0, max: 100,  unit: "ml/s" },
-            { topic: "cr_cycles",           type: "int",       label: "CR Cycles",        min: 1, max: 999,  unit: "" }
+        { id: "clean", label: qsTr("Clean"), items: [
+            { topic: "cr_cart_vac",         type: "threshold", label: qsTr("Cartridge Vacuum"), min: 0, max: 1200, unit: "mbar" },
+            { topic: "cr_cart_leak",        type: "threshold", label: qsTr("Cartridge Leak"),   min: 0, max: 1200, unit: "mbar" },
+            { topic: "cr_pressure_balance", type: "threshold", label: qsTr("Pressure Balance"), min: 0, max: 1200, unit: "mbar" },
+            { topic: "cr_volume",           type: "float",     label: qsTr("CR Volume"),        min: 0, max: 9999, unit: "ml" },
+            { topic: "cr_flow_rate",        type: "float",     label: qsTr("CR Flow"),          min: 0, max: 100,  unit: "ml/s" },
+            { topic: "cr_loading_rate",     type: "float",     label: qsTr("CR Loading"),       min: 0, max: 100,  unit: "ml/s" },
+            { topic: "cr_cycles",           type: "int",       label: qsTr("CR Cycles"),        min: 1, max: 999,  unit: "" }
         ]},
-        { id: "dosing", label: "Dosing", items: [
-            { topic: "dosing_volume",       type: "float", label: "Dosing Volume",  min: 0, max: 9999, unit: "ml" },
-            { topic: "dosing_flow_rate",    type: "float", label: "Dosing Flow",    min: 0, max: 100,  unit: "ml/s" },
-            { topic: "dosing_loading_rate", type: "float", label: "Dosing Loading", min: 0, max: 100,  unit: "ml/s" }
+        { id: "dosing", label: qsTr("Dosing"), items: [
+            { topic: "dosing_volume",       type: "float", label: qsTr("Dosing Volume"),  min: 0, max: 9999, unit: "ml" },
+            { topic: "dosing_flow_rate",    type: "float", label: qsTr("Dosing Flow"),    min: 0, max: 100,  unit: "ml/s" },
+            { topic: "dosing_loading_rate", type: "float", label: qsTr("Dosing Loading"), min: 0, max: 100,  unit: "ml/s" }
         ]},
-        { id: "pwm", label: "PWM/Tank", items: [
-            { topic: "base_pwm",            type: "int",   label: "Base PWM",         min: 0,   max: 100,  unit: "%" },
-            { topic: "chamber_vent_pwm",    type: "int",   label: "Chamber Vent PWM", min: 0,   max: 100,  unit: "%" },
-            { topic: "cr_valve10_pwm",      type: "int",   label: "CR Valve10 PWM",   min: 0,   max: 100,  unit: "%" },
-            { topic: "cr_valve10_duration", type: "float", label: "CR Valve10 Time",  min: 0.5, max: 30,   unit: "s" },
-            { topic: "cr_valve5_duration",  type: "float", label: "CR Valve5 Time",   min: 0.5, max: 30,   unit: "s" },
-            { topic: "cr_return_duration",  type: "float", label: "CR Return Time",   min: 0.5, max: 30,   unit: "s" },
-            { topic: "tank_min",            type: "float", label: "Tank Min",         min: 0,   max: 1000, unit: "mbar" },
-            { topic: "tank_max",            type: "float", label: "Tank Max",         min: 0,   max: 1000, unit: "mbar" }
+        { id: "pwm", label: qsTr("PWM/Tank"), items: [
+            { topic: "base_pwm",            type: "int",   label: qsTr("Base PWM"),         min: 0,   max: 100,  unit: "%" },
+            { topic: "chamber_vent_pwm",    type: "int",   label: qsTr("Chamber Vent PWM"), min: 0,   max: 100,  unit: "%" },
+            { topic: "cr_valve10_pwm",      type: "int",   label: qsTr("CR Valve10 PWM"),   min: 0,   max: 100,  unit: "%" },
+            { topic: "cr_valve10_duration", type: "float", label: qsTr("CR Valve10 Time"),  min: 0.5, max: 30,   unit: "s" },
+            { topic: "cr_valve5_duration",  type: "float", label: qsTr("CR Valve5 Time"),   min: 0.5, max: 30,   unit: "s" },
+            { topic: "cr_return_duration",  type: "float", label: qsTr("CR Return Time"),   min: 0.5, max: 30,   unit: "s" },
+            { topic: "tank_min",            type: "float", label: qsTr("Tank Min"),         min: 0,   max: 1000, unit: "mbar" },
+            { topic: "tank_max",            type: "float", label: qsTr("Tank Max"),         min: 0,   max: 1000, unit: "mbar" }
         ]}
     ]
     // Helper: publish setting based on type (matches old PAGE 4 wire-up)
@@ -375,13 +378,13 @@ Item {
     property bool   hasError:  hpController.errorStatus && hpController.errorStatus !== "OK"
                               && hpController.errorStatus !== "-"
     function inkNameText() {
-        return inkMap["NAME"] || inkMap["INK_NAME"] || inkMap["CODE"] || "NAME";
+        return inkMap["NAME"] || inkMap["INK_NAME"] || inkMap["CODE"] || qsTr("NAME");
     }
     function inkCodeLotText() {
         var code = inkMap["CODE"] || "-";
         var lotPi = inkMap["LOT_PI"] || "-";
         var lotCi = inkMap["LOT_CI"] || "-";
-        return code + " · Lot PI: " + lotPi + " · Lot CI: " + lotCi;
+        return qsTr("%1 · Lot PI: %2 · Lot CI: %3").arg(code).arg(lotPi).arg(lotCi);
     }
     function safetyOk(key) {
         return classifyState(inputsMap[key]) === "on";
@@ -389,17 +392,17 @@ Item {
     function processAutoText() {
         if (modeStr !== "AUTO") return "-";
         var m = stateStr.match(/FILL:(\d+)/);
-        return "FILL " + (m ? m[1] : "-");
+        return qsTr("FILL %1").arg(m ? m[1] : "-");
     }
     function processDosingText() {
         var m = stateStr.match(/DOSING:(\d+)/);
-        if (m) return "DOSING " + m[1];
-        return (modeStr === "CLEAN" || modeStr === "PREFILL") ? "CR dosing" : "-";
+        if (m) return qsTr("DOSING %1").arg(m[1]);
+        return (modeStr === "CLEAN" || modeStr === "PREFILL") ? qsTr("CR dosing") : "-";
     }
     function processCleanText() {
         if (modeStr !== "CLEAN" && modeStr !== "PREFILL") return "-";
         var m = stateStr.match(/CR:(\d+)/);
-        return "CR " + (m ? m[1] : "-");
+        return qsTr("CR %1").arg(m ? m[1] : "-");
     }
 
     Rectangle { anchors.fill: parent; color: cBg }
@@ -420,14 +423,14 @@ Item {
             spacing: 8
 
             DashboardText {
-                text: "Fill HP Control"
+                text: qsTr("Fill HP Control")
                 color: cText; font.pixelSize: 28; font.bold: true
             }
 
             Item { Layout.fillWidth: true }
 
             TbBtn {
-                lbl: "START"; variant: "primary"
+                lbl: qsTr("START"); variant: "primary"
                 iconSource: "qrc:/qml/icons/play.svg"
                 Layout.preferredWidth: 132
                 Layout.preferredHeight: 40
@@ -435,7 +438,7 @@ Item {
             }
 
             TbBtn {
-                lbl: "STOP"; variant: "danger"
+                lbl: qsTr("STOP"); variant: "danger"
                 iconSource: "qrc:/qml/icons/octagon_x_lucide.svg"
                 Layout.preferredWidth: 132
                 Layout.preferredHeight: 40
@@ -445,7 +448,7 @@ Item {
             Item { width: 8 }
 
             TbBtn {
-                lbl: "Clear Error"; variant: "warn"
+                lbl: qsTr("Clear Error"); variant: "warn"
                 visible: tab.hasError
                 onClicked: hpController.publishString("error_control", "clear")
             }
@@ -511,7 +514,7 @@ Item {
                     DashboardText { text: "⛔"; font.pixelSize: 30 }
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        DashboardText { text: "SYSTEM WARNING"; color: cBad; font.bold: true; font.pixelSize: 22 }
+                        DashboardText { text: qsTr("SYSTEM WARNING"); color: cBad; font.bold: true; font.pixelSize: 22 }
                         DashboardText {
                             text: hpController.errorStatus || "-"
                             color: cText; font.pixelSize: 21
@@ -519,7 +522,7 @@ Item {
                         }
                     }
                     TbBtn {
-                        lbl: "Acknowledge & Clear"; variant: "danger"
+                        lbl: qsTr("Acknowledge & Clear"); variant: "danger"
                         onClicked: hpController.publishString("error_control", "clear")
                     }
                 }
@@ -588,7 +591,7 @@ Item {
                     spacing: 10
 
                     SensorGroupCard {
-                        title: "SENSOR"
+                        title: qsTr("SENSOR")
                         columns: 8
                         squareTiles: true
                         items: [
@@ -614,7 +617,7 @@ Item {
                     }
 
                     SensorGroupCard {
-                        title: "TUBE 1-8"
+                        title: qsTr("TUBE 1-8")
                         columns: 8
                         squareTiles: true
                         items: [
@@ -631,7 +634,7 @@ Item {
                     }
 
                     SensorGroupCard {
-                        title: "MAG 1-8"
+                        title: qsTr("MAG 1-8")
                         columns: 8
                         squareTiles: true
                         items: [
@@ -672,7 +675,7 @@ Item {
 
         Sect {
             anchors.fill: parent
-            title: "MODE SELECTION"
+            title: qsTr("MODE SELECTION")
             fillBodyHeight: true
 
             ColumnLayout {
@@ -680,26 +683,26 @@ Item {
                 spacing: 6
 
                 ModeSelectionButton {
-                    lbl: "AUTO"
-                    desc: "Automatic"
+                    lbl: qsTr("AUTO")
+                    desc: qsTr("Automatic")
                     active: tab.modeStr === "AUTO"
                     onClicked: hpController.publishMode(0)
                 }
                 ModeSelectionButton {
-                    lbl: "CLEAN"
-                    desc: "Cleaning cycle"
+                    lbl: qsTr("CLEAN")
+                    desc: qsTr("Cleaning cycle")
                     active: tab.modeStr === "CLEAN"
                     onClicked: hpController.publishMode(1)
                 }
                 ModeSelectionButton {
-                    lbl: "MANUAL"
-                    desc: "Direct control"
+                    lbl: qsTr("MANUAL")
+                    desc: qsTr("Direct control")
                     active: tab.modeStr === "MANUAL"
                     onClicked: hpController.publishMode(2)
                 }
                 ModeSelectionButton {
-                    lbl: "REFILL"
-                    desc: "Refill cycle"
+                    lbl: qsTr("REFILL")
+                    desc: qsTr("Refill cycle")
                     active: tab.modeStr === "PREFILL" || tab.modeStr === "REFILL"
                     onClicked: hpController.publishMode(3)
                 }
@@ -774,7 +777,7 @@ Item {
         Sect {
             id: overviewSect
             width: parent.width
-            title: "SYSTEM OVERVIEW"
+            title: qsTr("SYSTEM OVERVIEW")
 
             ColumnLayout {
                 width: parent.width
@@ -797,7 +800,7 @@ Item {
                             Layout.fillWidth: true
                             spacing: 6
                             DashboardText {
-                                text: "CURRENT INK:"
+                                text: qsTr("CURRENT INK:")
                                 color: cIdle
                                 font.pixelSize: 14
                                 font.bold: true
@@ -816,7 +819,7 @@ Item {
                             Layout.fillWidth: true
                             spacing: 6
                             DashboardText {
-                                text: "Scan Code:"
+                                text: qsTr("Scan Code:")
                                 color: cIdle
                                 font.pixelSize: 14
                                 font.bold: true
@@ -838,24 +841,24 @@ Item {
                     columnSpacing: 22
                     rowSpacing: 0
 
-                    OverviewKv { lbl: "Mode"; val: tab.modeStr }
-                    OverviewKv { lbl: "State"; val: tab.stateStr }
-                    OverviewKv { lbl: "Volume"; val: tab.volumeStr }
+                    OverviewKv { lbl: qsTr("Mode"); val: tab.modeStr }
+                    OverviewKv { lbl: qsTr("State"); val: tab.stateStr }
+                    OverviewKv { lbl: qsTr("Volume"); val: tab.volumeStr }
                     OverviewKv {
-                        lbl: "Running"
+                        lbl: qsTr("Running")
                         chip: StatusChip {
                             state: tab.running ? "on" : "off"
-                            label: tab.running ? "In Process" : "Stop"
+                            label: tab.running ? qsTr("In Process") : qsTr("Stopped")
                         }
                     }
-                    OverviewKv { lbl: "Cycle"; val: tab.cycleStr }
+                    OverviewKv { lbl: qsTr("Cycle"); val: tab.cycleStr }
                 }
 
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 5
                     DashboardText {
-                        text: "Last Response"
+                        text: qsTr("Last Response")
                         color: cMuted
                         font.pixelSize: 18
                         font.bold: true
@@ -890,7 +893,7 @@ Item {
             id: safetySect
             width: parent.width
             height: parent.height > 0 ? parent.height : implicitHeight
-            title: "SAFETY"
+            title: qsTr("SAFETY")
 
             ColumnLayout {
                 width: parent.width
@@ -901,13 +904,13 @@ Item {
                     columns: 3
                     columnSpacing: 6
                     rowSpacing: 6
-                    SafetyBox { lbl: "SAFETY I_4"; ok: tab.safetyOk("safety_i_4_i04") }
-                    SafetyBox { lbl: "SAFETY I_5"; ok: tab.safetyOk("safety_i_5_i04") }
-                    SafetyBox { lbl: "SAFETY AREA CLEAR"; ok: tab.safetyOk("safety_area_clear") }
+                    SafetyBox { lbl: qsTr("SAFETY I_4"); ok: tab.safetyOk("safety_i_4_i04") }
+                    SafetyBox { lbl: qsTr("SAFETY I_5"); ok: tab.safetyOk("safety_i_5_i04") }
+                    SafetyBox { lbl: qsTr("SAFETY AREA CLEAR"); ok: tab.safetyOk("safety_area_clear") }
                 }
 
                 DashboardText {
-                    text: "PROCESS"
+                    text: qsTr("PROCESS")
                     color: cMuted
                     font.pixelSize: 15
                     font.bold: true
@@ -923,19 +926,19 @@ Item {
                     rowSpacing: 5
                     ProcessBox {
                         Layout.preferredWidth: processGrid.cellWidth
-                        lbl: "AUTO FILL"; val: tab.processAutoText(); active: tab.running && tab.modeStr === "AUTO"
+                        lbl: qsTr("AUTO FILL"); val: tab.processAutoText(); active: tab.running && tab.modeStr === "AUTO"
                     }
                     ProcessBox {
                         Layout.preferredWidth: processGrid.cellWidth
-                        lbl: "DOSING"; val: tab.processDosingText(); active: tab.running && (tab.modeStr === "AUTO" || tab.modeStr === "CLEAN" || tab.modeStr === "PREFILL")
+                        lbl: qsTr("DOSING"); val: tab.processDosingText(); active: tab.running && (tab.modeStr === "AUTO" || tab.modeStr === "CLEAN" || tab.modeStr === "PREFILL")
                     }
                     ProcessBox {
                         Layout.preferredWidth: processGrid.cellWidth
-                        lbl: "CLEAN / PREFILL"; val: tab.processCleanText(); active: tab.running && (tab.modeStr === "CLEAN" || tab.modeStr === "PREFILL")
+                        lbl: qsTr("CLEAN / PREFILL"); val: tab.processCleanText(); active: tab.running && (tab.modeStr === "CLEAN" || tab.modeStr === "PREFILL")
                     }
                     ProcessBox {
                         Layout.preferredWidth: processGrid.cellWidth
-                        lbl: "CYCLE / VOLUME"; val: tab.cycleStr + " | " + tab.volumeStr; active: tab.running
+                        lbl: qsTr("CYCLE / VOLUME"); val: tab.cycleStr + " | " + tab.volumeStr; active: tab.running
                     }
                 }
             }
@@ -1049,7 +1052,7 @@ Item {
             id: settingsSect
             width: parent.width
             height: parent.height > 0 ? parent.height : implicitHeight
-            title: "OPERATING PARAMETERS"
+            title: qsTr("OPERATING PARAMETERS")
             fillBodyHeight: true
             frameBorderWidth: 0
 
@@ -1061,7 +1064,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 34
                     DashboardText {
-                        text: "BASE PWM SUGGESTION"
+                        text: qsTr("BASE PWM SUGGESTION")
                         color: cAccent
                         font.pixelSize: 15
                         font.bold: true
@@ -1069,7 +1072,7 @@ Item {
                     }
                     Item { Layout.fillWidth: true }
                     CompactActionBtn {
-                        lbl: "Restore Defaults"
+                        lbl: qsTr("Restore Defaults")
                         variant: "warn"
                         Layout.preferredWidth: 180
                         labelPixelSize: 13
@@ -1105,7 +1108,8 @@ Item {
                         spacing: 6
 
                         DashboardText {
-                            text: "51.5ml @ 2.0ml/s -> recommended Base PWM 37% (current " + hpController.basePwmStatus + "%). Apply 37%?"
+                            text: qsTr("51.5 ml @ 2.0 ml/s → recommended Base PWM 37% (current %1%). Apply 37%?")
+                                  .arg(hpController.basePwmStatus)
                             color: cText
                             opacity: 0.88
                             font.pixelSize: 15
@@ -1113,7 +1117,7 @@ Item {
                             Layout.fillWidth: true
                         }
                         CompactActionBtn {
-                            lbl: "Apply 37%"
+                            lbl: qsTr("Apply 37%")
                             variant: "action"
                             labelPixelSize: 14
                             Layout.preferredWidth: 126
@@ -1121,7 +1125,7 @@ Item {
                             onClicked: hpController.publishInt("base_pwm", 37)
                         }
                         CompactActionBtn {
-                            lbl: "Skip"
+                            lbl: qsTr("Skip")
                             labelPixelSize: 14
                             Layout.preferredWidth: 90
                             Layout.preferredHeight: 38
@@ -1226,7 +1230,7 @@ Item {
                     // Numeric setting with no validator declared, so the
                     // keypad has to be asked for rather than inferred.
                     useNumpad: true
-                    numpadTitle: item.label || "SETTING"
+                    numpadTitle: item.label || qsTr("SETTING")
                     numpadUnits: item.unit || ""
                     numpadAllowSign: false
                     showFocusBorder: false
@@ -1261,7 +1265,7 @@ Item {
                     spacing: 3
 
                     DashboardText {
-                        text: "USED"
+                        text: qsTr("USED")
                         color: cIdle
                         font.pixelSize: 11
                         font.bold: true
@@ -1286,7 +1290,7 @@ Item {
             }
 
             CompactActionBtn {
-                lbl: "SET"
+                lbl: qsTr("SET")
                 variant: "action"
                 labelPixelSize: 12
                 Layout.preferredWidth: 84
@@ -1299,7 +1303,7 @@ Item {
 
     component CompactActionBtn: Rectangle {
         id: compactBtn
-        property string lbl: "Btn"
+        property string lbl: qsTr("Button")
         property string variant: "default"
         property int labelPixelSize: 11
         signal clicked
@@ -1421,7 +1425,7 @@ Item {
             }
             DashboardText {
                 Layout.fillWidth: true
-                text: ok ? "OK" : "BLOCK"
+                text: ok ? qsTr("OK") : qsTr("BLOCKED")
                 color: ok ? cOk : cBad
                 font.pixelSize: 15
                 font.bold: true
@@ -1530,7 +1534,7 @@ Item {
                                 spacing: 12
 
                                 Sect {
-                                    title: "Cylinders (manual only)"
+                                    title: qsTr("Cylinders (manual only)")
                                     fillBodyHeight: true
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 500
@@ -1560,7 +1564,7 @@ Item {
                                 }
 
                                 Sect {
-                                    title: "Servo & Motor"
+                                    title: qsTr("Servo & Motor")
                                     fillBodyHeight: true
                                     Layout.fillWidth: true
                                     Layout.preferredWidth: 360
@@ -1580,7 +1584,7 @@ Item {
                                             border.width: 1
                                             DashboardText {
                                                 anchors.centerIn: parent
-                                                text: "Pos: " + hpController.servoPosition.toFixed(2) + " mm"
+                                                text: qsTr("Position: %1 mm").arg(hpController.servoPosition.toFixed(2))
                                                 color: cText
                                                 font.pixelSize: 21
                                                 font.bold: true
@@ -1592,10 +1596,10 @@ Item {
                                             spacing: 8
                                             Layout.fillWidth: true
 
-                                            TbBtn { lbl: "Enable"; Layout.fillWidth: true; Layout.preferredHeight: 46; onClicked: hpController.publishString("servo_command", "enable") }
-                                            TbBtn { lbl: "Disable"; Layout.fillWidth: true; Layout.preferredHeight: 46; onClicked: hpController.publishString("servo_command", "disable") }
-                                            TbBtn { lbl: "Home"; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 46; onClicked: hpController.publishString("servo_command", "home") }
-                                            TbBtn { lbl: "Reset Fault"; variant: "danger"; Layout.fillWidth: true; Layout.preferredHeight: 46; onClicked: hpController.publishString("servo_command", "reset_fault") }
+                                            TbBtn { lbl: qsTr("Enable"); Layout.fillWidth: true; Layout.preferredHeight: 46; onClicked: hpController.publishString("servo_command", "enable") }
+                                            TbBtn { lbl: qsTr("Disable"); Layout.fillWidth: true; Layout.preferredHeight: 46; onClicked: hpController.publishString("servo_command", "disable") }
+                                            TbBtn { lbl: qsTr("Home"); variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 46; onClicked: hpController.publishString("servo_command", "home") }
+                                            TbBtn { lbl: qsTr("Reset Fault"); variant: "danger"; Layout.fillWidth: true; Layout.preferredHeight: 46; onClicked: hpController.publishString("servo_command", "reset_fault") }
                                         }
 
                                         ColumnLayout {
@@ -1608,11 +1612,11 @@ Item {
                                             RowLayout {
                                                 spacing: 8
                                                 Layout.fillWidth: true
-                                                JogBtn { lbl: "JOG REV"; dir: "rev"; variant: "warn"; Layout.fillWidth: true; Layout.preferredHeight: 54 }
-                                                JogBtn { lbl: "JOG FWD"; dir: "fwd"; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 54 }
+                                                JogBtn { lbl: qsTr("JOG REV"); dir: "rev"; variant: "warn"; Layout.fillWidth: true; Layout.preferredHeight: 54 }
+                                                JogBtn { lbl: qsTr("JOG FWD"); dir: "fwd"; variant: "primary"; Layout.fillWidth: true; Layout.preferredHeight: 54 }
                                             }
                                             TbBtn {
-                                                lbl: "STOP"
+                                                lbl: qsTr("STOP")
                                                 variant: "danger"
                                                 Layout.fillWidth: true
                                                 Layout.preferredHeight: 48
@@ -1629,10 +1633,10 @@ Item {
                                             RowLayout {
                                                 Layout.fillWidth: true
                                                 spacing: 8
-                                                DashboardText { text: "Base PWM"; color: cText; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
+                                                DashboardText { text: qsTr("Base PWM"); color: cText; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
                                                 PwmInput { id: basePwmIn; valueText: hpController.basePwmStatus.toString(); Layout.preferredWidth: 70 }
                                                 TbBtn {
-                                                    lbl: "Set"; variant: "primary"
+                                                    lbl: qsTr("Set"); variant: "primary"
                                                     Layout.preferredWidth: 70
                                                     Layout.preferredHeight: 38
                                                     onClicked: {
@@ -1646,10 +1650,10 @@ Item {
                                                 spacing: 8
                                                 enabled: tab.modeStr === "MANUAL"
                                                 opacity: tab.modeStr === "MANUAL" ? 1.0 : 0.4
-                                                DashboardText { text: "V10 PWM"; color: cText; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
+                                                DashboardText { text: qsTr("V10 PWM"); color: cText; font.pixelSize: 17; font.bold: true; Layout.fillWidth: true }
                                                 PwmInput { id: v10In; valueText: (tab.valvesMap["v10"] && tab.valvesMap["v10"].label) ? tab.valvesMap["v10"].label.replace("%","") : "0"; Layout.preferredWidth: 70 }
                                                 TbBtn {
-                                                    lbl: "Set"; variant: "primary"
+                                                    lbl: qsTr("Set"); variant: "primary"
                                                     Layout.preferredWidth: 70
                                                     Layout.preferredHeight: 38
                                                     onClicked: {
@@ -1669,7 +1673,7 @@ Item {
                                 spacing: 12
 
                                 Sect {
-                                    title: "Action log"
+                                    title: qsTr("Action log")
                                     fillBodyHeight: true
                                     Layout.preferredWidth: 500
                                     Layout.maximumWidth: 500
@@ -1679,9 +1683,14 @@ Item {
                                         spacing: 4
                                         RowLayout {
                                             Layout.fillWidth: true
-                                            DashboardText { text: tab.actionLog.length > 0 ? (tab.actionLog.length + " recent actions") : "No actions yet"; color: cMuted; font.pixelSize: 17 }
+                                            DashboardText {
+                                                text: tab.actionLog.length > 0
+                                                      ? qsTr("%1 recent actions").arg(tab.actionLog.length)
+                                                      : qsTr("No actions yet")
+                                                color: cMuted; font.pixelSize: 17
+                                            }
                                             Item { Layout.fillWidth: true }
-                                            TbBtn { lbl: "Clear log"; visible: tab.actionLog.length > 0; onClicked: { tab.actionLog = []; tab.lastActionRaw = "" } }
+                                            TbBtn { lbl: qsTr("Clear log"); visible: tab.actionLog.length > 0; onClicked: { tab.actionLog = []; tab.lastActionRaw = "" } }
                                         }
                                         ScrollView {
                                             Layout.fillWidth: true
@@ -1712,7 +1721,7 @@ Item {
                         }
 
                         Sect {
-                            title: "Valves (manual only)"
+                            title: qsTr("Valves (manual only)")
                             fillBodyHeight: true
                             Layout.fillWidth: true
                             Layout.preferredWidth: 450
@@ -1765,7 +1774,7 @@ Item {
             spacing: 8
 
             DashboardText {
-                text: "Raw Status"
+                text: qsTr("Raw Status")
                 color: cMuted
                 font.pixelSize: 18
                 font.bold: true
@@ -1825,7 +1834,7 @@ Item {
             spacing: 10
 
             DashboardText {
-                text: "ANALOG PRESSURE"
+                text: qsTr("ANALOG PRESSURE")
                 color: cText
                 font.pixelSize: 22
                 font.bold: true
@@ -1836,16 +1845,16 @@ Item {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 8
-                PCard { lbl: "S1 Chamber";   val: hpController.pressureS1; maxVal: 1200 }
-                PCard { lbl: "S2 Cartridge"; val: hpController.pressureS2; maxVal: 1200 }
-                PCard { lbl: "S3 Tank";      val: hpController.pressureS3; maxVal: 1200 }
+                PCard { lbl: qsTr("S1 Chamber");   val: hpController.pressureS1; maxVal: 1200 }
+                PCard { lbl: qsTr("S2 Cartridge"); val: hpController.pressureS2; maxVal: 1200 }
+                PCard { lbl: qsTr("S3 Tank");      val: hpController.pressureS3; maxVal: 1200 }
             }
 
             RowLayout {
                 Layout.fillWidth: true
                 Layout.topMargin: 6
                 DashboardText {
-                    text: "CARTRIDGE\nPRESSURE"
+                    text: qsTr("CARTRIDGE\nPRESSURE")
                     color: cMuted
                     font.pixelSize: 18
                     font.bold: true
@@ -1870,7 +1879,7 @@ Item {
                     model: 8
                     CartRow {
                         Layout.fillHeight: true
-                        cartName: "Cart " + (index + 1)
+                        cartName: qsTr("Cart %1").arg(index + 1)
                         cartVal: (hpController.cartridgePressures && hpController.cartridgePressures.length > index) ? (Number(hpController.cartridgePressures[index]) || 0) : 0
                     }
                 }
@@ -1917,7 +1926,7 @@ Item {
 
     component TbBtn: Rectangle {
         id: tbBtn
-        property string lbl: "Btn"
+        property string lbl: qsTr("Button")
         property string variant: "default"
         property url iconSource: ""
         signal clicked
@@ -2362,7 +2371,7 @@ Item {
     // Press-and-hold jog button: publishes "rev"/"fwd" on press, "stop" on release
     component JogBtn: Rectangle {
         id: jogBtn
-        property string lbl: "JOG"
+        property string lbl: qsTr("JOG")
         property string dir: "fwd"  // "fwd" | "rev"
         property string variant: "default"
         property bool _pressed: false
@@ -2453,7 +2462,7 @@ Item {
                     focusHost: tab.focusHost
                     // Numeric setting, same as the compact row above.
                     useNumpad: true
-                    numpadTitle: item.label || "SETTING"
+                    numpadTitle: item.label || qsTr("SETTING")
                     numpadUnits: item.unit || ""
                     numpadAllowSign: false
                     anchors.fill: parent; anchors.margins: 6
@@ -2481,7 +2490,7 @@ Item {
                     }
                 }
                 DashboardText {
-                    anchors.centerIn: parent; text: "Set"; color: "#ffffff"
+                    anchors.centerIn: parent; text: qsTr("Set"); color: "#ffffff"
                     font.pixelSize: 19; font.bold: true
                 }
                 MotionMouseArea {

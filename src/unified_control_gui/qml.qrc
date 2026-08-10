@@ -19,6 +19,7 @@
     <file alias="GlassHighlight.qml">qml/GlassHighlight.qml</file>
     <file alias="HoverHint.qml">qml/HoverHint.qml</file>
     <file alias="SystemAlertButton.qml">qml/SystemAlertButton.qml</file>
+    <file alias="LanguageSelector.qml">qml/LanguageSelector.qml</file>
     <file alias="icons/camera.svg">qml/icons/camera.svg</file>
     <file alias="icons/switch_camera.svg">qml/icons/switch_camera.svg</file>
     <file alias="icons/download.svg">qml/icons/download.svg</file>
@@ -51,6 +52,7 @@
     <file alias="icons/weight_tilde_lucide.svg">qml/icons/weight_tilde_lucide.svg</file>
     <file alias="icons/weight_tilde_lucide_red.svg">qml/icons/weight_tilde_lucide_red.svg</file>
     <file alias="icons/message_circle_warning.svg">qml/icons/message_circle_warning.svg</file>
+    <file alias="icons/globe.svg">qml/icons/globe.svg</file>
     <file alias="frm_settings.qml">qml/frm_settings.qml</file>
   </qresource>
   <qresource prefix="/icons">
@@ -78,6 +80,7 @@
     <file>qml/icons/weight_tilde_lucide.svg</file>
     <file>qml/icons/weight_tilde_lucide_red.svg</file>
     <file>qml/icons/message_circle_warning.svg</file>
+    <file>qml/icons/globe.svg</file>
     <file>qml/icons/bg_servers.jpg</file>
   </qresource>
 </RCC>

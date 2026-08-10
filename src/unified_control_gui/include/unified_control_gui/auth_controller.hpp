@@ -18,10 +18,11 @@ public:
     bool authenticated() const { return authenticated_; }
     QString username() const { return username_; }
     QString role() const { return role_; }
-    QString lastError() const { return last_error_; }
+    QString lastError() const;
 
     Q_INVOKABLE bool login(const QString &username, const QString &password);
     Q_INVOKABLE void logout();
+    void refreshTranslations();
 
 signals:
     void authenticatedChanged();

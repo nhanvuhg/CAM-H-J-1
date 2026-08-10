@@ -43,6 +43,7 @@ public:
     Q_INVOKABLE bool acknowledgeWarning(const QString &id);
     Q_INVOKABLE int acknowledgeAllWarnings();
     Q_INVOKABLE void requestAttention();
+    void refreshTranslations();
 
 signals:
     void alertsChanged();
@@ -95,7 +96,8 @@ private:
     void checkHeartbeats();
 
     QString effectiveLevel(const QString &baseLevel, bool connectionIssue) const;
-    static QString actionForArea(const QString &area);
+    QString actionForArea(const QString &area) const;
+    QString localizedAlertText(const QString &text) const;
     static QString stableCameraMessage(const QString &source, const QString &value);
     static QString normalized(const QString &value);
     static bool isHealthy(const QString &value);

@@ -257,7 +257,25 @@ void CamNode::refreshTopics()
 
 QVariantList CamNode::cameraList() const
 {
-    return cameraList_;
+    QVariantList localized;
+    localized.reserve(cameraList_.size());
+    for (int index = 0; index < cameraList_.size(); ++index) {
+        QVariantMap camera = cameraList_.at(index).toMap();
+        const QString topic = camera.value("topic").toString();
+        if (topic.contains(QStringLiteral("/cam0HP/")))
+            camera["name"] = tr("CAM0 - INPUT");
+        else if (topic.contains(QStringLiteral("/cam1HP/")))
+            camera["name"] = tr("CAM1 - OUTPUT");
+        else
+            camera["name"] = tr("Camera %1").arg(index + 1);
+        localized.append(camera);
+    }
+    return localized;
+}
+
+void CamNode::refreshTranslations()
+{
+    emit cameraListChanged();
 }
 
 // Save current topic selections to file

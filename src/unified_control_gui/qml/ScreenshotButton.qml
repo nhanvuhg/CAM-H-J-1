@@ -5,7 +5,7 @@ MotionButton {
     id: control
 
     property int countdown: 0
-    property string hintText: "Chụp ảnh"
+    property string hintText: qsTr("Screenshot")
 
     signal captureRequested()
 
@@ -17,9 +17,11 @@ MotionButton {
     shimmerColor: "#55d4faff"
     opacity: countdown > 0 ? 0.82 : 1.0
 
-    Accessible.name: countdown > 0
-                     ? "Chụp màn hình sau " + countdown + " giây"
-                     : "Chụp màn hình sau 3 giây"
+    Accessible.name: countdown === 1
+                     ? qsTr("Capture screenshot in 1 second")
+                     : (countdown > 1
+                        ? qsTr("Capture screenshot in %1 seconds").arg(countdown)
+                        : qsTr("Capture screenshot in 3 seconds"))
 
     background: Rectangle {
         radius: 6

@@ -16,7 +16,8 @@ find_package(dobot_msgs_v3 REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(image_transport REQUIRED)
-find_package(Qt5 REQUIRED COMPONENTS Core Gui Qml Quick Charts QuickControls2 Widgets Network)
+find_package(ament_index_cpp REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS Core Gui Qml Quick Charts QuickControls2 Widgets Network LinguistTools)
 
 include_directories(
   include
@@ -32,6 +33,7 @@ set(HEADER_FILES
   include/unified_control_gui/hp_controller.hpp
   include/unified_control_gui/auth_controller.hpp
   include/unified_control_gui/system_alert_controller.hpp
+  include/unified_control_gui/language_controller.hpp
 )
 
 set(SOURCES
@@ -44,7 +46,16 @@ set(SOURCES
   src/hp_controller.cpp
   src/auth_controller.cpp
   src/system_alert_controller.cpp
+  src/language_controller.cpp
 )
+
+set(TS_FILES
+  translations/unified_control_gui_core_vi.ts
+  translations/unified_control_gui_camera_vi.ts
+  translations/unified_control_gui_cartridge_vi.ts
+  translations/unified_control_gui_cpp_vi.ts
+)
+qt5_add_translation(QM_FILES ${TS_FILES})
 
 qt5_add_resources(QML_RESOURCES qml.qrc)
 
@@ -52,6 +63,7 @@ add_executable(${PROJECT_NAME}
   ${SOURCES}
   ${HEADER_FILES}
   ${QML_RESOURCES}
+  ${QM_FILES}
 )
 
 target_link_libraries(${PROJECT_NAME}
@@ -74,6 +86,7 @@ ament_target_dependencies(${PROJECT_NAME}
   dobot_msgs_v3
   cv_bridge
   image_transport
+  ament_index_cpp
 )
 
 install(TARGETS
@@ -87,5 +100,14 @@ install(PROGRAMS
   scripts/restart_gui.sh
   DESTINATION lib/${PROJECT_NAME}
 )
+
+install(FILES ${QM_FILES}
+  DESTINATION share/${PROJECT_NAME}/i18n
+)
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_i18n_catalog tests/test_i18n_catalog.py)
+endif()
 
 ament_package()

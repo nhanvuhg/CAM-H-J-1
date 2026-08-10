@@ -7,7 +7,7 @@ Window {
     id: settingsWindow
     width: 720
     height: 480
-    title: "Settings"
+    title: qsTr("Camera Settings")
     flags: Qt.Window
     color: "#06101d"
 
@@ -62,7 +62,7 @@ Window {
             Text {
                 anchors.centerIn: parent
                 visible: settingsWindow.loadingTopics
-                text: "⏳ Scanning ROS2 topics..."
+                text: qsTr("⏳ Scanning ROS2 topics...")
                 color: "#67d0ff"; font.pixelSize: 16; font.bold: true
             }
             GridLayout {
@@ -128,7 +128,7 @@ Window {
         }
 
         MotionButton {
-            text: "Save"
+            text: qsTr("Save")
             Layout.alignment: Qt.AlignRight
             Layout.topMargin: 0
             Layout.bottomMargin: 30
@@ -137,7 +137,7 @@ Window {
             Layout.preferredWidth: 120
 
             contentItem: Text {
-                text: "Save"
+                text: qsTr("Save")
                 color: "#67d0ff"
                 font.pixelSize: 14
                 verticalAlignment: Text.AlignVCenter

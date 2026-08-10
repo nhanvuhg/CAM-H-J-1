@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WS="${ROS2_WS:-/home/pi/ros2_ws}"
+WS="${ROS2_WS:-$HOME/ros2_ws}"
 LOG_DIR="$WS/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/restart_system_nodes.log"
@@ -20,10 +20,10 @@ if [ -f "$WS/ros2_env.sh" ]; then
   source "$WS/ros2_env.sh" || true
 fi
 
-if [ -f "/opt/ros/jazzy/setup.bash" ]; then
+if [ -f "/opt/ros/humble/setup.bash" ]; then
   set +u
   # shellcheck disable=SC1091
-  source /opt/ros/jazzy/setup.bash || true
+  source /opt/ros/humble/setup.bash || true
   set -u
 fi
 

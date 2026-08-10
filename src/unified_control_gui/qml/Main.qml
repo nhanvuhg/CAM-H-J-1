@@ -9,7 +9,7 @@ ApplicationWindow {
     visible: true
     width: 1920
     height: 1080
-    title: "ROS2 - Unified Control System"
+    title: qsTr("ROS2 - Unified Control System")
     color: "#020817"
     visibility: Window.FullScreen
 
@@ -295,7 +295,7 @@ ApplicationWindow {
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: "⚠  OUTPUT TRAY FULL"
+                text: qsTr("⚠  OUTPUT TRAY FULL")
                 color: "#f0735c"
                 font.pixelSize: 28
                 font.bold: true
@@ -303,11 +303,10 @@ ApplicationWindow {
 
             Text {
                 Layout.fillWidth: true
-                text: "Sensor S4 đang ON khi bắt đầu STATE 2: khay Output đã đầy.\n" +
-                      "Hệ thống giữ InX tại -60 mm và InY tại 87 mm để check tray.\n" +
-                      "InX sẽ không di chuyển " +
-                      "tới vị trí lấy khay 502.5 mm.\n\n" +
-                      "Hãy lấy/dọn khay Output, sau đó nhấn ACCEPT để kiểm tra lại S4."
+                text: qsTr("Sensor S4 is ON when STATE 2 starts: the output tray is full.\n" +
+                           "The system is holding InX at -60 mm and InY at 87 mm to check the tray.\n" +
+                           "InX will not move to the 502.5 mm tray pickup position.\n\n" +
+                           "Remove the output tray, then select ACCEPT to recheck S4.")
                 color: "#c7dcef"
                 font.pixelSize: 18
                 wrapMode: Text.WordWrap
@@ -323,7 +322,7 @@ ApplicationWindow {
                 MotionButton {
                     Layout.preferredWidth: 360
                     Layout.preferredHeight: 60
-                    text: "✓  ACCEPT — RECHECK S4"
+                    text: qsTr("✓  ACCEPT — RECHECK S4")
                     font.pixelSize: 17
                     font.bold: true
                     background: Rectangle {
@@ -345,7 +344,7 @@ ApplicationWindow {
                 MotionButton {
                     Layout.preferredWidth: 220
                     Layout.preferredHeight: 60
-                    text: "⏹  STOP"
+                    text: qsTr("⏹  STOP")
                     font.pixelSize: 17
                     font.bold: true
                     background: Rectangle {
@@ -416,14 +415,14 @@ ApplicationWindow {
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: "⏸  RESUME REQUIRED"
+                text: qsTr("⏸  RESUME REQUIRED")
                 color: "#f5a623"
                 font.pixelSize: 26
                 font.bold: true
             }
             Text {
                 Layout.fillWidth: true
-                text: "feed_chamber timeout 150s — SCALE has been drained to PLACE.\nSelect how to resume the cycle:"
+                text: qsTr("feed_chamber timed out after 150 seconds — SCALE has been drained to PLACE.\nSelect how to resume the cycle:")
                 color: "#c7dcef"
                 font.pixelSize: 17
                 wrapMode: Text.WordWrap
@@ -437,7 +436,7 @@ ApplicationWindow {
 
                 MotionButton {
                     Layout.preferredWidth: 250; Layout.preferredHeight: 60
-                    text: "🔁  LOAD CHAMBER\nFROM BUFFER"
+                    text: qsTr("🔁  LOAD CHAMBER\nFROM BUFFER")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
                         radius: 6
@@ -461,7 +460,7 @@ ApplicationWindow {
                 }
                 MotionButton {
                     Layout.preferredWidth: 250; Layout.preferredHeight: 60
-                    text: "🔂  LOAD CHAMBER\nFROM TRAY"
+                    text: qsTr("🔂  LOAD CHAMBER\nFROM TRAY")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
                         radius: 6
@@ -485,7 +484,7 @@ ApplicationWindow {
             MotionButton {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: 516; Layout.preferredHeight: 52
-                text: "⏹  STOP  —  Dừng hệ thống và giữ nguyên vị trí hiện tại"
+                text: qsTr("⏹  STOP — Stop the system and hold the current position")
                 font.pixelSize: 15; font.bold: true
                 background: Rectangle { color: "#3a1614"; border.color: "#f0735c"; border.width: 2; radius: 6 }
                 contentItem: Text {
@@ -522,16 +521,16 @@ ApplicationWindow {
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: "⚠  CONFIRM EMPTY BUFFER"
+                text: qsTr("⚠  CONFIRM EMPTY BUFFER")
                 color: "#f0735c"
                 font.pixelSize: 24
                 font.bold: true
             }
             Text {
                 Layout.fillWidth: true
-                text: "LOAD CHAMBER FROM TRAY will restart like a fresh boot:\n" +
-                      "  INIT_LOAD → INIT_REFILL_BUFFER → cycle.\n\n" +
-                      "Have you manually removed all cartridges from the BUFFER?"
+                text: qsTr("LOAD CHAMBER FROM TRAY will restart like a fresh boot:\n" +
+                           "  INIT_LOAD → INIT_REFILL_BUFFER → cycle.\n\n" +
+                           "Have you manually removed all cartridges from the BUFFER?")
                 color: "#c7dcef"
                 font.pixelSize: 16
                 wrapMode: Text.WordWrap
@@ -545,7 +544,7 @@ ApplicationWindow {
 
                 MotionButton {
                     Layout.preferredWidth: 240; Layout.preferredHeight: 56
-                    text: "✓  Buffer is empty — CONFIRM"
+                    text: qsTr("✓  Buffer is empty — CONFIRM")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle { color: "#3ed0b4"; radius: 6 }
                     contentItem: Text {
@@ -562,7 +561,7 @@ ApplicationWindow {
                 }
                 MotionButton {
                     Layout.preferredWidth: 240; Layout.preferredHeight: 56
-                    text: "✗  Cancel / Back"
+                    text: qsTr("✗  Cancel / Back")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle { color: "#14263c"; border.color: "#1a4a6e"; border.width: 1; radius: 6 }
                     contentItem: Text {
@@ -602,14 +601,14 @@ ApplicationWindow {
 
             Text {
                 Layout.alignment: Qt.AlignHCenter
-                text: "⚠  SCALE ISSUE DETECTED"
+                text: qsTr("⚠  SCALE ISSUE DETECTED")
                 color: "#f0735c"
                 font.pixelSize: 26
                 font.bold: true
             }
             Text {
                 Layout.fillWidth: true
-                text: "No loadcell topic received for 150s in PROCESSING_SCALE.\nSelect how to handle this cartridge:"
+                text: qsTr("No loadcell topic was received for 150 seconds in PROCESSING_SCALE.\nSelect how to handle this cartridge:")
                 color: "#c7dcef"
                 font.pixelSize: 16
                 wrapMode: Text.WordWrap
@@ -623,7 +622,7 @@ ApplicationWindow {
 
                 MotionButton {
                     Layout.preferredWidth: 196; Layout.preferredHeight: 72
-                    text: "↩  BACK TO\nWAIT FILLING\n(đã lấy cartridge ra)"
+                    text: qsTr("↩  BACK TO\nWAIT FILLING\n(cartridge removed)")
                     font.pixelSize: 13; font.bold: true
                     background: Rectangle { color: "#081627"; border.color: "#36b6ff"; border.width: 2; radius: 6 }
                     contentItem: Text {
@@ -640,7 +639,7 @@ ApplicationWindow {
                 }
                 MotionButton {
                     Layout.preferredWidth: 196; Layout.preferredHeight: 72
-                    text: "✓  PLACE TO\nOUTPUT\n(force PASS)"
+                    text: qsTr("✓  PLACE TO\nOUTPUT\n(force PASS)")
                     font.pixelSize: 13; font.bold: true
                     background: Rectangle { color: "#0a2418"; border.color: "#3ed0b4"; border.width: 2; radius: 6 }
                     contentItem: Text {
@@ -657,7 +656,7 @@ ApplicationWindow {
                 }
                 MotionButton {
                     Layout.preferredWidth: 196; Layout.preferredHeight: 72
-                    text: "✗  PLACE TO\nFAIL\n(force FAIL)"
+                    text: qsTr("✗  PLACE TO\nFAIL\n(force FAIL)")
                     font.pixelSize: 13; font.bold: true
                     background: Rectangle { color: "#220c0b"; border.color: "#f0735c"; border.width: 2; radius: 6 }
                     contentItem: Text {
@@ -677,7 +676,7 @@ ApplicationWindow {
             MotionButton {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: 612; Layout.preferredHeight: 52
-                text: "⏹  STOP  —  Dừng hệ thống và giữ nguyên vị trí hiện tại"
+                text: qsTr("⏹  STOP — Stop the system and hold the current position")
                 font.pixelSize: 15; font.bold: true
                 background: Rectangle { color: "#160a09"; border.color: "#f0735c"; border.width: 2; radius: 6 }
                 contentItem: Text {
@@ -750,14 +749,14 @@ ApplicationWindow {
             spacing: 15
             
             Text {
-                text: "⚠️ WARNING: INK NOT SELECTED"
+                text: qsTr("⚠️ WARNING: INK NOT SELECTED")
                 color: "#f0735c"
                 font.pixelSize: 24
                 font.bold: true
                 Layout.alignment: Qt.AlignHCenter
             }
             Text {
-                text: "Ink or Lot has not been selected for the system.\nIf you continue running, production and consumption logs WILL NOT BE SAVED."
+                text: qsTr("Ink or Lot has not been selected for the system.\nIf you continue running, production and consumption logs WILL NOT BE SAVED.")
                 color: "#c7dcef"
                 font.pixelSize: 16
                 Layout.alignment: Qt.AlignHCenter
@@ -770,7 +769,7 @@ ApplicationWindow {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 20
                 MotionButton {
-                    text: "✓ RUN (NO LOGGING)"
+                    text: qsTr("✓ RUN (NO LOGGING)")
                     font.pixelSize: 16
                     font.bold: true
                     onClicked: {
@@ -786,7 +785,7 @@ ApplicationWindow {
                     }
                 }
                 MotionButton {
-                    text: "✗ CANCEL"
+                    text: qsTr("✗ CANCEL")
                     font.pixelSize: 16
                     font.bold: true
                     onClicked: notYetInkSelectedPopup.close()
@@ -859,7 +858,7 @@ ApplicationWindow {
 
                     Text {
                         Layout.fillWidth: true
-                        text: authController.authenticated ? "VIEWER MODE" : "VIEW ONLY"
+                        text: authController.authenticated ? qsTr("VIEWER MODE") : qsTr("VIEW ONLY")
                         color: "#7fcdf5"
                         font.pixelSize: 15
                         font.bold: true
@@ -868,7 +867,7 @@ ApplicationWindow {
 
                     Text {
                         Layout.fillWidth: true
-                        text: "CameraPage only"
+                        text: qsTr("Camera page only")
                         color: "#9fb3c8"
                         font.pixelSize: 12
                         elide: Text.ElideRight
@@ -878,7 +877,7 @@ ApplicationWindow {
                 MotionButton {
                     Layout.preferredWidth: 92
                     Layout.preferredHeight: 40
-                    text: "LOGIN"
+                    text: qsTr("LOGIN")
                     font.pixelSize: 14
                     font.bold: true
                     hoverScale: 1.02
@@ -970,6 +969,22 @@ ApplicationWindow {
                 }
             }
 
+            LanguageSelector {
+                id: loginLanguageSelector
+                anchors.top: parent.top
+                anchors.right: closeLoginButton.left
+                anchors.topMargin: 14
+                anchors.rightMargin: 8
+                width: 42
+                height: 42
+                panelColor: "#14263c"
+                panelColorDeep: "#06101d"
+                borderColor: "#1a4a6e"
+                textColor: "#d6f1ff"
+                mutedColor: "#74899f"
+                accentColor: "#7fcdf5"
+            }
+
             ColumnLayout {
                 id: loginColumn
                 anchors.left: parent.left
@@ -981,8 +996,8 @@ ApplicationWindow {
 
                 Text {
                     Layout.fillWidth: true
-                    Layout.rightMargin: 44
-                    text: "SYSTEM LOGIN"
+                    Layout.rightMargin: 94
+                    text: qsTr("SYSTEM LOGIN")
                     color: "#7fcdf5"
                     font.pixelSize: 24
                     font.bold: true
@@ -991,8 +1006,8 @@ ApplicationWindow {
 
                 Text {
                     Layout.fillWidth: true
-                    Layout.rightMargin: 44
-                    text: "Use Fill HP account to unlock controls"
+                    Layout.rightMargin: 94
+                    text: qsTr("Use a Fill HP account to unlock controls")
                     color: "#9fb3c8"
                     font.pixelSize: 15
                     horizontalAlignment: Text.AlignHCenter
@@ -1002,7 +1017,7 @@ ApplicationWindow {
 
                 Text {
                     Layout.fillWidth: true
-                    text: "Account"
+                    text: qsTr("Account")
                     color: "#d6f1ff"
                     font.pixelSize: 15
                     font.bold: true
@@ -1012,7 +1027,7 @@ ApplicationWindow {
                     id: loginUsername
                     Layout.fillWidth: true
                     Layout.preferredHeight: 52
-                    placeholderText: "Enter account"
+                    placeholderText: qsTr("Enter account")
                     color: "#ffffff"
                     placeholderTextColor: "#6f8ba4"
                     selectByMouse: true
@@ -1028,7 +1043,7 @@ ApplicationWindow {
 
                 Text {
                     Layout.fillWidth: true
-                    text: "Password"
+                    text: qsTr("Password")
                     color: "#d6f1ff"
                     font.pixelSize: 15
                     font.bold: true
@@ -1039,7 +1054,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 52
                     rightPadding: 58
-                    placeholderText: "Enter password"
+                    placeholderText: qsTr("Enter password")
                     color: "#ffffff"
                     placeholderTextColor: "#6f8ba4"
                     echoMode: mainWindow.passwordVisible ? TextInput.Normal : TextInput.Password
@@ -1097,7 +1112,7 @@ ApplicationWindow {
                     id: loginButton
                     Layout.fillWidth: true
                     Layout.preferredHeight: 56
-                    text: "LOGIN"
+                    text: qsTr("LOGIN")
                     font.pixelSize: 18
                     font.bold: true
                     hoverScale: 1.01

@@ -146,7 +146,7 @@ Popup {
             Text {
                 width: parent.width
                 horizontalAlignment: Text.AlignHCenter
-                text: pad.title !== "" ? pad.title : "ENTER TEXT"
+                text: pad.title !== "" ? pad.title : qsTr("ENTER TEXT")
                 color: pad.cAccent
                 font.pixelSize: 16
                 font.bold: true
@@ -230,7 +230,7 @@ Popup {
                 spacing: 6
                 Key {
                     width: pad.keyUnit * 1.5 + 3
-                    label: "SHIFT"
+                    label: qsTr("SHIFT")
                     alt: true
                     active: pad.shifted
                     onActivated: pad.shifted = !pad.shifted
@@ -259,10 +259,10 @@ Popup {
                 Key { width: pad.keyUnit; label: "."; alt: true; onActivated: pad.type(".") }
                 Key {
                     width: pad.keyUnit * 5 + 4 * 6
-                    label: "SPACE"
+                    label: qsTr("SPACE")
                     onActivated: pad.type(" ")
                 }
-                Key { width: pad.keyUnit * 2 + 6; label: "CLEAR"; alt: true; onActivated: pad.clearAll() }
+                Key { width: pad.keyUnit * 2 + 6; label: qsTr("CLEAR"); alt: true; onActivated: pad.clearAll() }
             }
 
             // ── Action row ──
@@ -279,7 +279,7 @@ Popup {
                     border.color: pad.cDanger
                     border.width: 1
                     Text {
-                        anchors.centerIn: parent; text: "CANCEL"
+                        anchors.centerIn: parent; text: qsTr("CANCEL")
                         color: pad.cDanger; font.pixelSize: 14; font.bold: true
                     }
                     MouseArea { id: cancelMA; anchors.fill: parent; onClicked: pad.revert() }
@@ -294,7 +294,7 @@ Popup {
                         GradientStop { position: 1.0; color: okMA.pressed ? Qt.darker(pad.cOkEnd, 1.3) : pad.cOkEnd }
                     }
                     Text {
-                        anchors.centerIn: parent; text: "OK"
+                        anchors.centerIn: parent; text: qsTr("OK")
                         color: "#ffffff"; font.pixelSize: 14; font.bold: true
                     }
                     MouseArea { id: okMA; anchors.fill: parent; onClicked: pad.commit() }

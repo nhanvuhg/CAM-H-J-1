@@ -86,12 +86,13 @@ Item {
 
     function currentInkStatusText() {
         if (inkValue("CODE_LOCKED", "0") === "1") {
-            return "LOCKED " + inkValue("CODE_FAILS", "0") + "/" + inkValue("CODE_MAX_FAILS", "5");
+            return qsTr("LOCKED %1/%2").arg(inkValue("CODE_FAILS", "0"))
+                    .arg(inkValue("CODE_MAX_FAILS", "5"));
         }
-        if (inkValue("DEPLETED", "0") === "1") return "EMPTY";
-        if (currentInkNeedsLotCI()) return "NEED LOT CI";
-        if (inkValue("CODE", "") !== "" || inkValue("SCAN", "") !== "") return "OK";
-        return "NO INK";
+        if (inkValue("DEPLETED", "0") === "1") return qsTr("EMPTY");
+        if (currentInkNeedsLotCI()) return qsTr("NEED LOT CI");
+        if (inkValue("CODE", "") !== "" || inkValue("SCAN", "") !== "") return qsTr("OK");
+        return qsTr("NO INK");
     }
 
     function currentInkStatusColor() {
@@ -271,7 +272,7 @@ Item {
                     anchors.margins: 20
                     spacing: 12
 
-                    Text { text: "LIVE WEIGHT DISPLAY"; color: cAccent; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                    Text { text: qsTr("LIVE WEIGHT DISPLAY"); color: cAccent; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: cBorder }
 
@@ -279,13 +280,15 @@ Item {
                         Layout.alignment: Qt.AlignHCenter
                         spacing: 20
                         Text {
-                            text: "● LOADCELL: " + scaleController.loadcellStatus
+                            text: qsTr("● LOADCELL: %1").arg(scaleController.loadcellStatus)
                             color: (scaleController.loadcellStatus == "OK" || scaleController.loadcellStatus == "SIM") ? cSuccess : cDanger
 	                            font.pixelSize: labelFont
                             font.bold: true
                         }
                         Text {
-                            text: "Scale node: ● " + (scaleController.scaleNodeConnected ? "CONNECTED" : "DISCONNECTED")
+                            text: qsTr("Scale node: ● %1").arg(
+                                      scaleController.scaleNodeConnected
+                                      ? qsTr("CONNECTED") : qsTr("DISCONNECTED"))
                             color: scaleController.scaleNodeConnected ? cSuccess : cDanger
 	                            font.pixelSize: labelFont
                             font.bold: true
@@ -313,7 +316,7 @@ Item {
                         Layout.fillWidth: true
                         spacing: 8
 
-	                        Text { text: "Status:"; color: cSubText; font.pixelSize: labelFont }
+	                        Text { text: qsTr("Status:"); color: cSubText; font.pixelSize: labelFont }
                         Rectangle {
                             width: 140; height: 35; radius: 6
                             color: {
@@ -329,8 +332,8 @@ Item {
 
                         Item { Layout.fillWidth: true }
 
-	                        Text { text: "Profile:"; color: cSubText; font.pixelSize: labelFont }
-	                        Text { text: scaleController.activeInkName === "NONE" ? "NOT SELECTED" : scaleController.activeInkName; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+	                        Text { text: qsTr("Profile:"); color: cSubText; font.pixelSize: labelFont }
+	                        Text { text: scaleController.activeInkName === "NONE" ? qsTr("NOT SELECTED") : scaleController.activeInkName; color: cAccent; font.pixelSize: valueFont; font.bold: true }
                     }
 
                     RowLayout {
@@ -342,7 +345,7 @@ Item {
                         MotionButton {
                             id: tareBtn
                             opacity: down ? 0.8 : 1.0
-                            text: "TARE"
+                            text: qsTr("TARE")
                             Layout.fillWidth: true; Layout.preferredHeight: 50; Layout.maximumHeight: 50
 	                            font.pixelSize: buttonFont; font.bold: true
                             onClicked: scaleController.tare()
@@ -365,7 +368,7 @@ Item {
                         MotionButton {
                             id: resetTareBtn
                             opacity: down ? 0.8 : 1.0
-                            text: "RESET TARE"
+                            text: qsTr("RESET TARE")
                             Layout.fillWidth: true; Layout.preferredHeight: 50; Layout.maximumHeight: 50
 	                            font.pixelSize: buttonFont; font.bold: true
                             onClicked: scaleController.resetTare()
@@ -385,9 +388,9 @@ Item {
                     // ── MOVED: CALIBRATE SCALE ──
                     RowLayout {
                         Layout.fillWidth: true
-	                        Text { text: "CALIBRATE SCALE"; color: cAccent; font.pixelSize: sectionFont; font.bold: true }
+	                        Text { text: qsTr("CALIBRATE SCALE"); color: cAccent; font.pixelSize: sectionFont; font.bold: true }
                         Item { Layout.fillWidth: true }
-	                        Text { text: "Status: " + scaleController.calStatus; color: cWarning; font.pixelSize: labelFont; font.bold: true }
+	                        Text { text: qsTr("Status: %1").arg(scaleController.calStatus); color: cWarning; font.pixelSize: labelFont; font.bold: true }
                     }
 
                     Rectangle {
@@ -399,14 +402,14 @@ Item {
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 10
                             ColumnLayout {
-	                                Text { text: "STEP 1 — Empty Scale"; color: "#ecc45a"; font.pixelSize: labelFont; font.bold: true }
-	                                Text { text: "Ensure NOTHING is on the scale."; color: "#c7dcef"; font.pixelSize: helperFont }
+	                                Text { text: qsTr("STEP 1 — Empty Scale"); color: "#ecc45a"; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: qsTr("Ensure NOTHING is on the scale."); color: "#c7dcef"; font.pixelSize: helperFont }
                             }
                             Item { Layout.fillWidth: true }
                             MotionButton {
                                 id: setZeroBtn
                                 opacity: down ? 0.8 : 1.0
-                                text: "SET ZERO"
+                                text: qsTr("SET ZERO")
                                 Layout.preferredWidth: 120; Layout.preferredHeight: 35
 	                                font.pixelSize: labelFont; font.bold: true
                                 onClicked: scaleController.startCalibration()
@@ -443,22 +446,22 @@ Item {
                                     spacing: 2
                                     Text {
                                         text: {
-                                            if (scaleController.calStatus === "WAITING_WEIGHT") return "STEP 2 — Place Standard Weight (Point 1/4)";
-                                            if (scaleController.calStatus === "CONTINUE_CAL_2/5") return "STEP 3 — Place Next Weight (Point 2/4)";
-                                            if (scaleController.calStatus === "CONTINUE_CAL_3/5") return "STEP 4 — Place Next Weight (Point 3/4)";
-                                            if (scaleController.calStatus === "CONTINUE_CAL_4/5") return "STEP 5 — Place Final Weight (Point 4/4)";
-                                            return "STEP 2 — Place Standard Weight";
+                                            if (scaleController.calStatus === "WAITING_WEIGHT") return qsTr("STEP 2 — Place Standard Weight (Point 1/4)");
+                                            if (scaleController.calStatus === "CONTINUE_CAL_2/5") return qsTr("STEP 3 — Place Next Weight (Point 2/4)");
+                                            if (scaleController.calStatus === "CONTINUE_CAL_3/5") return qsTr("STEP 4 — Place Next Weight (Point 3/4)");
+                                            if (scaleController.calStatus === "CONTINUE_CAL_4/5") return qsTr("STEP 5 — Place Final Weight (Point 4/4)");
+                                            return qsTr("STEP 2 — Place Standard Weight");
                                         }
                                         color: "#ecc45a"
 	                                        font.pixelSize: tableFont; font.bold: true
                                     }
                                     Text {
                                         text: {
-                                            if (scaleController.calStatus === "WAITING_WEIGHT") return "Suggested: 100g";
-                                            if (scaleController.calStatus === "CONTINUE_CAL_2/5") return "Suggested: 250g";
-                                            if (scaleController.calStatus === "CONTINUE_CAL_3/5") return "Suggested: 500g";
-                                            if (scaleController.calStatus === "CONTINUE_CAL_4/5") return "Suggested: 1000g";
-                                            return "Enter known weight below";
+                                            if (scaleController.calStatus === "WAITING_WEIGHT") return qsTr("Suggested: 100 g");
+                                            if (scaleController.calStatus === "CONTINUE_CAL_2/5") return qsTr("Suggested: 250 g");
+                                            if (scaleController.calStatus === "CONTINUE_CAL_3/5") return qsTr("Suggested: 500 g");
+                                            if (scaleController.calStatus === "CONTINUE_CAL_4/5") return qsTr("Suggested: 1000 g");
+                                            return qsTr("Enter the known weight below");
                                         }
 	                                        color: cSubText; font.pixelSize: helperFont
                                     }
@@ -495,7 +498,7 @@ Item {
                                 Layout.fillWidth: true; spacing: 6
                                 TextField {
                                     id: tfCalW
-                                    placeholderText: "Enter value (g)"; placeholderTextColor: cSubText
+                                    placeholderText: qsTr("Enter value (g)"); placeholderTextColor: cSubText
                                     Layout.fillWidth: true; Layout.preferredHeight: 45
 	                                    font.pixelSize: valueFont; font.bold: true; color: cWarning
                                     horizontalAlignment: TextInput.AlignHCenter
@@ -517,7 +520,7 @@ Item {
                                 MotionButton {
                                     id: applyStep2Btn
                                     opacity: down ? 0.8 : 1.0
-                                    text: scaleController.calStatus === "CONTINUE_CAL_4/5" ? "FINISH" : "APPLY"
+                                    text: scaleController.calStatus === "CONTINUE_CAL_4/5" ? qsTr("FINISH") : qsTr("APPLY")
                                     Layout.preferredWidth: 120; Layout.preferredHeight: 45
 	                                    font.pixelSize: buttonFont; font.bold: true
                                     onClicked: {
@@ -545,7 +548,7 @@ Item {
 
                     Rectangle { Layout.fillWidth: true; height: 2; color: cBorder }
 
-	                    Text { text: "PRODUCTION RESULTS"; color: cAccent; font.pixelSize: sectionFont; font.bold: true; font.letterSpacing: 2; Layout.alignment: Qt.AlignHCenter }
+	                    Text { text: qsTr("PRODUCTION RESULTS"); color: cAccent; font.pixelSize: sectionFont; font.bold: true; font.letterSpacing: 2; Layout.alignment: Qt.AlignHCenter }
 
                     // ── STAT CARDS ROW ──
                     RowLayout {
@@ -556,9 +559,9 @@ Item {
 	                            color: cCard; border.color: cFrameBorder; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-	                                Text { text: "TOTAL"; color: cSubText; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: qsTr("TOTAL"); color: cSubText; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
 	                                Text { text: scaleController.totalBatch.toString(); color: "#ffffff"; font.pixelSize: resultFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-	                                Text { text: "batch"; color: "#bfe0f5"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: qsTr("batch"); color: "#bfe0f5"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                         // PASS card
@@ -567,9 +570,9 @@ Item {
 	                            color: Qt.rgba(0.13, 0.77, 0.37, 0.15); border.color: cFrameBorder; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-	                                Text { text: "✓ PASS"; color: "#3ed0b4"; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: qsTr("✓ PASS"); color: "#3ed0b4"; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
 	                                Text { text: scaleController.passBatch.toString(); color: cSuccess; font.pixelSize: resultFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-	                                Text { text: "batch"; color: "#1f9e86"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: qsTr("batch"); color: "#1f9e86"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                         // FAIL card
@@ -578,9 +581,9 @@ Item {
 	                            color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: cFrameBorder; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-	                                Text { text: "✗ FAIL"; color: "#f5a394"; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: qsTr("✗ FAIL"); color: "#f5a394"; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
 	                                Text { text: scaleController.failBatch.toString(); color: cDanger; font.pixelSize: resultFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-	                                Text { text: "batch"; color: "#b53527"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
+	                                Text { text: qsTr("batch"); color: "#b53527"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                     }
@@ -594,14 +597,14 @@ Item {
                             border.color: scaleController.consecFails >= 3 ? cDanger : cBorder; border.width: 1
                             RowLayout {
                                 anchors.centerIn: parent; spacing: 8
-	                                Text { text: "⚠ CONSECUTIVE FAILS:"; color: cSubText; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1 }
+	                                Text { text: qsTr("⚠ CONSECUTIVE FAILS:"); color: cSubText; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1 }
 	                                Text { text: scaleController.consecFails.toString(); color: scaleController.consecFails >= 3 ? cDanger : cWarning; font.pixelSize: valueFont; font.bold: true }
                             }
                         }
                         MotionButton {
                             id: resetBatchBtn
                             opacity: down ? 0.8 : 1.0
-                            text: "RESET BATCH"
+                            text: qsTr("RESET BATCH")
                             Layout.preferredWidth: 130; Layout.preferredHeight: 48
 	                            font.pixelSize: buttonFont; font.bold: true
                             onClicked: scaleController.resetBatch()
@@ -638,7 +641,7 @@ Item {
                     spacing: 15
 
                     // Title
-	                    Text { text: "INK PROFILES"; color: "#67d0ff"; font.pixelSize: titleFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+	                    Text { text: qsTr("INK PROFILES"); color: "#67d0ff"; font.pixelSize: titleFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
 
 	                    // ── MỤC CHỌN MỰC TƯƠNG TỰ 'SELECT MODE' ──
 	                    Rectangle { Layout.fillWidth: true; height: 1; color: cBorder; opacity: 0.5 }
@@ -661,7 +664,7 @@ Item {
 	                                spacing: 10
 
 	                                Text {
-	                                    text: "INK BATCH STATUS"
+	                                    text: qsTr("INK BATCH STATUS")
 	                                    color: cAccent
 	                                    font.pixelSize: sectionFont
 	                                    font.bold: true
@@ -692,7 +695,7 @@ Item {
 	                                    anchors.rightMargin: 16
 	                                    spacing: 12
 	                                    Text {
-	                                        text: "CODE"
+	                                        text: qsTr("CODE")
 	                                        color: cMuted
 	                                        font.pixelSize: tableFont
 	                                        font.bold: true
@@ -713,7 +716,7 @@ Item {
 	                                        font.bold: true
 	                                    }
 	                                    Text {
-	                                        text: "/ " + inkNumberText("TOTAL", 2) + " kg remaining"
+	                                        text: qsTr("/ %1 kg remaining").arg(inkNumberText("TOTAL", 2))
 	                                        color: cSubText
 	                                        font.pixelSize: labelFont
 	                                        font.bold: true
@@ -727,11 +730,11 @@ Item {
 	                                columnSpacing: 8
 	                                rowSpacing: 8
 
-	                                InkMetricBox { title: "LEFT (BATCH)"; value: inkNumberText("REMAIN_BATCHES", 2) }
-	                                InkMetricBox { title: "NEED/BATCH (g)"; value: inkNumberText("BATCH_NEED_G", 1) }
-	                                InkMetricBox { title: "STATUS"; value: currentInkStatusText(); valueColor: currentInkStatusColor() }
-	                                InkMetricBox { title: "LOT PI"; value: inkValue("LOT_PI", "-") }
-	                                InkMetricBox { title: "LOT CI"; value: currentInkLotCIText(); valueColor: currentInkNeedsLotCI() ? cWarning : cAccent }
+	                                InkMetricBox { title: qsTr("LEFT (BATCH)"); value: inkNumberText("REMAIN_BATCHES", 2) }
+	                                InkMetricBox { title: qsTr("NEED/BATCH (g)"); value: inkNumberText("BATCH_NEED_G", 1) }
+	                                InkMetricBox { title: qsTr("STATUS"); value: currentInkStatusText(); valueColor: currentInkStatusColor() }
+	                                InkMetricBox { title: qsTr("LOT PI"); value: inkValue("LOT_PI", "-") }
+	                                InkMetricBox { title: qsTr("LOT CI"); value: currentInkLotCIText(); valueColor: currentInkNeedsLotCI() ? cWarning : cAccent }
 	                            }
 
 	                            RowLayout {
@@ -761,7 +764,7 @@ Item {
 	                                        verticalAlignment: TextInput.AlignVCenter
 	                                        clip: true
 	                                        selectByMouse: true
-	                                        placeholderText: "Enter / scan ink code"
+	                                        placeholderText: qsTr("Enter or scan an ink code")
 	                                        background: Rectangle { color: "transparent" }
 	                                        Keys.onReturnPressed: submitInkCodeFromPanel()
 	                                        Keys.onEnterPressed: submitInkCodeFromPanel()
@@ -770,7 +773,7 @@ Item {
 
 	                                MotionButton {
 	                                    id: submitInkBtn
-	                                    text: "APPLY"
+	                                    text: qsTr("APPLY")
 	                                    Layout.preferredWidth: 86
 	                                    Layout.preferredHeight: 40
 	                                    font.pixelSize: labelFont
@@ -789,7 +792,7 @@ Item {
 
 	                                MotionButton {
 	                                    id: outInkBtn
-	                                    text: "CLEAR"
+	                                    text: qsTr("CLEAR")
 	                                    Layout.preferredWidth: 70
 	                                    Layout.preferredHeight: 40
 	                                    font.pixelSize: labelFont
@@ -818,7 +821,7 @@ Item {
 	                                    anchors.margins: 8
 	                                    spacing: 8
 	                                    Text {
-	                                        text: "LOT CI"
+	                                        text: qsTr("LOT CI")
 	                                        color: currentInkNeedsLotCI() ? cWarning : cAccent
 	                                        font.pixelSize: tableFont
 	                                        font.bold: true
@@ -847,7 +850,7 @@ Item {
 		                                            verticalAlignment: TextInput.AlignVCenter
 		                                            clip: true
 		                                            selectByMouse: true
-		                                            placeholderText: "Enter Lot CI"
+		                                            placeholderText: qsTr("Enter Lot CI")
 		                                            background: Rectangle { color: "transparent" }
 		                                            Keys.onReturnPressed: submitLotCIFromPanel()
 		                                            Keys.onEnterPressed: submitLotCIFromPanel()
@@ -855,7 +858,7 @@ Item {
 		                                    }
 	                                    MotionButton {
 	                                        id: confirmLotCiBtn
-		                                        text: "ACCEPT LOT CI"
+		                                        text: qsTr("ACCEPT LOT CI")
 		                                        Layout.preferredWidth: 150
 		                                        Layout.preferredHeight: 34
 	                                        font.pixelSize: tableFont
@@ -884,7 +887,7 @@ Item {
 	                        ColumnLayout {
 	                            Layout.fillWidth: true
 	                            Layout.preferredWidth: 560
-	                            Text { text: "SELECT INK PROFILE"; color: "#67d0ff"; font.pixelSize: tableFont; font.bold: true; font.letterSpacing: 1 }
+	                            Text { text: qsTr("SELECT INK PROFILE"); color: "#67d0ff"; font.pixelSize: tableFont; font.bold: true; font.letterSpacing: 1 }
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 36; radius: 4
                                 color: cField; border.color: cFieldBorder; border.width: 1
@@ -918,17 +921,17 @@ Item {
 	                                                width: parent.width; height: 32; color: cCard
                                                 Row {
 	                                                    anchors.fill: parent; spacing: 0
-	                                                    Item { width: parent.width * 0.07; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.07; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("No."); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-	                                                    Item { width: parent.width * 0.16 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "SCAN CODE"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.16 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: qsTr("SCAN CODE"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-	                                                    Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "INK NAME"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: qsTr("INK NAME"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-	                                                    Item { width: parent.width * 0.13 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "TOTAL KG"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.13 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("TOTAL KG"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-	                                                    Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DENSITY"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("DENSITY"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-	                                                    Item { width: parent.width * 0.34 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "LOT PI"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.34 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: qsTr("LOT PI"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                }
 	                                            }
                                             Rectangle { width: parent.width; height: 2; color: cAccent }
@@ -970,7 +973,7 @@ Item {
 	                            Layout.fillWidth: false
 	                            Layout.preferredWidth: 340
 	                            Layout.maximumWidth: 360
-	                            Text { text: "SELECT CARTRIDGE TYPE"; color: cAccent; font.pixelSize: tableFont; font.bold: true; font.letterSpacing: 1 }
+	                            Text { text: qsTr("SELECT CARTRIDGE TYPE"); color: cAccent; font.pixelSize: tableFont; font.bold: true; font.letterSpacing: 1 }
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 36; radius: 4
                                 color: cField; border.color: cFieldBorder; border.width: 1
@@ -1003,13 +1006,13 @@ Item {
 	                                                width: parent.width; height: 32; color: cCard
                                                 Row {
                                                     anchors.fill: parent; spacing: 0
-	                                                    Item { width: parent.width * 0.14; height: parent.height; Text { anchors.centerIn: parent; text: "No"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.14; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("No."); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-	                                                    Item { width: parent.width * 0.46 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: "CART NAME"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.46 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: qsTr("CART NAME"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-	                                                    Item { width: parent.width * 0.30 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "CART WEIGHT"; color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.30 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("CART WEIGHT"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-	                                                    Item { width: parent.width * 0.10 - 1; height: parent.height; Text { anchors.centerIn: parent; text: "DEL"; color: cDanger; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.10 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("DEL"); color: cDanger; font.pixelSize: tableFont; font.bold: true } }
                                                 }
                                             }
                                             Rectangle { width: parent.width; height: 2; color: cAccent }
@@ -1061,29 +1064,29 @@ Item {
 
 	                            // Row 1
 	                            RowLayout {
-	                                Text { text: "SCAN CODE:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: qsTr("SCAN CODE:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).scan_code : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Text { text: "INK NAME:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: qsTr("INK NAME:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? (inkModel.get(inkSelector.currentIndex).ink_name || inkModel.get(inkSelector.currentIndex).name) : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Text { text: "TOTAL KG:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: qsTr("TOTAL KG:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? Number(inkModel.get(inkSelector.currentIndex).total_kg || 0).toFixed(2) : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 
 	                            // Row 2
 	                            RowLayout {
-	                                Text { text: "DENSITY:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: qsTr("DENSITY:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? Number(inkModel.get(inkSelector.currentIndex).density || 0).toFixed(2) + " g/ml" : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Text { text: "LOT PI:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: qsTr("LOT PI:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? (inkModel.get(inkSelector.currentIndex).lot_pi || "--") : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-			                                Text { text: "RELATIVE ERROR (g):"; color: cWarning; font.pixelSize: labelFont; font.bold: true }
+		                                Text { text: qsTr("RELATIVE ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
 		                                Rectangle {
 		                                    width: 70; height: 35; color: cField; border.color: cWarning; border.width: 0.5; radius: 4
 		                                    TextInput {
@@ -1098,15 +1101,15 @@ Item {
 
 	                            // Row 3
 	                            RowLayout {
-	                                Text { text: "CARTRIDGE TYPE:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: qsTr("CARTRIDGE TYPE:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).name : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Text { text: "CART WEIGHT:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { text: qsTr("CART WEIGHT:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: cartSelector.currentIndex >= 0 ? Number(cartModel.get(cartSelector.currentIndex).density || 0).toFixed(2) + " g" : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
                             RowLayout {
-                                Text { text: "CART WEIGHT ERROR (g):"; color: cWarning; font.pixelSize: labelFont; font.bold: true }
+                                Text { text: qsTr("CART WEIGHT ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     width: 70; height: 35; color: cField; border.color: cWarning; border.width: 0.5; radius: 4
                                     TextInput {
@@ -1133,7 +1136,7 @@ Item {
 
 	                            // Row 4
                             RowLayout {
-                                Text { text: "CURRENT ML FILL:"; color: cSubText; font.pixelSize: labelFont; font.bold: true }
+                                Text { text: qsTr("CURRENT ML FILL:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     width: 80; height: 35; color: cField; border.color: cFieldBorder; border.width: 1; radius: 4
                                     Text {
@@ -1142,7 +1145,7 @@ Item {
                                 }
                             }
                             RowLayout {
-                                Text { text: "TYPE WEIGHT FILL:"; color: cAccent; font.pixelSize: labelFont; font.bold: true }
+                                Text { text: qsTr("TYPE WEIGHT FILL:"); color: cAccent; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     width: 70; height: 35; color: cField; border.color: cFieldBorder; border.width: 1; radius: 4
                                     TextInput {
@@ -1177,7 +1180,7 @@ Item {
                                 MotionButton {
                                     id: applyTargetBtn
                                     opacity: down ? 0.8 : 1.0
-                                    text: "APPLY TARGET (RUN)"
+                                    text: qsTr("APPLY TARGET (RUN)")
                                     Layout.preferredHeight: 50; Layout.preferredWidth: 240
                                     background: Rectangle {
                                         radius: 5
@@ -1214,7 +1217,7 @@ Item {
                                 MotionButton {
                                     id: clearSelectionBtn
                                     opacity: down ? 0.8 : 1.0
-                                    text: "CLEAR SELECTION"
+                                    text: qsTr("CLEAR SELECTION")
                                     Layout.preferredHeight: 50; Layout.preferredWidth: 160
                                     background: Rectangle {
                                         border.color: cPauseBorder
@@ -1242,7 +1245,7 @@ Item {
                                                 anchors.verticalCenter: parent.verticalCenter
                                             }
                                             Text {
-                                                text: "CLEAR SELECTION"
+                                                text: qsTr("CLEAR SELECTION")
 	                                                font.pixelSize: tableFont
                                                 font.bold: true
                                                 color: "#ffffff"
@@ -1267,7 +1270,7 @@ Item {
                         Rectangle {
                             Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cFrameBorder; border.width: 1; radius: 6
                             Column { anchors.centerIn: parent; spacing: 2
-	                                Text { text: "TOTAL BATCH (g)"; color: cSubText; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+	                                Text { text: qsTr("TOTAL BATCH (g)"); color: cSubText; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
 	                                Text { text: scaleController.totalBatchWeight.toFixed(2); color: cAccent; font.pixelSize: valueFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                             }
                         }
@@ -1286,7 +1289,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Column { spacing: 2; anchors.verticalCenter: parent.verticalCenter
-	                                Text { text: "MIN WEIGHT (g)"; color: cWarning; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+	                                Text { text: qsTr("MIN WEIGHT (g)"); color: cWarning; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
 	                                Text { text: scaleController.minWeight.toFixed(2); color: cWarning; font.pixelSize: valueFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                 }
                             }
@@ -1306,7 +1309,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Column { spacing: 2; anchors.verticalCenter: parent.verticalCenter
-	                                Text { text: "MAX WEIGHT (g)"; color: cSuccess; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+	                                Text { text: qsTr("MAX WEIGHT (g)"); color: cSuccess; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
 	                                Text { text: scaleController.maxWeight.toFixed(2); color: cSuccess; font.pixelSize: valueFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                 }
                             }
@@ -1334,14 +1337,15 @@ Item {
             anchors.leftMargin: 12; anchors.rightMargin: 8
             spacing: 10
             Text {
-                text: "⚠  TEMPO NOT YET TARED — press TARE to clear drift"
+
+                text: qsTr("⚠  SCALE NOT YET TARED — press TARE to clear drift")
 	                color: "#0c1726"; font.pixelSize: buttonFont; font.bold: true
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
             MotionButton {
                 id: driftTareBtn
-                text: "TARE"
+                text: qsTr("TARE")
                 Layout.preferredWidth: 80; Layout.preferredHeight: 28
 	                font.pixelSize: tableFont; font.bold: true
                 background: Rectangle { color: cField; border.color: cFieldBorder; border.width: 1; radius: 4 }
@@ -1367,13 +1371,13 @@ Item {
         background: Rectangle { color: cCard; border.color: cDanger; border.width: 1; radius: 10 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 20
-	            Text { text: "WARNING: OVERLOAD!"; color: cDanger; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-	            Text { text: "Scale load exceeds maximum limit. Check immediately."; color: cSubText; font.pixelSize: buttonFont; Layout.alignment: Qt.AlignHCenter }
+	            Text { text: qsTr("WARNING: OVERLOAD!"); color: cDanger; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+	            Text { text: qsTr("Scale load exceeds the maximum limit. Check immediately."); color: cSubText; font.pixelSize: buttonFont; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
             MotionButton {
                 id: ackOverloadBtn
                 opacity: down ? 0.8 : 1.0
-                text: "ACKNOWLEDGE"
+                text: qsTr("ACKNOWLEDGE")
                 Layout.alignment: Qt.AlignHCenter
 	                font.pixelSize: buttonFont; font.bold: true
                 onClicked: { scaleController.ackOverload(); overloadPopup.close() }
@@ -1400,8 +1404,8 @@ Item {
         background: Rectangle { color: cCard; border.color: cFrameBorder; border.width: 1; radius: 10 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 20
-	            Text { text: "Zero Drift Warning"; color: cAccent; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-	            Text { text: "Loadcell zero drift detected. Re-tare recommended."; color: cSubText; font.pixelSize: buttonFont; Layout.alignment: Qt.AlignHCenter }
+	            Text { text: qsTr("Zero Drift Warning"); color: cAccent; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+	            Text { text: qsTr("Loadcell zero drift detected. Re-tare is recommended."); color: cSubText; font.pixelSize: buttonFont; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
@@ -1409,7 +1413,7 @@ Item {
                 MotionButton {
                     id: zeroDriftTareBtn
                     opacity: down ? 0.8 : 1.0
-                    text: "TARE NOW"
+                    text: qsTr("TARE NOW")
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 45
 	                    font.pixelSize: buttonFont; font.bold: true
@@ -1426,7 +1430,7 @@ Item {
                 }
                 MotionButton {
                     opacity: down ? 0.8 : 1.0
-                    text: "NO"
+                    text: qsTr("NO")
                     Layout.preferredWidth: 150
                     Layout.preferredHeight: 45
 	                    font.pixelSize: buttonFont; font.bold: true
@@ -1457,7 +1461,7 @@ Item {
         background: Rectangle { color: cCard; radius: 12; border.color: cFrameBorder; border.width: 1 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 15; spacing: 8
-	            Text { text: "ENTER VALUE (g)"; color: cAccent; font.pixelSize: buttonFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+	            Text { text: qsTr("ENTER VALUE (g)"); color: cAccent; font.pixelSize: buttonFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
             Rectangle {
                 Layout.fillWidth: true; Layout.preferredHeight: 50; radius: 6
                 color: cField; border.color: cFieldBorder; border.width: 1
@@ -1519,7 +1523,7 @@ Item {
                 Layout.fillWidth: true; spacing: 10
                 MotionButton {
                     opacity: down ? 0.8 : 1.0
-                    text: "CANCEL"; Layout.fillWidth: true; Layout.preferredHeight: 44
+                    text: qsTr("CANCEL"); Layout.fillWidth: true; Layout.preferredHeight: 44
 	                    font.pixelSize: labelFont; font.bold: true
                     onClicked: numpadPopup.close()
                     background: Rectangle { radius: 6; color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: cDanger }
@@ -1528,7 +1532,7 @@ Item {
                 MotionButton {
                     id: numpadOkBtn
                     opacity: down ? 0.8 : 1.0
-                    text: "OK"; Layout.fillWidth: true; Layout.preferredHeight: 44
+                    text: qsTr("OK"); Layout.fillWidth: true; Layout.preferredHeight: 44
 	                    font.pixelSize: labelFont; font.bold: true
                     onClicked: {
                         if (inkTab.numpadTarget) {

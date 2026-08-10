@@ -33,6 +33,29 @@ Item {
         alertPopup.open()
     }
 
+    function displayLevel(level) {
+        var token = String(level || "").trim().toUpperCase()
+        switch (token) {
+        case "ERROR": return qsTr("ERROR")
+        case "WARNING": return qsTr("WARNING")
+        case "INFO": return qsTr("INFO")
+        default: return level || ""
+        }
+    }
+
+    function displayArea(area) {
+        var token = String(area || "").trim().toUpperCase()
+        switch (token) {
+        case "ROBOT": return qsTr("ROBOT")
+        case "FEEDER": return qsTr("FEEDER")
+        case "SCALE": return qsTr("SCALE")
+        case "VFD": return qsTr("VFD")
+        case "CAMERA": return qsTr("CAMERA")
+        case "FILL_HP": return qsTr("FILL_HP")
+        default: return area || ""
+        }
+    }
+
     Connections {
         target: systemAlertController
         function onAttentionRequested() {
@@ -100,14 +123,21 @@ Item {
             HoverHint {
                 visible: alertButton.hovered
                 label: root.totalCount === 0
-                       ? "Cảnh báo hệ thống"
+                       ? qsTr("System warnings and errors")
                        : (root.hasError
-                          ? systemAlertController.errorCount + " lỗi đang chặn START"
+                          ? (systemAlertController.errorCount === 1
+                             ? qsTr("1 error blocking START")
+                             : qsTr("%1 errors blocking START")
+                                 .arg(systemAlertController.errorCount))
                           : (root.needsAcknowledge
-                             ? systemAlertController.unacknowledgedWarningCount
-                               + " cảnh báo cần acknowledge"
-                             : systemAlertController.warningCount
-                               + " cảnh báo đã acknowledge"))
+                             ? (systemAlertController.unacknowledgedWarningCount === 1
+                                ? qsTr("1 warning requires acknowledgement")
+                                : qsTr("%1 warnings require acknowledgement")
+                                    .arg(systemAlertController.unacknowledgedWarningCount))
+                             : (systemAlertController.warningCount === 1
+                                ? qsTr("1 warning acknowledged")
+                                : qsTr("%1 warnings acknowledged")
+                                    .arg(systemAlertController.warningCount))))
                 bc: root.stateColor
                 tc: root.textColor
             }
@@ -168,7 +198,7 @@ Item {
                         spacing: 3
 
                         Text {
-                            text: "SYSTEM WARNINGS & ERRORS"
+                            text: qsTr("SYSTEM WARNINGS & ERRORS")
                             color: root.textColor
                             font.pixelSize: 20
                             font.bold: true
@@ -176,9 +206,14 @@ Item {
                         }
                         Text {
                             text: root.totalCount === 0
-                                  ? "Không có cảnh báo đang hoạt động"
-                                  : systemAlertController.errorCount + " ERROR  -  "
-                                    + systemAlertController.warningCount + " WARNING"
+                                  ? qsTr("No active warnings or errors")
+                                  : (systemAlertController.errorCount === 1
+                                     ? qsTr("1 ERROR")
+                                     : qsTr("%1 ERRORS").arg(systemAlertController.errorCount))
+                                    + "  -  "
+                                    + (systemAlertController.warningCount === 1
+                                       ? qsTr("1 WARNING")
+                                       : qsTr("%1 WARNINGS").arg(systemAlertController.warningCount))
                             color: root.mutedColor
                             font.pixelSize: 13
                         }
@@ -188,7 +223,7 @@ Item {
                         visible: systemAlertController.unacknowledgedWarningCount > 1
                         Layout.preferredWidth: 168
                         Layout.preferredHeight: 42
-                        text: "ACK ALL WARNINGS"
+                        text: qsTr("ACK ALL WARNINGS")
                         font.pixelSize: 11
                         font.bold: true
                         onClicked: systemAlertController.acknowledgeAllWarnings()
@@ -302,14 +337,14 @@ Item {
                     }
                     Text {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "HỆ THỐNG KHÔNG CÓ CẢNH BÁO ACTIVE"
+                        text: qsTr("NO ACTIVE SYSTEM WARNINGS OR ERRORS")
                         color: root.textColor
                         font.pixelSize: 16
                         font.bold: true
                     }
                     Text {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "Lịch sử lỗi trong AUTO/AI vẫn được lưu tại Production Output."
+                        text: qsTr("AUTO/AI error history is still saved in Production Output.")
                         color: root.mutedColor
                         font.pixelSize: 13
                     }
@@ -375,7 +410,7 @@ Item {
                                     Text {
                                         id: severityText
                                         anchors.centerIn: parent
-                                        text: modelData.level
+                                        text: root.displayLevel(modelData.level)
                                         color: modelData.level === "ERROR" ? "#ffffff" : "#151006"
                                         font.pixelSize: 11
                                         font.bold: true
@@ -383,7 +418,7 @@ Item {
                                 }
 
                                 Text {
-                                    text: modelData.area
+                                    text: root.displayArea(modelData.area)
                                     color: root.accentColor
                                     font.pixelSize: 12
                                     font.bold: true
@@ -415,7 +450,7 @@ Item {
                                     Text {
                                         id: acknowledgedText
                                         anchors.centerIn: parent
-                                        text: "ACKNOWLEDGED"
+                                        text: qsTr("ACKNOWLEDGED")
                                         color: root.successColor
                                         font.pixelSize: 10
                                         font.bold: true
@@ -443,7 +478,7 @@ Item {
                                     anchors.margins: 9
                                     spacing: 9
                                     Text {
-                                        text: "FIX"
+                                        text: qsTr("FIX")
                                         color: root.accentColor
                                         font.pixelSize: 11
                                         font.bold: true
@@ -465,10 +500,10 @@ Item {
                                 Text {
                                     Layout.fillWidth: true
                                     text: modelData.level === "ERROR"
-                                          ? "ERROR tự mở khóa khi topic nguồn báo đã hồi phục."
+                                          ? qsTr("The error clears automatically when its source topic recovers.")
                                           : (modelData.acknowledged
-                                             ? "Đã acknowledge; cảnh báo vẫn hiển thị tới khi hồi phục."
-                                             : "Acknowledge xác nhận đã đọc cảnh báo và cho phép START.")
+                                             ? qsTr("Acknowledged; the warning remains visible until recovery.")
+                                             : qsTr("Acknowledge the warning to confirm it was read and allow START."))
                                     color: modelData.level === "ERROR" ? root.errorColor
                                                                        : root.mutedColor
                                     font.pixelSize: 12
@@ -480,7 +515,7 @@ Item {
                                     visible: modelData.level === "WARNING" && !modelData.acknowledged
                                     Layout.preferredWidth: 132
                                     Layout.preferredHeight: 38
-                                    text: "ACKNOWLEDGE"
+                                    text: qsTr("ACKNOWLEDGE")
                                     font.pixelSize: 11
                                     font.bold: true
                                     onClicked: systemAlertController.acknowledgeWarning(modelData.id)

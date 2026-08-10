@@ -1,6 +1,7 @@
 #include "unified_control_gui/hp_controller.hpp"
 #include <QDebug>
 #include <QMetaObject>
+#include <QRegularExpression>
 #include <QTime>
 
 HpController::HpController(rclcpp::Node::SharedPtr node, QObject *parent)
@@ -309,7 +310,7 @@ HpController::HpController(rclcpp::Node::SharedPtr node, QObject *parent)
         });
 
     qDebug() << "HpController initialized successfully.";
-    addAlert("System Status", "HpController initialized successfully.", "info");
+    addAlert("System Status", "Fill HP controller initialized successfully.", "info");
 }
 
 // ── Control Slots ────────────────────────────────────────────────────────────
@@ -391,4 +392,49 @@ void HpController::addAlert(const QString &title, const QString &text, const QSt
         alert_history_.removeLast();
     }
     emit alertHistoryChanged();
+}
+
+QVariantList HpController::alertHistory() const
+{
+    QVariantList localized;
+    localized.reserve(alert_history_.size());
+    for (const QVariant &value : alert_history_) {
+        QVariantMap item = value.toMap();
+        item["title"] = localizedAlertText(item.value("title").toString());
+        item["text"] = localizedAlertText(item.value("text").toString());
+        localized.append(item);
+    }
+    return localized;
+}
+
+void HpController::refreshTranslations()
+{
+    emit alertHistoryChanged();
+}
+
+QString HpController::localizedAlertText(const QString &text) const
+{
+    if (text == "Manual Response") return tr("Manual Response");
+    if (text == "Error Alert") return tr("Error Alert");
+    if (text == "Error Cleared") return tr("Error Cleared");
+    if (text == "System Status") return tr("System Status");
+    if (text == "Manual Command") return tr("Manual Command");
+    if (text == "Mode Switch") return tr("Mode Switch");
+    if (text == "Screen Control") return tr("Screen Control");
+    if (text == "Parameter Update") return tr("Parameter Update");
+    if (text == "System error has been cleared.")
+        return tr("System error has been cleared.");
+    if (text == "Fill HP controller initialized successfully.")
+        return tr("Fill HP controller initialized successfully.");
+
+    static const QRegularExpression modeExpression("^Change mode to (.+)$");
+    QRegularExpressionMatch match = modeExpression.match(text);
+    if (match.hasMatch())
+        return tr("Change mode to %1").arg(match.captured(1));
+
+    static const QRegularExpression commandExpression("^Command: (.+)$");
+    match = commandExpression.match(text);
+    if (match.hasMatch())
+        return tr("Command: %1").arg(match.captured(1));
+    return text;
 }

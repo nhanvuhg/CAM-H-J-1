@@ -95,7 +95,8 @@ Item {
     function getCartridgeStats() {
         var list = hpController.cartridgePressures;
         if (!list || list.length === 0) {
-            return "Min 0.0   Avg 0.0   Max\n0.0 mbar";
+            return qsTr("Min %1   Avg %2   Max").arg("0.0").arg("0.0")
+                    + "\n0.0 mbar";
         }
         var minVal = Number.MAX_VALUE;
         var maxVal = -Number.MAX_VALUE;
@@ -110,9 +111,13 @@ Item {
                 count++;
             }
         }
-        if (count === 0) return "Min 0.0   Avg 0.0   Max\n0.0 mbar";
+        if (count === 0)
+            return qsTr("Min %1   Avg %2   Max").arg("0.0").arg("0.0")
+                    + "\n0.0 mbar";
         var avgVal = sum / count;
-        return "Min " + minVal.toFixed(1) + "   Avg " + avgVal.toFixed(1) + "   Max\n" + maxVal.toFixed(1) + " mbar";
+        return qsTr("Min %1   Avg %2   Max")
+                .arg(minVal.toFixed(1)).arg(avgVal.toFixed(1))
+                + "\n" + maxVal.toFixed(1) + " mbar";
     }
 
     // Calculated from systemStatus - block mode change when robot is running
@@ -306,7 +311,7 @@ Item {
                             }
                             HoverHint {
                                 visible: refreshNodesBtn.hovered
-                                label: "Restart Node"
+                                label: qsTr("Restart Node")
                                 bc: cServoRunEnd
                                 tc: cBtnBaseText
                             }
@@ -340,7 +345,7 @@ Item {
                             }
                             HoverHint {
                                 visible: restartGuiBtn.hovered
-                                label: "Restart GUI"
+                                label: qsTr("Restart GUI")
                                 bc: cServoRunEnd
                                 tc: cBtnBaseText
                             }
@@ -377,7 +382,7 @@ Item {
                             }
                             HoverHint {
                                 visible: ignoreScaleBtn.hovered
-                                label: "Ignore Scale"
+                                label: qsTr("Ignore Scale")
                                 bc: cServoRunEnd
                                 tc: robotController.ignoreScale ? cBad : cBtnBaseText
                             }
@@ -422,7 +427,7 @@ Item {
                             }
                             HoverHint {
                                 visible: settingsBtn.hovered
-                                label: "Camera Setting"
+                                label: qsTr("Camera Settings")
                                 bc: cServoRunEnd
                                 tc: cBtnBaseText
                             }
@@ -448,7 +453,7 @@ Item {
                         Layout.fillWidth: true
                         Text {
                             anchors.centerIn: parent
-                            text: "ROS 2 - INKOBOT MONITORING SYSTEM"
+                            text: qsTr("ROS 2 - INKOBOT MONITORING SYSTEM")
                             font.pixelSize: 24; font.bold: true; color: cAccent; font.letterSpacing: 2
                         }
                     }
@@ -480,11 +485,23 @@ Item {
                             }
                             HoverHint {
                                 visible: cartridgePageBtn.hovered
-                                label: "Cartridge Page"
+                                label: qsTr("Cartridge System")
                                 bc: cServoRunEnd
                                 tc: cBtnBaseText
                             }
                         }
+                    }
+
+                    LanguageSelector {
+                        id: cameraLanguageSelector
+                        Layout.preferredWidth: 50
+                        Layout.preferredHeight: 50
+                        panelColor: cServoRunStart
+                        panelColorDeep: cServoRunEnd
+                        borderColor: cServoRunBorder
+                        textColor: cBtnBaseText
+                        mutedColor: cMuted
+                        accentColor: cAccent
                     }
 
                     MotionButton {
@@ -513,7 +530,7 @@ Item {
                             }
                             HoverHint {
                                 visible: closeGuiBtn.hovered
-                                label: "Tắt giao diện"
+                                label: qsTr("Close GUI")
                                 bc: cBtnDangerEnd
                                 tc: "#ffffff"
                             }
@@ -548,14 +565,14 @@ Item {
                 }
                 Text {
                     Layout.fillWidth: true
-                    text: "SCALE ISSUE — Scale problem or cartridge taken away. Operator intervention was required. Check scale and loadcell before next cycle."
+                    text: qsTr("SCALE ISSUE — Scale problem or cartridge taken away. Operator intervention was required. Check scale and loadcell before the next cycle.")
                     color: "#f5a394"
                     font.pixelSize: 14
                     elide: Text.ElideRight
                 }
                 MotionButton {
                     Layout.preferredWidth: 110; Layout.preferredHeight: 30
-                    text: "✓  Confirm"
+                    text: qsTr("✓  Confirm")
                     font.pixelSize: 13; font.bold: true
                     background: Rectangle { color: "#3a1210"; border.color: "#f0735c"; border.width: 1; radius: 4 }
                     contentItem: Text {
@@ -659,7 +676,7 @@ Item {
                     spacing: 10
 
                     Text {
-                        text: "ANALOG PRESSURE"
+                        text: qsTr("ANALOG PRESSURE")
                         color: "#ffffff"
                         font.pixelSize: 20
                         font.bold: true
@@ -670,9 +687,9 @@ Item {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 8
-                        PCard { lbl: "S1 Chamber";   val: hpController.pressureS1; maxVal: 1200; cardIndex: 0 }
-                        PCard { lbl: "S2 Cartridge"; val: hpController.pressureS2; maxVal: 1200; cardIndex: 1 }
-                        PCard { lbl: "S3 Tank";      val: hpController.pressureS3; maxVal: 1200; cardIndex: 2 }
+                        PCard { lbl: qsTr("S1 Chamber");   val: hpController.pressureS1; maxVal: 1200; cardIndex: 0 }
+                        PCard { lbl: qsTr("S2 Cartridge"); val: hpController.pressureS2; maxVal: 1200; cardIndex: 1 }
+                        PCard { lbl: qsTr("S3 Tank");      val: hpController.pressureS3; maxVal: 1200; cardIndex: 2 }
                     }
 
                     Item { height: 10 } // Spacer
@@ -680,7 +697,7 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Text {
-                            text: "CARTRIDGE\nPRESSURE"
+                            text: qsTr("CARTRIDGE\nPRESSURE")
                             color: "#74899f"
                             font.pixelSize: 18
                             font.bold: true
@@ -705,7 +722,7 @@ Item {
                             model: 8
                             CartRow {
                                 cartIndex: index
-                                cartName: "Cart " + (index + 1)
+                                cartName: qsTr("Cart %1").arg(index + 1)
                                 cartVal:  (hpController.cartridgePressures && hpController.cartridgePressures.length > index) ? (Number(hpController.cartridgePressures[index]) || 0) : 0
                             }
                         }
@@ -743,7 +760,7 @@ Item {
                     spacing: 6
 
                     Text {
-                        text: "SYSTEM MONITOR"
+                        text: qsTr("SYSTEM MONITOR")
                         color: "#ffffff"; font.bold: true; font.pixelSize: 20; font.letterSpacing: 0.6
                         Layout.alignment: Qt.AlignHCenter
                     }
@@ -779,13 +796,13 @@ Item {
                             Layout.alignment: Qt.AlignTop
                             columns: 2; rowSpacing: 8; columnSpacing: 10
 
-                            Text { text: "Mode:"; color: "#9fb3c8"; font.pixelSize: 18 }
+                            Text { text: qsTr("Mode:"); color: "#9fb3c8"; font.pixelSize: 18 }
                             Text { text: cameraPageRoot.ctrlMode.toUpperCase(); color: "#d6f1ff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
 
-                            Text { text: "Uptime:"; color: "#9fb3c8"; font.pixelSize: 18 }
+                            Text { text: qsTr("Uptime:"); color: "#9fb3c8"; font.pixelSize: 18 }
                             Text { text: robotController.systemUptime; color: "#d6f1ff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
 
-                            Text { text: "State Robot:"; color: "#9fb3c8"; font.pixelSize: 18 }
+                            Text { text: qsTr("Robot State:"); color: "#9fb3c8"; font.pixelSize: 18 }
                             Text { text: robotController.systemStatus; color: "#d6f1ff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
                         }
 
@@ -797,13 +814,13 @@ Item {
                             Layout.alignment: Qt.AlignTop
                             columns: 2; rowSpacing: 8; columnSpacing: 10
 
-                            Text { text: "Ink Name:"; color: "#9fb3c8"; font.pixelSize: 18 }
+                            Text { text: qsTr("Ink Name:"); color: "#9fb3c8"; font.pixelSize: 18 }
                             Text { text: scaleController.activeInkName; color: "#d6f1ff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
 
-                            Text { text: "Cartridge Type:"; color: "#9fb3c8"; font.pixelSize: 18 }
+                            Text { text: qsTr("Cartridge Type:"); color: "#9fb3c8"; font.pixelSize: 18 }
                             Text { text: scaleController.activeCartName; color: "#d6f1ff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
 
-                            Text { text: "Weight Batch:"; color: "#9fb3c8"; font.pixelSize: 18 }
+                            Text { text: qsTr("Batch Weight:"); color: "#9fb3c8"; font.pixelSize: 18 }
                             Text { text: scaleController.totalBatchWeight > 0 ? scaleController.totalBatchWeight.toFixed(2) + " g" : "0.00 g"; color: "#d6f1ff"; font.bold: true; font.pixelSize: 18; elide: Text.ElideRight; Layout.fillWidth: true }
                         }
 
@@ -815,7 +832,7 @@ Item {
                             Layout.alignment: Qt.AlignTop
                             spacing: 6
 
-                            Text { text: "CONTROL MODE "; color: "#ffffff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
+                            Text { text: qsTr("CONTROL MODE"); color: "#ffffff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
 
                             Rectangle {
                                 Layout.fillWidth: true
@@ -833,8 +850,8 @@ Item {
 
                                     Repeater {
                                         model: [
-                                            { key: "auto",      lbl: "AUTO" },
-                                            { key: "camera_ai", lbl: "CAMERA AI" }
+                                            { key: "auto",      lbl: qsTr("AUTO") },
+                                            { key: "camera_ai", lbl: qsTr("CAMERA AI") }
                                         ]
                                         delegate: MotionButton {
                                             id: modeOption
@@ -904,11 +921,15 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: false
-                        Text { text: "INPUT ROW"; color: "#ffffff"; font.pixelSize: 17; font.bold: true }
+                        Text { text: qsTr("INPUT ROW"); color: "#ffffff"; font.pixelSize: 17; font.bold: true }
                         Text {
                             Layout.fillWidth: true;
                             font.pixelSize: 13; color: "#74899f"; font.italic: true
-                            text: cameraPageRoot.rowLocked ? "🔒 Waiting for tray..." : (cameraPageRoot.ctrlMode === "camera_ai" ? "(AI auto)" : "Select then press PICK_CARTRIDGE")
+                            text: cameraPageRoot.rowLocked
+                                  ? qsTr("🔒 Waiting for tray...")
+                                  : (cameraPageRoot.ctrlMode === "camera_ai"
+                                     ? qsTr("(AI auto)")
+                                     : qsTr("Select a row, then press PICK_CARTRIDGE"))
                             elide: Text.ElideRight
                         }
                     }
@@ -953,9 +974,11 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: false
-                        Text { text: "OUTPUT SLOT"; color: "#ffffff"; font.pixelSize: 17; font.bold: true }
+                        Text { text: qsTr("OUTPUT SLOT"); color: "#ffffff"; font.pixelSize: 17; font.bold: true }
                         Text {
-                            text: robotController.selectedSlot > 0 ? ("Selected slot " + robotController.selectedSlot) : "Select output tray position"
+                            text: robotController.selectedSlot > 0
+                                  ? qsTr("Selected slot %1").arg(robotController.selectedSlot)
+                                  : qsTr("Select the output tray position")
                             color: "#74899f"; font.pixelSize: 17
                         }
                     }
@@ -1013,17 +1036,17 @@ Item {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#163a52" }
 
-                    Text { text: "STATE COMMANDS"; color: "#ffffff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
+                    Text { text: qsTr("STATE COMMANDS"); color: "#ffffff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
                     GridLayout {
                         Layout.fillWidth: true; columns: 2; rowSpacing: 8; columnSpacing: 8
                         Repeater {
                             model: [
-                                { lbl: "IN_READY",     displayLbl: "IN_READY",       icon: "icons/between_horizontal_end.svg",   bgStart: cBtnBaseStart,    bgEnd: cBtnBaseEnd,    bc: cBtnBaseBorder,    tc: cBtnBaseText },
-                                { lbl: "OUT_READY",    displayLbl: "OUT_READY",      icon: "icons/between_horizontal_start.svg", bgStart: cBtnBaseStart,    bgEnd: cBtnBaseEnd,    bc: cBtnBaseBorder,    tc: cBtnBaseText },
-                                { lbl: "PICK_INPUT",   displayLbl: "PICK_CARTRIDGE", icon: "icons/arrows_up_from_line.svg",      bgStart: cServoJogStart,   bgEnd: cServoJogEnd,   bc: cServoJogBorder,   tc: cServoJogText },
-                                { lbl: "PICK_CHAMBER", displayLbl: "PICK_CHAMBER",   icon: "icons/fold_horizontal.svg",         bgStart: cServoJogStart,   bgEnd: cServoJogEnd,   bc: cServoJogBorder,   tc: cServoJogText },
-                                { lbl: "PLACE_OUTPUT", displayLbl: "PLACE_OUTPUT",   icon: "icons/package.svg",                 bgStart: "#1C4D8D",        bgEnd: "#0c1726",        bc: "#0c1726",        tc: "#ffffff" },
-                                { lbl: "PLACE_FAIL",   displayLbl: "PLACE_FAIL",     icon: "icons/package_x.svg",               bgStart: "#E68457",        bgEnd: "#8a4210",        bc: "#8a4210",        tc: "#ffffff" }
+                                { lbl: "IN_READY",     displayLbl: qsTr("INPUT READY"),    icon: "icons/between_horizontal_end.svg",   bgStart: cBtnBaseStart,    bgEnd: cBtnBaseEnd,    bc: cBtnBaseBorder,    tc: cBtnBaseText },
+                                { lbl: "OUT_READY",    displayLbl: qsTr("OUTPUT READY"),   icon: "icons/between_horizontal_start.svg", bgStart: cBtnBaseStart,    bgEnd: cBtnBaseEnd,    bc: cBtnBaseBorder,    tc: cBtnBaseText },
+                                { lbl: "PICK_INPUT",   displayLbl: qsTr("PICK CARTRIDGE"), icon: "icons/arrows_up_from_line.svg",      bgStart: cServoJogStart,   bgEnd: cServoJogEnd,   bc: cServoJogBorder,   tc: cServoJogText },
+                                { lbl: "PICK_CHAMBER", displayLbl: qsTr("PICK CHAMBER"),   icon: "icons/fold_horizontal.svg",         bgStart: cServoJogStart,   bgEnd: cServoJogEnd,   bc: cServoJogBorder,   tc: cServoJogText },
+                                { lbl: "PLACE_OUTPUT", displayLbl: qsTr("PLACE OUTPUT"),   icon: "icons/package.svg",                 bgStart: "#1C4D8D",        bgEnd: "#0c1726",        bc: "#0c1726",        tc: "#ffffff" },
+                                { lbl: "PLACE_FAIL",   displayLbl: qsTr("PLACE FAILED"),   icon: "icons/package_x.svg",               bgStart: "#E68457",        bgEnd: "#8a4210",        bc: "#8a4210",        tc: "#ffffff" }
                             ]
                             delegate: Rectangle {
                                 required property var modelData
@@ -1125,12 +1148,12 @@ Item {
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#163a52" }
 
-                    Text { text: "SYSTEM CONTROL"; color: "#ffffff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
+                    Text { text: qsTr("SYSTEM CONTROL"); color: "#ffffff"; font.pixelSize: 16; font.bold: true; font.letterSpacing: 1 }
 
                     Text {
                         Layout.fillWidth: true
                         visible: cameraPageRoot.systemPaused
-                        text: "⏸ Đang PAUSE — nhấn RESUME để chạy tiếp, hoặc STOP để kết thúc"
+                        text: qsTr("⏸ PAUSED — press RESUME to continue, or STOP to end")
                         color: "#f5a623"
                         font.pixelSize: 13
                         font.bold: true
@@ -1175,7 +1198,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Text {
-                                    text: "START"
+                                    text: qsTr("START")
                                     color: "#d6f1ff"
                                     font.pixelSize: 19
                                     font.bold: true
@@ -1226,7 +1249,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Text {
-                                    text: "ENABLE"
+                                    text: qsTr("ENABLE")
                                     color: "#d6f1ff"
                                     font.pixelSize: 19
                                     font.bold: true
@@ -1268,7 +1291,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Text {
-                                    text: "STOP"
+                                    text: qsTr("STOP")
                                     color: "#ffffff"
                                     font.pixelSize: 19
                                     font.bold: true
@@ -1313,7 +1336,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Text {
-                                    text: "CLEAR"
+                                    text: qsTr("CLEAR")
                                     color: "#ffffff"
                                     font.pixelSize: 19
                                     font.bold: true
@@ -1354,7 +1377,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Text {
-                                    text: "RESUME"
+                                    text: qsTr("RESUME")
                                     color: cServoRunText
                                     font.pixelSize: 19
                                     font.bold: true
@@ -1415,7 +1438,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Text {
-                                    text: "PAUSE"
+                                    text: qsTr("PAUSE")
                                     color: "#ffffff"
                                     font.pixelSize: 19
                                     font.bold: true
@@ -1446,11 +1469,11 @@ Item {
                 anchors.fill: parent; color: cPanel; border.color: cBorder; border.width: 1
                 RowLayout {
                     anchors.fill: parent; anchors.margins: 10
-                    Text { text: "© 2025 RYNAN TECHNOLOGIES"; color: "#ffffff"; font.pixelSize: 16; Layout.alignment: Qt.AlignVCenter }
+                    Text { text: qsTr("© 2025 RYNAN TECHNOLOGIES"); color: "#ffffff"; font.pixelSize: 16; Layout.alignment: Qt.AlignVCenter }
                     Item { Layout.fillWidth: true }
                     RowLayout { spacing: 6
                         Image { source: "qrc:/icons/qml/icons/app_badging.svg"; width: 24; height: 24; fillMode: Image.PreserveAspectFit; smooth: true; Layout.preferredWidth: 24; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
-                        Text { text: "Status: Running"; color: "#3ed0b4"; font.pixelSize: 16; Layout.alignment: Qt.AlignVCenter }
+                        Text { text: qsTr("Status: Running"); color: "#3ed0b4"; font.pixelSize: 16; Layout.alignment: Qt.AlignVCenter }
                     }
                     Rectangle { width: 2; Layout.fillHeight: true; color: "#163a52" }
                     RowLayout { spacing: 6; Layout.alignment: Qt.AlignVCenter

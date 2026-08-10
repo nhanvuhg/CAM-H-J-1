@@ -19,6 +19,19 @@ AuthController::AuthController(QObject *parent) : QObject(parent)
     ensureUsersFile();
 }
 
+QString AuthController::lastError() const
+{
+    if (last_error_ == QStringLiteral("invalid_credentials"))
+        return tr("Incorrect username or password");
+    return last_error_;
+}
+
+void AuthController::refreshTranslations()
+{
+    if (!last_error_.isEmpty())
+        emit lastErrorChanged();
+}
+
 void AuthController::ensureUsersFile()
 {
     if (QFileInfo::exists(users_file_))
@@ -72,7 +85,7 @@ bool AuthController::login(const QString &username, const QString &password)
     const QString normalized = username.trimmed();
     QString matched_role;
     if (normalized.isEmpty() || password.isEmpty() || !readUser(normalized, password, &matched_role)) {
-        setError(QStringLiteral("Sai tài khoản hoặc mật khẩu"));
+        setError(QStringLiteral("invalid_credentials"));
         return false;
     }
 

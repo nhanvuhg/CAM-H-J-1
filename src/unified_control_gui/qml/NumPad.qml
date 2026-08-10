@@ -209,7 +209,7 @@ Popup {
                 horizontalAlignment: Text.AlignHCenter
                 text: pad.title !== ""
                       ? pad.title + (pad.units ? " (" + pad.units + ")" : "")
-                      : "ENTER VALUE" + (pad.units ? " (" + pad.units + ")" : "")
+                      : qsTr("ENTER VALUE") + (pad.units ? " (" + pad.units + ")" : "")
                 color: pad.cAccent
                 font.pixelSize: 16
                 font.bold: true
@@ -305,7 +305,7 @@ Popup {
                     border.width: 1
                     Text {
                         anchors.centerIn: parent
-                        text: "CANCEL"
+                        text: qsTr("CANCEL")
                         color: pad.cDanger
                         font.pixelSize: 14
                         font.bold: true
@@ -324,7 +324,7 @@ Popup {
                     }
                     Text {
                         anchors.centerIn: parent
-                        text: "OK"
+                        text: qsTr("OK")
                         color: "#ffffff"
                         font.pixelSize: 14
                         font.bold: true

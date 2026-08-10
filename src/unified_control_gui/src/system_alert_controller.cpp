@@ -119,9 +119,9 @@ QVariantList SystemAlertController::activeAlerts() const
         item["source"] = alert.source;
         item["level"] = alert.level;
         item["area"] = alert.area;
-        item["title"] = alert.title;
-        item["message"] = alert.message;
-        item["action"] = alert.action;
+        item["title"] = localizedAlertText(alert.title);
+        item["message"] = localizedAlertText(alert.message);
+        item["action"] = actionForArea(alert.area);
         item["time"] = alert.time;
         item["acknowledged"] = alert.acknowledged;
         result.append(item);
@@ -163,9 +163,10 @@ QString SystemAlertController::startBlockReason() const
     const int errors = errorCount();
     const int warnings = unacknowledgedWarningCount();
     if (errors > 0)
-        return QString("%1 ERROR đang hoạt động — xử lý lỗi trước khi START").arg(errors);
+        return tr("%1 active error(s) — resolve them before START").arg(errors);
     if (warnings > 0)
-        return QString("%1 WARNING chưa acknowledge — mở cảnh báo để xác nhận").arg(warnings);
+        return tr("%1 unacknowledged warning(s) — open alerts to acknowledge")
+            .arg(warnings);
     return QString();
 }
 
@@ -229,6 +230,13 @@ int SystemAlertController::acknowledgeAllWarnings()
 void SystemAlertController::requestAttention()
 {
     emit attentionRequested();
+}
+
+void SystemAlertController::refreshTranslations()
+{
+    // Alert payloads keep canonical source text. Rebuild the QVariant model
+    // and start interlock description after QTranslator changes.
+    emit alertsChanged();
 }
 
 void SystemAlertController::observeString(const QString &source, const QString &rawValue)
@@ -305,7 +313,7 @@ void SystemAlertController::observeString(const QString &source, const QString &
                 const QString label = "Servo S" + QString::number(servoId);
                 upsertAlert(alertId, source, "WARNING", "FEEDER",
                             label + " offline",
-                            label + " chưa kết nối; hệ thống đang tự động kết nối lại.",
+                            label + " is not connected; the system is retrying automatically.",
                             true);
             }
         }
@@ -438,10 +446,10 @@ void SystemAlertController::observeBool(const QString &source, bool value)
     }
     if (source == "scale_overload") {
         upsertAlert(source, source, "ERROR", "SCALE", "Loadcell overload",
-                    "Loadcell đang báo quá tải.");
+                    "The loadcell reports an overload.");
     } else if (source == "scale_zero_drift") {
         upsertAlert(source, source, "WARNING", "SCALE", "Loadcell zero drift",
-                    "Loadcell đang có cảnh báo trôi điểm zero.");
+                    "The loadcell reports a zero-point drift warning.");
     }
 }
 
@@ -623,17 +631,17 @@ void SystemAlertController::checkHeartbeats()
     };
     static const Watch watches[] = {
         {"robot_heartbeat", "ROBOT", "Robot status offline",
-         "Không nhận được heartbeat /robot/system_uptime trong 12 giây.", 12000},
+         "No /robot/system_uptime heartbeat was received for 12 seconds.", 12000},
         {"robot_feedback", "ROBOT", "Robot hardware disconnected",
-         "Không nhận được feedback phần cứng /nova5/joint_states_robot trong 5 giây.", 5000},
+         "No hardware feedback was received from /nova5/joint_states_robot for 5 seconds.", 5000},
         {"feeder_system_state", "FEEDER", "Cartridge status offline",
-         "Không nhận được /system_state từ cartridge system trong 12 giây.", 12000},
+         "No /system_state update was received from the cartridge system for 12 seconds.", 12000},
         {"feeder_servo_positions", "FEEDER", "Servo feedback offline",
-         "Không nhận được /providesystem/servo_positions trong 6 giây.", 6000},
+         "No /providesystem/servo_positions feedback was received for 6 seconds.", 6000},
         {"camera_cam0_health", "CAMERA", "CAM0 status offline",
-         "Không nhận được /camera/cam0/health trong 12 giây.", 12000},
+         "No /camera/cam0/health update was received for 12 seconds.", 12000},
         {"camera_cam1_health", "CAMERA", "CAM1 status offline",
-         "Không nhận được /camera/cam1/health trong 12 giây.", 12000},
+         "No /camera/cam1/health update was received for 12 seconds.", 12000},
     };
 
     for (const Watch &watch : watches) {
@@ -658,19 +666,83 @@ QString SystemAlertController::effectiveLevel(
         : baseLevel.trimmed().toUpper();
 }
 
-QString SystemAlertController::actionForArea(const QString &area)
+QString SystemAlertController::actionForArea(const QString &area) const
 {
     if (area == "ROBOT")
-        return "Dừng chuyển động, kiểm tra robot và chỉ chạy lại sau khi lỗi đã được xử lý.";
+        return tr("Stop motion, inspect the robot, and resume only after the fault is resolved.");
     if (area == "FEEDER")
-        return "Kiểm tra cartridge feeder, servo và cảm biến trước khi tiếp tục.";
+        return tr("Inspect the cartridge feeder, servos, and sensors before continuing.");
     if (area == "SCALE")
-        return "Kiểm tra cân/loadcell, kết nối RS485 và tải đặt trên cân.";
+        return tr("Inspect the scale/loadcell, RS485 connection, and the load on the scale.");
     if (area == "VFD")
-        return "Dừng băng tải và kiểm tra VFD, RS485 cùng tín hiệu fault trước khi chạy lại.";
+        return tr("Stop the conveyor and inspect the VFD, RS485, and fault signal before restarting.");
     if (area == "CAMERA")
-        return "Kiểm tra camera, CSI/VI và topic hình ảnh trước khi tiếp tục.";
-    return "Kiểm tra phần cứng Fill HP và xác nhận trạng thái an toàn trước khi chạy lại.";
+        return tr("Inspect the camera, CSI/VI, and image topics before continuing.");
+    return tr("Inspect the Fill HP hardware and confirm a safe state before restarting.");
+}
+
+QString SystemAlertController::localizedAlertText(const QString &text) const
+{
+    // Incoming driver/ROS diagnostics remain verbatim. Only canonical GUI
+    // phrases owned by this controller are translated here.
+    if (text == "Robot error") return tr("Robot error");
+    if (text == "Robot system") return tr("Robot system");
+    if (text == "Cartridge system") return tr("Cartridge system");
+    if (text == "ROI validation") return tr("ROI validation");
+    if (text == "Camera system") return tr("Camera system");
+    if (text == "Fill HP error") return tr("Fill HP error");
+    if (text == "Fill HP hardware") return tr("Fill HP hardware");
+    if (text == "VFD fault") return tr("VFD fault");
+    if (text == "Scale fault") return tr("Scale fault");
+    if (text == "Loadcell overload") return tr("Loadcell overload");
+    if (text == "Loadcell zero drift") return tr("Loadcell zero drift");
+    if (text == "Cartridge notification") return tr("Cartridge notification");
+    if (text == "Robot status offline") return tr("Robot status offline");
+    if (text == "Robot hardware disconnected") return tr("Robot hardware disconnected");
+    if (text == "Cartridge status offline") return tr("Cartridge status offline");
+    if (text == "Servo feedback offline") return tr("Servo feedback offline");
+    if (text == "CAM0 status offline") return tr("CAM0 status offline");
+    if (text == "CAM1 status offline") return tr("CAM1 status offline");
+    if (text == "The loadcell reports an overload.")
+        return tr("The loadcell reports an overload.");
+    if (text == "The loadcell reports a zero-point drift warning.")
+        return tr("The loadcell reports a zero-point drift warning.");
+    if (text == "No /robot/system_uptime heartbeat was received for 12 seconds.")
+        return tr("No /robot/system_uptime heartbeat was received for 12 seconds.");
+    if (text == "No hardware feedback was received from /nova5/joint_states_robot for 5 seconds.")
+        return tr("No hardware feedback was received from /nova5/joint_states_robot for 5 seconds.");
+    if (text == "No /system_state update was received from the cartridge system for 12 seconds.")
+        return tr("No /system_state update was received from the cartridge system for 12 seconds.");
+    if (text == "No /providesystem/servo_positions feedback was received for 6 seconds.")
+        return tr("No /providesystem/servo_positions feedback was received for 6 seconds.");
+    if (text == "No /camera/cam0/health update was received for 12 seconds.")
+        return tr("No /camera/cam0/health update was received for 12 seconds.");
+    if (text == "No /camera/cam1/health update was received for 12 seconds.")
+        return tr("No /camera/cam1/health update was received for 12 seconds.");
+
+    static const QRegularExpression servoTitle("^Servo S(\\d+) offline$");
+    QRegularExpressionMatch match = servoTitle.match(text);
+    if (match.hasMatch())
+        return tr("Servo S%1 offline").arg(match.captured(1));
+
+    static const QRegularExpression servoMessage(
+        "^Servo S(\\d+) is not connected; the system is retrying automatically\\.$");
+    match = servoMessage.match(text);
+    if (match.hasMatch())
+        return tr("Servo S%1 is not connected; the system is retrying automatically.")
+            .arg(match.captured(1));
+
+    static const QRegularExpression cameraReconnect("^(CAM[01]) reconnecting$");
+    match = cameraReconnect.match(text);
+    if (match.hasMatch())
+        return tr("%1 reconnecting").arg(match.captured(1));
+
+    static const QRegularExpression cameraFault("^(CAM[01]) camera fault$");
+    match = cameraFault.match(text);
+    if (match.hasMatch())
+        return tr("%1 camera fault").arg(match.captured(1));
+
+    return text;
 }
 
 QString SystemAlertController::stableCameraMessage(
