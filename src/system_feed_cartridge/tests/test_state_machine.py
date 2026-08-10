@@ -23,6 +23,7 @@ import sys
 import os
 import time
 import threading
+import json
 import pytest
 from unittest.mock import MagicMock, PropertyMock, call, patch
 from enum import Enum
@@ -578,6 +579,53 @@ class TestStateTransitions:
 
         assert node.state_s3 == SystemState.S3_WAIT_S17
         node._cyl4_retract.assert_called_once()
+
+    def test_s18_feed_prioritizes_cpx41_and_uses_fast_poll(self, monkeypatch):
+        """Servo3 FEED must poll CPX41 first at the configured 10 ms rate."""
+        node = _make_node()
+        node.state_s3 = SystemState.S3_SERVO3_FEED
+        node._cmd_sent_s3 = True
+        node._s18_cache_prev = False
+        node._s18_rise_monotonic = 0.0
+        node._io_bg_lock = threading.Lock()
+        node._update_sensor_latches_locked = MagicMock()
+
+        read_order = []
+        module1 = MagicMock()
+        module1.is_function_supported.return_value = True
+        module1.read_channels.side_effect = (
+            lambda: (read_order.append(1), [False] * 16)[1]
+        )
+        node.io_module = types.SimpleNamespace(modules=[module1])
+        node.io_module_2 = object()
+        node._read_io2_sensor_channels_locked = MagicMock(
+            side_effect=lambda: (read_order.append(2), [False] * 12)[1]
+        )
+
+        sleeps = []
+        monkeypatch.setattr(time, 'sleep', sleeps.append)
+        with patch.object(_rclpy_mock, 'ok', side_effect=[True, False]):
+            node._io_bg_loop()
+
+        assert read_order == [2, 1]
+        assert sleeps == [pytest.approx(0.01)]
+
+    def test_s18_on_queues_immediate_servo3_stop(self):
+        """S18 must not wait on the blocking shared-servo STOP path."""
+        node = _make_node()
+        node.state_s3 = SystemState.S3_SERVO3_FEED
+        node._cmd_sent_s3 = True
+        node._s18_rise_monotonic = time.monotonic()
+        _set_sensors(node, S18_FEED_OK=True)
+        node._stop = MagicMock()
+        node._stop_immediate = MagicMock()
+
+        node._s3_servo3_feed()
+
+        node._stop_immediate.assert_called_once_with(3)
+        node._stop.assert_not_called()
+        assert node._s3_output_loaded is True
+        assert node.state_s3 == SystemState.S3_WAIT_S18
 
     def test_s4_cyl5_extends_when_s19_on(self):
         """S19 ON: S28 ON + S27 OFF mới cho phép chuyển sang scan S20."""
@@ -1339,6 +1387,136 @@ class TestZoneToRow:
         node = _make_node()
         assert node._zone_to_row(50.0, self.INPUT_ZONES) is None
         assert node._zone_to_row(2000.0, self.INPUT_ZONES) is None
+
+
+class TestServoPositionStatusContract:
+    """Position topic must never present an offline cache as live hardware."""
+
+    @staticmethod
+    def _position_node():
+        node = _make_node()
+        node._servo_lock = threading.Lock()
+        node._idle_skip_modbus_s = 2.0
+        node._live_position_servos = set()
+        node._fas_jog_vel = {}
+        node._jog_velocity_ms = 0.03
+        node._servo_feedback_monotonic = {}
+        node._servo_feedback_active_timeout_s = 1.5
+        node._servo_feedback_idle_timeout_s = 12.0
+        return node
+
+    @staticmethod
+    def _published_payload(node):
+        message = node.pub_servo_pos.publish.call_args.args[0]
+        return json.loads(message.data)
+
+    def test_live_servo_publishes_hardware_position_and_status(self):
+        node = self._position_node()
+        mot = MagicMock()
+        mot.current_position.return_value = 12500
+        node.servos = {1: mot}
+        node.zero_offset[1] = 2500
+        node._servo_motion_t[1] = time.time()
+
+        node._publish_positions()
+
+        payload = self._published_payload(node)
+        assert payload['1'] == 10.0
+        assert payload['_servo_status'] == {
+            '1': 'LIVE',
+            '2': 'OFFLINE',
+            '3': 'OFFLINE',
+            '4': 'OFFLINE',
+            '5': 'OFFLINE',
+        }
+        assert payload['_servo_required'] == ['1', '2', '3', '4', '5']
+
+    def test_offline_servo_omits_old_cached_position(self):
+        node = self._position_node()
+        node.servos = {}
+        node._pos_cache[1] = 432.1
+
+        node._publish_positions()
+
+        payload = self._published_payload(node)
+        assert payload['_servo_status']['1'] == 'OFFLINE'
+        assert '1' not in payload
+
+    def test_disconnect_during_sample_drops_instance_position(self):
+        node = self._position_node()
+        mot = MagicMock()
+
+        def disconnect_while_reading():
+            node.servos.pop(1, None)
+            return 15000
+
+        mot.current_position.side_effect = disconnect_while_reading
+        node.servos = {1: mot}
+        node._servo_motion_t[1] = time.time()
+
+        node._publish_positions()
+
+        payload = self._published_payload(node)
+        assert payload['_servo_status']['1'] == 'OFFLINE'
+        assert '1' not in payload
+
+    def test_manual_jog_still_forces_fresh_hardware_read(self):
+        node = self._position_node()
+        mot = MagicMock()
+        mot.current_position.return_value = 21000
+        node.servos = {1: mot}
+        node._pos_cache[1] = 5.0
+        node._servo_motion_t[1] = 0.0
+        node._jog_active = {1}
+
+        node._publish_positions()
+
+        mot.current_position.assert_called_once_with()
+        payload = self._published_payload(node)
+        assert payload['1'] == 21.0
+        assert payload['_servo_status']['1'] == 'LIVE'
+
+    def test_expired_feedback_never_publishes_cached_position_as_live(self):
+        node = self._position_node()
+        mot = MagicMock()
+        mot.current_position.side_effect = TimeoutError('drive offline')
+        node.servos = {1: mot}
+        node._pos_cache[1] = 87.0
+        node._jog_active = {1}
+        node._servo_feedback_monotonic[1] = (
+            time.monotonic() - node._servo_feedback_active_timeout_s - 0.1
+        )
+
+        node._publish_positions()
+
+        payload = self._published_payload(node)
+        assert payload['_servo_status']['1'] == 'OFFLINE'
+        assert '1' not in payload
+
+    def test_recent_feedback_survives_one_short_read_hiccup(self):
+        node = self._position_node()
+        mot = MagicMock()
+        mot.current_position.side_effect = TimeoutError('transient')
+        node.servos = {1: mot}
+        node._pos_cache[1] = 87.0
+        node._jog_active = {1}
+        node._servo_feedback_monotonic[1] = time.monotonic()
+
+        node._publish_positions()
+
+        payload = self._published_payload(node)
+        assert payload['_servo_status']['1'] == 'LIVE'
+        assert payload['1'] == 87.0
+
+    def test_optional_output_servos_display_offline_but_are_not_required(self):
+        node = self._position_node()
+        node.config.output_stack_present = False
+
+        node._publish_positions()
+
+        payload = self._published_payload(node)
+        assert payload['_servo_status']['3'] == 'OFFLINE'
+        assert payload['_servo_required'] == ['1', '2']
 
 
 if __name__ == '__main__':

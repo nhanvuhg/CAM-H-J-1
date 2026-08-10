@@ -252,6 +252,12 @@ class CartridgeSystem(Node):
         # Cache vị trí (mm) lần đọc gần nhất — dùng cho _publish_positions khi lock
         # bận để fallback giá trị thay vì miss frame và GUI nhấp nháy "--".
         self._pos_cache: dict   = {}     # sid -> mm
+        # Timestamp của feedback hardware thành công gần nhất. Bên ngoài chỉ có
+        # LIVE/OFFLINE; timeout ngắn cho trục đang chạy và dài hơn khi idle vì
+        # monitor hardware chủ động ping mỗi 5 giây.
+        self._servo_feedback_monotonic: dict = {}
+        self._servo_feedback_active_timeout_s = 1.5
+        self._servo_feedback_idle_timeout_s = 12.0
         self.io_module          = None
         self.io_module_2        = None
         self._io_sensor_cache: list = []
@@ -261,6 +267,11 @@ class CartridgeSystem(Node):
         self._io_bg_lock        = threading.Lock()
         self._sensor_latch_until: dict = {}
         self._sensor_on_latch_s = max(0.0, float(getattr(self.config, 'sensor_on_latch_s', 0.10)))
+        # Monotonic timestamp of the latest S18 rising edge observed by the CPX
+        # reader. Used only for latency diagnostics on the critical Servo3 stop
+        # path; it never participates in state decisions.
+        self._s18_cache_prev = False
+        self._s18_rise_monotonic = 0.0
         # Sensor scan/confirm và các cặp limit cylinder phải phản ánh mức hiện
         # tại. Latch ON trên limit đôi làm trạng thái cũ (RETRACTED) còn giữ
         # trong khi trạng thái mới (EXTENDED) đã ON, tạo giả S21=S22=1 hoặc
@@ -909,6 +920,11 @@ class CartridgeSystem(Node):
                 mot.acknowledge_faults()
                 with self._servo_lock:
                     self.servos[sid] = mot
+                    # MotionHandler mới phải có ít nhất một actual-position
+                    # read thành công trước khi được gọi là LIVE. Không mang
+                    # cache/timestamp của connection cũ qua reconnect.
+                    self._pos_cache.pop(sid, None)
+                    self._servo_feedback_monotonic.pop(sid, None)
                 self.get_logger().info(f"S{sid} ({ip}) OK (attempt {attempt})")
                 return True
             except Exception as e:
@@ -968,6 +984,7 @@ class CartridgeSystem(Node):
             try:
                 with self._servo_lock:
                     mot.current_position()
+                    self._servo_feedback_monotonic[sid] = time.monotonic()
                 consecutive_fail = 0
             except Exception:
                 consecutive_fail += 1
@@ -977,6 +994,7 @@ class CartridgeSystem(Node):
                     self._notify('warn', f'Servo S{sid} mat ket noi', f'Dang reconnect...')
                     with self._servo_lock:
                         self.servos.pop(sid, None)
+                        self._servo_feedback_monotonic.pop(sid, None)
                     if self._connect_servo(sid, ip, attempts=1):
                         consecutive_fail = 0
                         offline_notified = False
@@ -1014,6 +1032,13 @@ class CartridgeSystem(Node):
 
     # ── IO background reader ──────────────────────────────────────
 
+    def _s18_poll_is_critical(self) -> bool:
+        """True while Servo3 is actively feeding and S18 must stop it."""
+        return (
+            self.state_s3 == SystemState.S3_SERVO3_FEED
+            and bool(self._cmd_sent_s3)
+        )
+
     def _io_bg_loop(self):
         """
         Thread nền đọc trạng thái toàn bộ IO module với chu kỳ cấu hình
@@ -1035,10 +1060,7 @@ class CartridgeSystem(Node):
             # trước để thời gian đọc Module 1 không nằm trên critical path dừng
             # Servo3. Ngoài state này giữ nguyên thứ tự lịch sử để không ảnh
             # hưởng timing của cụm input.
-            s18_critical = (
-                getattr(self, '_s3_state', SystemState.IDLE) == SystemState.S3_SERVO3_FEED
-                and bool(getattr(self, '_cmd_sent_s3', False))
-            )
+            s18_critical = self._s18_poll_is_critical()
             module_order = (2, 1) if s18_critical else (1, 2)
 
             for module_idx in module_order:
@@ -1067,6 +1089,10 @@ class CartridgeSystem(Node):
                     try:
                         with self._io_bg_lock:
                             channels2 = self._read_io2_sensor_channels_locked()
+                            s18_raw = len(channels2) > 1 and bool(channels2[1])
+                            if s18_raw and not self._s18_cache_prev:
+                                self._s18_rise_monotonic = time.monotonic()
+                            self._s18_cache_prev = s18_raw
                             self._io_sensor_cache_2 = channels2
                             self._update_sensor_latches_locked(channels2, 17)
                             self._io_ready_2 = True
@@ -4049,8 +4075,10 @@ class CartridgeSystem(Node):
 
     def _publish_positions(self):
         """Đọc vị trí tất cả servo và publish JSON lên /providesystem/servo_positions.
-        JSON chứa {sid: mm, _jog_vel: m/s, _fas_vel: {sid: m/s}}.
-        GUI dùng để hiển thị vị trí live và tốc độ JOG hiện tại.
+        JSON giữ các key vị trí cũ và bổ sung
+        ``_servo_status: {sid: "LIVE"|"OFFLINE"}`` cho toàn bộ servo cấu hình.
+        Servo OFFLINE không xuất vị trí cache cũ, tránh để GUI hiểu nhầm một
+        giá trị hardware đã mất kết nối là feedback đang sống.
 
         Tối ưu hot path:
         1. Per-servo: các trục trong _live_position_servos luôn đọc actual
@@ -4068,13 +4096,29 @@ class CartridgeSystem(Node):
             now = time.time()
             idle_skip = self._idle_skip_modbus_s
             jog_active = self._jog_active
-            for sid, mot in self.servos.items():
+            # Snapshot theo danh sách cấu hình thay vì iterate trực tiếp dict
+            # ``servos`` vì các monitor thread có thể add/remove drive đồng thời.
+            # Chỉ đọc pointer (không lấy _servo_lock) để position publisher không
+            # làm chậm đường lệnh Manual JOG đang đáp ứng tốt.
+            servo_snapshot = {
+                sid: self.servos.get(sid)
+                for sid in self.config.servo_ips
+            }
+            active_feedback = {}
+            for sid, mot in servo_snapshot.items():
+                if mot is None:
+                    continue
                 cached = self._pos_cache.get(sid)
                 # ── (1) Idle skip: servo không có motion command gần đây → reuse cache
                 # Bỏ qua nếu servo đang JOG continuous (duration=0.0) — drive di
                 # chuyển liên tục mà không có loop refresh _servo_motion_t.
                 last_motion = self._servo_motion_t.get(sid, 0.0)
                 live_position = sid in getattr(self, '_live_position_servos', set())
+                active_feedback[sid] = (
+                    live_position
+                    or sid in jog_active
+                    or now - last_motion <= idle_skip
+                )
                 if (not live_position
                         and sid not in jog_active
                         and now - last_motion > idle_skip
@@ -4089,6 +4133,7 @@ class CartridgeSystem(Node):
                 try:
                     counts = mot.current_position()
                     p = (counts - self.zero_offset.get(sid, 0)) / COUNTS_PER_MM
+                    self._servo_feedback_monotonic[sid] = time.monotonic()
                 except Exception:
                     p = cached
                 finally:
@@ -4097,7 +4142,34 @@ class CartridgeSystem(Node):
                     val = round(p, 2)
                     pos[str(sid)] = val
                     self._pos_cache[sid] = val
+            # Xác nhận lại identity ngay trước khi publish. Nếu monitor vừa loại
+            # một drive hoặc reconnect bằng MotionHandler mới, frame này được
+            # xem là OFFLINE và tuyệt đối không mang position của instance cũ.
+            servo_status = {}
+            status_now = time.monotonic()
+            for sid, sampled_mot in servo_snapshot.items():
+                feedback_age = status_now - self._servo_feedback_monotonic.get(sid, 0.0)
+                freshness_limit = (
+                    self._servo_feedback_active_timeout_s
+                    if active_feedback.get(sid, False)
+                    else self._servo_feedback_idle_timeout_s
+                )
+                is_live = (
+                    sampled_mot is not None
+                    and self.servos.get(sid) is sampled_mot
+                    and feedback_age <= freshness_limit
+                )
+                servo_status[str(sid)] = 'LIVE' if is_live else 'OFFLINE'
+                if not is_live:
+                    pos.pop(str(sid), None)
+
             data = pos.copy()
+            data['_servo_status'] = servo_status
+            output_enabled = bool(self._conf('output_stack_present', True))
+            data['_servo_required'] = [
+                str(sid) for sid in servo_snapshot
+                if sid in (1, 2) or output_enabled
+            ]
             data['_jog_vel'] = self._jog_velocity_ms
             if self._fas_jog_vel:
                 data['_fas_vel'] = {str(k): round(v, 4) for k, v in self._fas_jog_vel.items()}
@@ -6293,9 +6365,24 @@ class CartridgeSystem(Node):
             self.get_logger().info(f"[S3] Servo3 pushing to {cfg.servo3_target2}mm max until S18 ON")
         else:
             if self.sensor(S18_FEED_OK):
-                self._stop(3)
+                detected_at = time.monotonic()
+                rise_at = getattr(self, '_s18_rise_monotonic', 0.0)
+                cache_to_handler_ms = (
+                    max(0.0, (detected_at - rise_at) * 1000.0)
+                    if rise_at > 0.0 else -1.0
+                )
+                # This is a sensor-triggered stop: queue the STOP telegram
+                # without waiting for the shared servo lock or drive_stopped.
+                # Waiting here can delay the physical command by a full 3 s
+                # Modbus timeout when another position read owns the lock.
+                self._stop_immediate(3)
+                stop_queue_ms = (time.monotonic() - detected_at) * 1000.0
                 self._s3_output_loaded = True
-                self.get_logger().info("[S3] S18 ON -> Dung Servo 3 som")
+                self.get_logger().info(
+                    "[S3] S18 ON -> queued immediate Servo3 STOP "
+                    f"(cache_to_handler={cache_to_handler_ms:.1f}ms, "
+                    f"stop_queue={stop_queue_ms:.1f}ms)"
+                )
                 self._enter_s3(SystemState.S3_WAIT_S18)
                 return
 

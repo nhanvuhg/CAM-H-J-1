@@ -72,8 +72,10 @@ private:
     qint64 next_sequence_{1};
     bool robot_fault_state_seen_{false};
     bool feeder_fault_state_seen_{false};
+    bool servo_status_contract_seen_{false};
     bool scale_ignored_{false};
     QHash<QString, qint64> heartbeat_seen_ms_;
+    QHash<QString, qint64> servo_offline_since_ms_;
     QTimer *heartbeat_timer_{nullptr};
     qint64 heartbeat_watch_started_ms_{0};
 

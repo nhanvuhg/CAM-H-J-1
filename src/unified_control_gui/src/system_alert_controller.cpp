@@ -1,6 +1,7 @@
 #include "unified_control_gui/system_alert_controller.hpp"
 
 #include <QDateTime>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMetaObject>
@@ -65,6 +66,7 @@ SystemAlertController::SystemAlertController(
     subscribeString("robot_system_status", "/robot/system_status", qos);
     subscribeString("robot_heartbeat", "/robot/system_uptime", qos);
     subscribeString("feeder_gui_notify", "/providesystem/gui_notify", qos);
+    subscribeString("feeder_servo_positions", "/providesystem/servo_positions", qos);
     subscribeString("feeder_system_state", "/system_state", rclcpp::SensorDataQoS());
     subscribeString("hw_status", "/hw_status", qos);
     subscribeString("error_status", "/error_status", transientQos);
@@ -251,6 +253,65 @@ void SystemAlertController::observeString(const QString &source, const QString &
         return;
     }
 
+    if (source == "feeder_servo_positions") {
+        const QJsonDocument document = QJsonDocument::fromJson(value.toUtf8());
+        if (!document.isObject())
+            return;
+
+        const QJsonObject rootObject = document.object();
+        const QJsonObject status = rootObject.value("_servo_status").toObject();
+        if (status.isEmpty())
+            return;  // Rolling-deploy compatibility with an older feeder node.
+        markHeartbeat(source);
+        servo_status_contract_seen_ = true;
+
+        const bool hasRequiredList = rootObject.contains("_servo_required");
+        const QJsonArray required = rootObject.value("_servo_required").toArray();
+
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        for (auto it = status.constBegin(); it != status.constEnd(); ++it) {
+            bool validServoId = false;
+            const int servoId = it.key().toInt(&validServoId);
+            if (!validServoId || servoId <= 0)
+                continue;
+
+            const QString alertId = "feeder_servo_connection_s" + QString::number(servoId);
+            const bool servoRequired = !hasRequiredList
+                || required.contains(QJsonValue(it.key()));
+            if (!servoRequired) {
+                servo_offline_since_ms_.remove(alertId);
+                clearAlert(alertId);
+                continue;
+            }
+            const QString state = normalized(it.value().toString());
+            if (state == "LIVE") {
+                servo_offline_since_ms_.remove(alertId);
+                clearAlert(alertId);
+                continue;
+            }
+            if (state != "OFFLINE")
+                continue;
+
+            // Debounce startup/reconnect hand-off so a normally connecting
+            // servo does not flash a popup. A confirmed OFFLINE remains
+            // continuously observable, including after a GUI-only restart.
+            const qint64 firstSeen = servo_offline_since_ms_.value(alertId, now);
+            if (!servo_offline_since_ms_.contains(alertId))
+                servo_offline_since_ms_.insert(alertId, now);
+            if (now - firstSeen < 4000)
+                continue;
+
+            if (!alerts_.contains(alertId)) {
+                const QString label = "Servo S" + QString::number(servoId);
+                upsertAlert(alertId, source, "WARNING", "FEEDER",
+                            label + " offline",
+                            label + " chưa kết nối; hệ thống đang tự động kết nối lại.",
+                            true);
+            }
+        }
+        return;
+    }
+
     if (source == "robot_error") {
         if (value.isEmpty() || isHealthy(value)) {
             clearAlert(source);
@@ -401,11 +462,26 @@ void SystemAlertController::observeFeederNotification(const QString &value)
         QRegularExpression::CaseInsensitiveOption);
     const QRegularExpressionMatch servoMatch = servoExpression.match(title + " " + detail);
     const QString servoId = servoMatch.hasMatch() ? servoMatch.captured(1) : QString();
-    const QString id = !servoId.isEmpty() ? "feeder_servo_s" + servoId
+    const QString notificationText = title + " " + detail;
+    const QString normalizedNotification = normalized(notificationText);
+    const bool servoConnectionNotification = !servoId.isEmpty()
+        && (isConnectionIssue(notificationText)
+            || normalizedNotification.contains("KET NOI")
+            || normalizedNotification.contains("CONNECTED"));
+    const QString id = !servoId.isEmpty()
+        ? (servoConnectionNotification
+            ? "feeder_servo_connection_s" + servoId
+            : "feeder_servo_s" + servoId)
         : (!code.isEmpty() ? "feeder_notify_" + code : "feeder_gui_alert");
 
+    // Once the continuously published status contract is available it owns
+    // connectivity alerts. The notification topic is still logged by
+    // CartridgeController, but must not reset ACK or race clear/re-add here.
+    if (servo_status_contract_seen_ && servoConnectionNotification)
+        return;
+
     if (rawLevel == "ok" || rawLevel == "silent_ok" || rawLevel == "info") {
-        if (!servoId.isEmpty() && (normalized(title).contains("KET NOI LAI")
+        if (!servoId.isEmpty() && (normalized(title).contains("KET NOI")
                 || normalized(title).contains("CONNECTED")
                 || normalized(detail).endsWith(" OK")))
             clearAlert(id);
@@ -552,6 +628,8 @@ void SystemAlertController::checkHeartbeats()
          "Không nhận được feedback phần cứng /nova5/joint_states_robot trong 5 giây.", 5000},
         {"feeder_system_state", "FEEDER", "Cartridge status offline",
          "Không nhận được /system_state từ cartridge system trong 12 giây.", 12000},
+        {"feeder_servo_positions", "FEEDER", "Servo feedback offline",
+         "Không nhận được /providesystem/servo_positions trong 6 giây.", 6000},
         {"camera_cam0_health", "CAMERA", "CAM0 status offline",
          "Không nhận được /camera/cam0/health trong 12 giây.", 12000},
         {"camera_cam1_health", "CAMERA", "CAM1 status offline",

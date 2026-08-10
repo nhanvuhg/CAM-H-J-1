@@ -63,6 +63,15 @@ import QtGraphicalEffects 1.15
         readonly property string currentUiMode: mainWindow.selectedCartridgeMode !== ""
                                                 ? mainWindow.selectedCartridgeMode
                                                 : cartridgeController.currentMode
+        // Display-only hardware connectivity for the five servo cards. Motion
+        // commands deliberately do not depend on these properties; safety and
+        // START interlocks remain owned by the warning/error controller.
+        property var servoConnectionStates: ({})
+        property double servoStatusLastUpdateMs: 0
+        property double servoStatusClockMs: Date.now()
+        // Longer than the 3 s Modbus timeout so one delayed transaction does
+        // not make all five cards flicker OFFLINE.
+        readonly property int servoStatusTimeoutMs: 5000
 
         readonly property color cBg:     "transparent"
         readonly property color cBg2:    "#990d1e32"
@@ -197,6 +206,34 @@ import QtGraphicalEffects 1.15
         readonly property color cSensorActiveText: "#06101d"
         property bool jogStopStateHint: false
         property bool homingCommandLocked: false
+
+        function servoFeedbackLive(sid) {
+            return servoStatusLastUpdateMs > 0
+                    && servoStatusClockMs - servoStatusLastUpdateMs <= servoStatusTimeoutMs
+                    && servoConnectionStates[String(sid)] === "LIVE"
+        }
+
+        Connections {
+            target: cartridgeController
+            function onServoPositionsChanged() {
+                try {
+                    var payload = JSON.parse(cartridgeController.servoPositions)
+                    var states = payload["_servo_status"]
+                    if (states !== undefined && states !== null) {
+                        root.servoConnectionStates = states
+                        root.servoStatusLastUpdateMs = Date.now()
+                        root.servoStatusClockMs = root.servoStatusLastUpdateMs
+                    }
+                } catch(e) {}
+            }
+        }
+
+        Timer {
+            interval: 500
+            repeat: true
+            running: root.visible
+            onTriggered: root.servoStatusClockMs = Date.now()
+        }
 
         function pressColor(colorValue) {
             return Qt.darker(colorValue, cPressCustomDarken)
@@ -394,10 +431,12 @@ import QtGraphicalEffects 1.15
 
         Component.onCompleted: forceActiveFocus()
         onVisibleChanged: {
-            if (visible)
+            if (visible) {
+                servoStatusClockMs = Date.now()
                 forceActiveFocus()
-            else
+            } else {
                 dismissDataInput()
+            }
         }
 
         MouseArea {
@@ -1668,7 +1707,14 @@ import QtGraphicalEffects 1.15
                                     delegate: Rectangle {
                                         id: cardItem
                                         property int jogVelMms: 30
+                                        readonly property bool servoLive: root.servoFeedbackLive(model.sid)
                                         readonly property int controlH: Math.max(36, Math.min(40, Math.floor((height - 170) / 5)))
+                                        onServoLiveChanged: {
+                                            if (!servoLive) {
+                                                posText.lastVal = -99999
+                                                posText.positionValueText = "-- mm"
+                                            }
+                                        }
                                         Connections {
                                             target: cartridgeController
                                             function onServoPositionsChanged() {
@@ -1689,19 +1735,82 @@ import QtGraphicalEffects 1.15
                                             anchors.margins: 6
                                             spacing: 6; width: parent.width - 12
 
-                                            // header: name + desc
-                                            Column { width: parent.width; spacing: 2
-                                                Text { text: "S"+model.sid+": "+model.sname; color: root.cCardTitle; font.pixelSize: 20; font.bold: true; width: parent.width; horizontalAlignment: Text.AlignHCenter }
-                                                Text { text: model.sdesc; color: root.cWhiteText; font.pixelSize: 17; width: parent.width; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight }
+                                            // Header + display-only hardware status. Muted teal/slate
+                                            // keeps it subordinate to the warning popup severity.
+                                            Item {
+                                                width: parent.width
+                                                height: 47
+
+                                                Text {
+                                                    text: "S"+model.sid+": "+model.sname
+                                                    color: root.cCardTitle
+                                                    font.pixelSize: 18
+                                                    font.bold: true
+                                                    anchors.left: parent.left
+                                                    anchors.leftMargin: servoStatusBadge.width + 6
+                                                    anchors.right: servoStatusBadge.left
+                                                    anchors.rightMargin: 6
+                                                    anchors.top: parent.top
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    wrapMode: Text.NoWrap
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                Rectangle {
+                                                    id: servoStatusBadge
+                                                    width: 76
+                                                    height: 24
+                                                    radius: 12
+                                                    anchors.top: parent.top
+                                                    anchors.right: parent.right
+                                                    color: cardItem.servoLive
+                                                           ? Qt.rgba(root.cModeSelectedMid.r, root.cModeSelectedMid.g, root.cModeSelectedMid.b, 0.16)
+                                                           : root.cSensorIdleBg
+                                                    border.color: cardItem.servoLive
+                                                                  ? Qt.rgba(root.cModeSelectedTop.r, root.cModeSelectedTop.g, root.cModeSelectedTop.b, 0.38)
+                                                                  : root.cSensorIdleBorder
+                                                    border.width: 1
+
+                                                    Row {
+                                                        anchors.centerIn: parent
+                                                        spacing: 5
+                                                        Rectangle {
+                                                            width: 6; height: 6; radius: 3
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            color: cardItem.servoLive ? root.cModeSelectedTop : root.cDim
+                                                        }
+                                                        Text {
+                                                            text: cardItem.servoLive ? "LIVE" : "OFFLINE"
+                                                            color: cardItem.servoLive ? root.cModeSelectedTop : root.cDim
+                                                            font.pixelSize: 11
+                                                            font.weight: Font.DemiBold
+                                                            font.letterSpacing: 0.25
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                        }
+                                                    }
+                                                }
+
+                                                Text {
+                                                    text: model.sdesc
+                                                    color: root.cWhiteText
+                                                    font.pixelSize: 15
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
+                                                    anchors.bottom: parent.bottom
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    elide: Text.ElideRight
+                                                }
                                             }
 
                                             // position display — direct connect + deadband
                                             Text {
                                                 id: posText
                                                 width: parent.width; horizontalAlignment: Text.AlignHCenter
-                                                text: "--"
-                                                color: root.cWhiteText; font.pixelSize: 22; font.bold: true
+                                                text: cardItem.servoLive ? positionValueText : "-- mm"
+                                                color: cardItem.servoLive ? root.cWhiteText : root.cDim
+                                                font.pixelSize: 22; font.bold: true
                                                 property real lastVal: -99999
+                                                property string positionValueText: "-- mm"
                                                 Connections {
                                                     target: cartridgeController
                                                     function onServoPositionsChanged() {
@@ -1711,7 +1820,7 @@ import QtGraphicalEffects 1.15
                                                                  var v = Number(p)
                                                                  if (Math.abs(v - posText.lastVal) >= 0.05) {
                                                                      posText.lastVal = v
-                                                                     posText.text = v.toFixed(1) + " mm"
+                                                                     posText.positionValueText = v.toFixed(1) + " mm"
                                                                  }
                                                              }
                                                          } catch(e) {}
