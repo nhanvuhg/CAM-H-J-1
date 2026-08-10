@@ -944,6 +944,7 @@ class CartridgeSystem(Node):
         Runs forever in its own thread so each servo's Modbus timeouts are
         isolated from the rest of the fleet."""
         consecutive_fail = 0
+        offline_notified = False
         while rclpy.ok():
             time.sleep(5.0)
             mot = self.servos.get(sid)
@@ -952,7 +953,17 @@ class CartridgeSystem(Node):
                 # loop will retry every 5s anyway; no need for inner sleep.
                 if self._connect_servo(sid, ip, attempts=1):
                     consecutive_fail = 0
+                    offline_notified = False
                     self._notify('info', f'S{sid} da ket noi', f'S{sid} ({ip}) OK')
+                elif not offline_notified:
+                    # Initial connection failure used to be visible only in
+                    # the terminal. Publish once so the shared GUI alert gate
+                    # can show the missing servo without spamming every retry.
+                    offline_notified = True
+                    self._notify(
+                        'warn',
+                        f'Servo S{sid} chua ket noi',
+                        f'{ip} — OFFLINE, dang reconnect...')
                 continue
             try:
                 with self._servo_lock:
@@ -962,11 +973,13 @@ class CartridgeSystem(Node):
                 consecutive_fail += 1
                 if consecutive_fail >= 2:
                     self.get_logger().error(f"S{sid} mat ket noi -> reconnect")
+                    offline_notified = True
                     self._notify('warn', f'Servo S{sid} mat ket noi', f'Dang reconnect...')
                     with self._servo_lock:
                         self.servos.pop(sid, None)
                     if self._connect_servo(sid, ip, attempts=1):
                         consecutive_fail = 0
+                        offline_notified = False
                         self._notify('info', f'S{sid} ket noi lai', f'S{sid} OK')
 
     def destroy_node(self):
@@ -3635,22 +3648,37 @@ class CartridgeSystem(Node):
     def _cb_update_config(self, msg: String):
         """
         Cập nhật config runtime từ GUI qua /providesystem/update_config (JSON).
-        Payload: {"key": "tên_config", "data": "giá_trị"}
+        Payload đơn: {"key": "tên_config", "data": "giá_trị"}
+        Payload batch: {"updates": {"key_1": "giá_trị", "key_2": "giá_trị"}}
         Hỗ trợ cập nhật số, string, dict (row positions) mà không cần restart node.
-        Sau khi cập nhật: lưu vào file YAML (config.save_to_file()).
+        Batch được ghi YAML và publish snapshot đúng một lần để tránh mất message
+        khi nút Save All gửi nhiều vị trí servo.
         Ví dụ: thay đổi tốc độ scan, vị trí row, timeout — có hiệu lực ngay.
         """
         try:
             import json
             self._reload_config_from_disk("before GUI update")
             payload = json.loads(msg.data)
-            key = payload.get('key')
-            val_str = payload.get('data', '')
-            if key and hasattr(self.config, key):
-                try:
-                    val = json.loads(val_str)
-                except ValueError:
-                    val = val_str
+
+            raw_updates = payload.get('updates')
+            if raw_updates is None:
+                key = payload.get('key')
+                raw_updates = {key: payload.get('data', '')} if key else {}
+            if not isinstance(raw_updates, dict) or not raw_updates:
+                raise ValueError("update_config payload has no updates")
+
+            unknown_keys = [key for key in raw_updates if not key or not hasattr(self.config, key)]
+            if unknown_keys:
+                raise ValueError(f"Config key not found or ignored: {unknown_keys}")
+
+            decoded_updates = {}
+            for key, raw_val in raw_updates.items():
+                val = raw_val
+                if isinstance(raw_val, str):
+                    try:
+                        val = json.loads(raw_val)
+                    except (TypeError, ValueError):
+                        val = raw_val
                 if isinstance(val, dict):
                     def parse_val(v):
                         if isinstance(v, list):
@@ -3660,14 +3688,34 @@ class CartridgeSystem(Node):
                 elif isinstance(val, str):
                     try: val = float(val)
                     except ValueError: pass
+                decoded_updates[key] = val
+
+            changed_updates = {
+                key: val for key, val in decoded_updates.items()
+                if getattr(self.config, key) != val
+            }
+            if not changed_updates:
+                self.get_logger().info("[CONFIG] No values changed; skip YAML save")
+                return
+
+            for key, val in changed_updates.items():
                 setattr(self.config, key, val)
-                self.config.save_to_file()
-                self._config_mtime_ns = self._config_file_mtime_ns()
-                self._publish_config_snapshot()
+
+            self.config.save_to_file()
+            self._config_mtime_ns = self._config_file_mtime_ns()
+            self._publish_config_snapshot()
+
+            if len(changed_updates) == 1:
+                key, val = next(iter(changed_updates.items()))
+                detail = f'Cập nhật thành công {key}'
                 self.get_logger().info(f"Config updated dynamically: {key} = {val}")
-                self._notify('info', 'Config Updated', f'Cập nhật thành công {key}')
             else:
-                self.get_logger().warn(f"Config key not found or ignored: {key}")
+                detail = f'Đã lưu {len(changed_updates)} giá trị servo'
+                self.get_logger().info(
+                    f"Config batch updated dynamically ({len(changed_updates)} values): "
+                    f"{', '.join(changed_updates.keys())}"
+                )
+            self._notify('info', 'Config Updated', detail)
         except Exception as e:
             self.get_logger().warn(f"update_config error: {e}")
 

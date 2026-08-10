@@ -12,7 +12,8 @@ It is intentionally isolated from Fill HP's existing data:
 
 ## Events captured
 
-The bridge records a row when a source **transitions into** an error state:
+The bridge records a row when a source **transitions into** an error state,
+but only while the synchronized system mode is **AUTO** or **AI**:
 
 - `/robot/error`: any non-empty/non-healthy error message
 - `/robot/system_status`: `ERROR_*`, fault, failure, timeout, offline, or
@@ -32,6 +33,11 @@ The bridge records a row when a source **transitions into** an error state:
 normal NG cartridges routed to the fail position, not a stopped system. Camera
 health counters are normalized before de-duplication so changing FPS/age values
 cannot create one row per second during a reconnect incident.
+
+Only `ERROR` rows belong to Stop Errors. `WARN` events and every fault observed
+in MANUAL/JOG/unknown mode remain runtime diagnostics and are not written to
+either production Stop Errors CSV. The merged API also filters legacy
+Manual/Warning rows without deleting the original CSV history.
 
 Repeated samples of one active fault are suppressed. After a healthy/recovered
 sample, recurrence is logged as a new event. A ten-second persistent de-duplication
@@ -60,14 +66,16 @@ The apply operation:
 
 1. stages the tracked logger and patcher in a unique `/tmp` directory on RevPi A;
 2. parses and compiles the complete proposed `web_hp.py` before writing;
-3. installs the companion module in the source package, then runs
+3. patches `production_log.py` so Fill HP follows the same AUTO/AI + ERROR-only
+   persistence policy;
+4. installs the companion module in the source package, then runs
    `colcon build --packages-select fill_hp --symlink-install`;
-4. verifies `from fill_hp import external_event_log` through the workspace's
+5. verifies `from fill_hp import external_event_log` through the workspace's
    `install/setup.bash` before changing `web_hp.py`;
-5. stores timestamped backups in
+6. stores timestamped backups in
    `/home/pi/cartridge_fill_logs/web_hp_backups`;
-6. atomically replaces `web_hp.py` and verifies both files;
-7. removes the staging directory.
+7. atomically replaces `web_hp.py` and verifies all changed files;
+8. removes the staging directory.
 
 It builds only the `fill_hp` package so the new Python import is valid. It does
 **not** restart, stop, or reload any service. The new callbacks become active

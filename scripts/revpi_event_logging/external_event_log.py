@@ -128,6 +128,18 @@ def _as_bool(value: Any) -> bool:
     return _upper(value) in {"1", "ON", "TRUE", "YES"}
 
 
+def _is_production_mode(value: Any) -> bool:
+    """Only AUTO/AI incidents belong to the Production Stop Errors table."""
+    normalized = re.sub(r"[^A-Z0-9]+", " ", _upper(value)).strip()
+    if not normalized:
+        return False
+    return normalized.split()[0] in {"AUTO", "AI", "1", "2"}
+
+
+def _is_persistable_stop_event(level: Any, mode: Any) -> bool:
+    return _upper(level) == "ERROR" and _is_production_mode(mode)
+
+
 def _fingerprint(level: str, area: str, message: str) -> str:
     normalized = "|".join((_upper(level), _upper(area), _upper(message)))
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24]
@@ -249,6 +261,11 @@ class ExternalEventLog:
         area = _upper(area) or "SYSTEM"
         source = _clean(source)
         context = dict(context or {})
+        # Production Output is a history of stops during production, not a
+        # maintenance diagnostic archive. Manual/JOG/unknown-mode faults stay
+        # visible in their runtime logger/UI only; WARN never enters this CSV.
+        if not _is_persistable_stop_event(level, context.get("mode")):
+            return _RECORD_IGNORED
         fingerprint = _fingerprint(level, area, message)
         try:
             now = self.now_fn()
@@ -553,6 +570,13 @@ def merge_event_summaries(
     for summary in (primary, external):
         for original in summary.get("items", []) or []:
             item = dict(original)
+            # Apply the policy to both the existing Fill HP CSV and the new
+            # external CSV. This hides legacy Manual/WARN rows without deleting
+            # or rewriting operator history on disk.
+            if not _is_persistable_stop_event(
+                item.get("level"), item.get("mode")
+            ):
+                continue
             identity = (
                 _clean(item.get("time")),
                 _upper(item.get("level")),

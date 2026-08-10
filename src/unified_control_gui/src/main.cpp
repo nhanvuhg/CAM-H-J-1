@@ -10,6 +10,7 @@
 #include "unified_control_gui/scale_controller.hpp"
 #include "unified_control_gui/hp_controller.hpp"
 #include "unified_control_gui/auth_controller.hpp"
+#include "unified_control_gui/system_alert_controller.hpp"
 #include <thread>
 
 int main(int argc, char *argv[])
@@ -39,6 +40,14 @@ int main(int argc, char *argv[])
 
     auto cartridgeController = new CartridgeController(camNode);
     engine.rootContext()->setContextProperty("cartridgeController", cartridgeController);
+
+    auto systemAlertController = new SystemAlertController(camNode);
+    engine.rootContext()->setContextProperty("systemAlertController", systemAlertController);
+    systemAlertController->setScaleIgnored(robotController->ignoreScale());
+    QObject::connect(robotController, &RobotController::ignoreScaleChanged,
+                     systemAlertController, [robotController, systemAlertController]() {
+        systemAlertController->setScaleIgnored(robotController->ignoreScale());
+    });
 
     auto scaleController = new ScaleController(camNode);
     engine.rootContext()->setContextProperty("scaleController", scaleController);

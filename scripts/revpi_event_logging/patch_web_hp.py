@@ -28,6 +28,9 @@ MARKERS = (
     f"BEGIN {PATCH_ID}_API",
 )
 
+CONTEXT_MODE_OLD = '"mode": status.get("mode_status") or status.get("feeder_current_mode") or "",'
+CONTEXT_MODE_NEW = '"mode": status.get("feeder_current_mode") or status.get("mode_status") or "",'
+
 IMPORT_ANCHOR = """    import production_log as prodlog
 
 
@@ -80,7 +83,7 @@ SUBSCRIPTION_REPLACEMENT = f"""        self.create_subscription(Float32, "/Fill_
         with self._lock:
             status = dict(self._status)
         return {{
-            "mode": status.get("mode_status") or status.get("feeder_current_mode") or "",
+            "mode": status.get("feeder_current_mode") or status.get("mode_status") or "",
             "fill_state": status.get("fill_status") or "",
             "dosing_state": status.get("dosing_status") or "",
             "cr_state": status.get("cr_status") or "",
@@ -190,8 +193,17 @@ def patch_source(source: str) -> Tuple[str, bool]:
     """Return ``(patched_source, changed)`` without touching the filesystem."""
     marker_presence = [marker in source for marker in MARKERS]
     if all(marker_presence):
-        compile(source, "web_hp.py", "exec")
-        return source, False
+        # V1 initially preferred Fill HP's mode_status, which can say MANUAL
+        # while the synchronized robot/cartridge system is actually in AI.
+        # Migrate existing installations to the authoritative feeder mode.
+        if CONTEXT_MODE_NEW in source:
+            compile(source, "web_hp.py", "exec")
+            return source, False
+        if source.count(CONTEXT_MODE_OLD) != 1:
+            raise PatchError("Patched web_hp.py has an unknown event mode context")
+        migrated = source.replace(CONTEXT_MODE_OLD, CONTEXT_MODE_NEW, 1)
+        compile(migrated, "web_hp.py", "exec")
+        return migrated, True
     if any(marker_presence):
         present = [m for m, found in zip(MARKERS, marker_presence) if found]
         raise PatchError(f"Partial {PATCH_ID} patch detected: {present}")

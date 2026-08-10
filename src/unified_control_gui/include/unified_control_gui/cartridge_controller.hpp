@@ -75,6 +75,7 @@ public slots:
     // Config
     void getConfig();
     void saveConfig(const QString &key, const QString &jsonData);
+    void saveConfigBatch(const QString &jsonData);
 
     // Log
     void clearLog();

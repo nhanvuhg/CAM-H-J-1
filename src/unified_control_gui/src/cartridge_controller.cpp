@@ -378,6 +378,28 @@ void CartridgeController::saveConfig(const QString &key, const QString &jsonData
     addLog(QString("Config saved: %1").arg(key), "ok");
 }
 
+void CartridgeController::saveConfigBatch(const QString &jsonData)
+{
+    QJsonParseError parseError;
+    const QJsonDocument updatesDoc = QJsonDocument::fromJson(jsonData.toUtf8(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !updatesDoc.isObject()) {
+        addLog("Config batch rejected: invalid JSON", "err");
+        return;
+    }
+
+    const QJsonObject updates = updatesDoc.object();
+    if (updates.isEmpty()) {
+        addLog("Config unchanged: nothing to save", "info");
+        return;
+    }
+
+    QJsonObject payload;
+    payload["updates"] = updates;
+    publishString(update_config_pub_, QString::fromUtf8(
+        QJsonDocument(payload).toJson(QJsonDocument::Compact)));
+    addLog(QString("Config batch sent: %1 values").arg(updates.size()), "info");
+}
+
 // ── Log ───────────────────────────────────────────────────────────
 
 void CartridgeController::addLog(const QString &msg, const QString &type)

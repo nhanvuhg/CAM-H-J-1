@@ -567,6 +567,20 @@ import QtGraphicalEffects 1.15
                         }
                     }
                 }
+                SystemAlertButton {
+                    Layout.preferredWidth: 50
+                    Layout.preferredHeight: 50
+                    pageActive: root.visible
+                    panelColor: root.cBg2
+                    panelColorDeep: root.cCard
+                    borderColor: root.cBtnBaseBorder
+                    textColor: root.cBtnBaseText
+                    mutedColor: root.cDim
+                    accentColor: root.cAccent
+                    warningColor: root.cOrange
+                    errorColor: root.cRed
+                    successColor: root.cGreen
+                }
                 Item { width: 6 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
@@ -1440,11 +1454,12 @@ import QtGraphicalEffects 1.15
                                     Layout.fillWidth: true; Layout.fillHeight: true
                                     columns: 2; columnSpacing: 4; rowSpacing: 4
 
-                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "START"; iconSource: "qrc:/qml/icons/play.svg"; bg: root.cBtnPrimaryStart; bgEnd: root.cBtnPrimaryEnd; bc: root.cBtnPrimaryBorder; tc: "#ffffff"; active: !root.systemPaused; clickEnabled: !root.startCommandLocked && !root.systemPaused; onClicked: {
+                                    CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "START"; iconSource: "qrc:/qml/icons/play.svg"; bg: root.cBtnPrimaryStart; bgEnd: root.cBtnPrimaryEnd; bc: root.cBtnPrimaryBorder; tc: "#ffffff"; active: !root.systemPaused && systemAlertController.canStart; clickEnabled: !root.startCommandLocked && !root.systemPaused; onClicked: {
                                             if (root.startCommandLocked || root.systemPaused)
                                                 return
                                             root.startCommandLocked = true
-                                            mainWindow.startSynchronizedSystems(root.currentUiMode)
+                                            if (!mainWindow.startSynchronizedSystems(root.currentUiMode))
+                                                root.startCommandLocked = false
                                         } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "RESUME"; iconSource: "qrc:/qml/icons/step_forward.svg"; bg: root.cServoRunStart; bgEnd: root.cServoRunEnd; bc: root.cServoRunBorder; tc: root.cServoRunText; blinking: root.systemPaused; onClicked: { root.pauseLatched = false; cartridgeController.resumeSystem() } }
                                     CBtn { Layout.fillWidth: true; Layout.fillHeight: true; Layout.preferredWidth: 1; Layout.preferredHeight: 1; lbl: "STOP"; bg: root.cBtnDangerStart; bgEnd: root.cBtnDangerEnd; bc: root.cBtnDangerBorder; tc: "#ffffff"; blinking: cartridgeController.uiHint === "press_stop"; onClicked: root.stopFromSystemControl() }
@@ -1458,6 +1473,17 @@ import QtGraphicalEffects 1.15
                                     visible: root.systemPaused
                                     text: "⏸ Đang PAUSE — nhấn RESUME để chạy tiếp, hoặc STOP để kết thúc"
                                     color: root.cOrange
+                                    font.pixelSize: 12
+                                    font.bold: true
+                                    wrapMode: Text.WordWrap
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    visible: !root.systemPaused && !systemAlertController.canStart
+                                    text: systemAlertController.startBlockReason
+                                    color: systemAlertController.errorCount > 0 ? root.cRed : root.cOrange
                                     font.pixelSize: 12
                                     font.bold: true
                                     wrapMode: Text.WordWrap
@@ -2271,11 +2297,22 @@ import QtGraphicalEffects 1.15
                                 Row { spacing: 8; topPadding: 8
                                     CBtn { lbl:"Save All"; iconSource:"icons/download.svg"; padV:10; padH:22; fontSize: 18; bg:root.cBtnPrimaryStart; bgEnd:root.cBtnPrimaryEnd; bc:root.cBtnPrimaryBorder; tc:"#ffffff"
                                         onClicked: {
+                                            var updates = ({})
                                             for (var i = 0; i < servoRepeater2.count; i++) {
                                                 var item = servoRepeater2.itemAt(i)
-                                                if (item && item.inputText !== "")
-                                                    cartridgeController.saveConfig(item.paramKey, item.inputText)
+                                                if (!item || item.inputText === "")
+                                                    continue
+
+                                                var oldValue = page2Root.parsedConfig[item.paramKey]
+                                                var newText = item.inputText.trim()
+                                                var newNumber = Number(newText)
+                                                var changed = (typeof oldValue === "number" && isFinite(newNumber))
+                                                              ? Math.abs(oldValue - newNumber) > 0.000001
+                                                              : String(oldValue) !== newText
+                                                if (changed)
+                                                    updates[item.paramKey] = newText
                                             }
+                                            cartridgeController.saveConfigBatch(JSON.stringify(updates))
                                         }
                                     }
 	                                    CBtn { lbl:"↺ Reset"; padV:10; padH:18; fontSize: 18; bg:root.cBtnBaseStart; bgEnd:root.cBtnBaseEnd; bc:root.cBtnBaseBorder; tc:root.cBtnBaseText; onClicked: cartridgeController.getConfig() }

@@ -1,6 +1,12 @@
 from pathlib import Path
 
-from patch_web_hp import MARKERS, inspect_or_apply, patch_source
+from patch_web_hp import (
+    CONTEXT_MODE_NEW,
+    CONTEXT_MODE_OLD,
+    MARKERS,
+    inspect_or_apply,
+    patch_source,
+)
 
 
 def web_hp_fixture():
@@ -72,10 +78,25 @@ def test_patch_source_is_syntactically_valid_and_idempotent():
     assert '"/camera/status"' in patched
     assert '"/vision/roi_status", self._string_cb("vision_roi_status"), qos_latched' in patched
     assert "node.merged_system_events_day" in patched
+    assert CONTEXT_MODE_NEW in patched
 
     second, changed_again = patch_source(patched)
     assert not changed_again
     assert second == patched
+
+
+def test_existing_v1_patch_migrates_mode_context_once():
+    patched, _ = patch_source(web_hp_fixture())
+    old_v1 = patched.replace(CONTEXT_MODE_NEW, CONTEXT_MODE_OLD, 1)
+
+    migrated, changed = patch_source(old_v1)
+    assert changed
+    assert CONTEXT_MODE_NEW in migrated
+    assert CONTEXT_MODE_OLD not in migrated
+
+    repeated, changed_again = patch_source(migrated)
+    assert not changed_again
+    assert repeated == migrated
 
 
 def test_check_mode_is_read_only_then_apply_creates_backup(tmp_path):

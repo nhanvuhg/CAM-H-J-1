@@ -18,6 +18,7 @@
     <file alias="ScreenshotButton.qml">qml/ScreenshotButton.qml</file>
     <file alias="GlassHighlight.qml">qml/GlassHighlight.qml</file>
     <file alias="HoverHint.qml">qml/HoverHint.qml</file>
+    <file alias="SystemAlertButton.qml">qml/SystemAlertButton.qml</file>
     <file alias="icons/camera.svg">qml/icons/camera.svg</file>
     <file alias="icons/switch_camera.svg">qml/icons/switch_camera.svg</file>
     <file alias="icons/download.svg">qml/icons/download.svg</file>

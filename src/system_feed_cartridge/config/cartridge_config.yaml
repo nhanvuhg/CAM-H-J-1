@@ -30,7 +30,6 @@ cylinder_timeout: 15.0
 modbus_timeout_ms: 3000
 control_loop_period_s: 0.02
 io_poll_period_s: 0.02
-# Chỉ dùng khi Servo3 đang đẩy khay và chờ S18; không tăng tải CPX liên tục.
 s18_fast_poll_period_s: 0.01
 sensor_on_latch_s: 0.1
 fas_position_velocity: 0.05
@@ -190,7 +189,7 @@ outy_safe_zone: 30.0
 outy_search_velocity: 80.0
 outy_slow_vel: 30.0
 target_scanoutp2: 1000.0
-outy_scan_arm_mm: 60.0
+outy_scan_arm_mm: 60
 outy_scan_valid_min_mm: 70.0
 outy_scan_valid_max_mm: 1000.0
 s4_scan_noise_retry_limit: 2

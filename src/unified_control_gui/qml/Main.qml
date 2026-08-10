@@ -18,6 +18,9 @@ ApplicationWindow {
     property string selectedCartridgeMode: cartridgeController.currentMode || "idle"
     property bool state2OutputFullWaitSeen: false
 
+    onSelectedCartridgeModeChanged:
+        systemAlertController.setOperationMode(cartridgeModeFor(selectedCartridgeMode))
+
     // Fill HP node-compatible authentication.
     property bool loginOpen: false
     property bool passwordVisible: false
@@ -62,6 +65,7 @@ ApplicationWindow {
         var cartridgeCommandMode = cartridgeCommandModeFor(mode)
         var robotMode = robotModeFor(mode)
 
+        systemAlertController.setOperationMode(cartridgeMode)
         selectedCartridgeMode = cartridgeMode
         synchronizedModeRequested(mode)
         cartridgeController.setMode(cartridgeCommandMode)
@@ -77,11 +81,16 @@ ApplicationWindow {
     }
 
     function startSynchronizedSystems(mode) {
+        var requestedCartridgeMode = cartridgeModeFor(mode)
+        if (!systemAlertController.prepareStart(requestedCartridgeMode))
+            return false
+
         var cartridgeMode = syncOperationMode(mode)
         autoAiStartedSinceModeSelect = (cartridgeMode === "auto" || cartridgeMode === "ai")
         hpController.publishMode((cartridgeMode === "auto" || cartridgeMode === "ai") ? 0 : 2)
         synchronizedStartRequested(mode)
         robotController.startSystem(true)
+        return true
     }
 
     function stopSynchronizedSystems() {

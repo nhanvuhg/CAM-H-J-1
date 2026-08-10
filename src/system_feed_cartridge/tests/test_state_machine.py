@@ -24,7 +24,7 @@ import os
 import time
 import threading
 import pytest
-from unittest.mock import MagicMock, PropertyMock, call
+from unittest.mock import MagicMock, PropertyMock, call, patch
 from enum import Enum
 
 # ── Path setup ────────────────────────────────────────────────────
@@ -197,6 +197,63 @@ class TestSystemConfig:
         loaded = SystemConfig.load(path)
         assert loaded.servo_ips == {1: "10.0.0.1"}
         assert loaded.iny_input_zones[1] == [10.0, 20.0, 30.0]
+
+    @staticmethod
+    def _make_config_update_node():
+        node = object.__new__(CartridgeSystem)
+        node.config = SystemConfig(
+            servo_ips={1: "10.0.0.1"}, io_ip="10.0.0.2", io_ip_2="10.0.0.3",
+            servo_limits={1: 700.0},
+            iny_input_zones={}, iny_output_zones={}, outy_output_zones={},
+            inx_home=0.0, outx_target2=400.0, outy_scan_arm_mm=50.0,
+        )
+        node._reload_config_from_disk = MagicMock(return_value=True)
+        node._config_file_mtime_ns = MagicMock(return_value=123)
+        node._publish_config_snapshot = MagicMock()
+        node._notify = MagicMock()
+        node.get_logger = MagicMock(return_value=MagicMock())
+        return node
+
+    def test_batch_config_update_saves_only_changed_values(self):
+        node = self._make_config_update_node()
+        msg = types.SimpleNamespace(data='{"updates":{"inx_home":"0.0","outx_target2":"552.0","outy_scan_arm_mm":"60.0"}}')
+
+        with patch.object(SystemConfig, 'save_to_file') as save_to_file:
+            node._cb_update_config(msg)
+
+        assert node.config.inx_home == 0.0
+        assert node.config.outx_target2 == 552.0
+        assert node.config.outy_scan_arm_mm == 60.0
+        save_to_file.assert_called_once_with()
+        node._publish_config_snapshot.assert_called_once_with()
+        node._notify.assert_called_once_with(
+            'info', 'Config Updated', 'Đã lưu 2 giá trị servo'
+        )
+
+    def test_batch_config_update_skips_save_when_unchanged(self):
+        node = self._make_config_update_node()
+        msg = types.SimpleNamespace(data='{"updates":{"inx_home":"0","outx_target2":"400.0"}}')
+
+        with patch.object(SystemConfig, 'save_to_file') as save_to_file:
+            node._cb_update_config(msg)
+
+        save_to_file.assert_not_called()
+        node._publish_config_snapshot.assert_not_called()
+        node._notify.assert_not_called()
+
+    def test_single_config_update_remains_compatible(self):
+        node = self._make_config_update_node()
+        msg = types.SimpleNamespace(data='{"key":"outx_target2","data":"552.0"}')
+
+        with patch.object(SystemConfig, 'save_to_file') as save_to_file:
+            node._cb_update_config(msg)
+
+        assert node.config.outx_target2 == 552.0
+        save_to_file.assert_called_once_with()
+        node._publish_config_snapshot.assert_called_once_with()
+        node._notify.assert_called_once_with(
+            'info', 'Config Updated', 'Cập nhật thành công outx_target2'
+        )
 
 
 # ══════════════════════════════════════════════════════════════════

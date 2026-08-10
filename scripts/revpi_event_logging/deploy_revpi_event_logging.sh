@@ -5,13 +5,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REMOTE_HOST="pi@172.16.11.31"
 REMOTE_TARGET="/home/pi/ros2_jazzy/src/fill_hp/fill_hp/web_hp.py"
+REMOTE_PRODUCTION_LOG_TARGET="/home/pi/ros2_jazzy/src/fill_hp/fill_hp/production_log.py"
 REMOTE_BACKUP_DIR="/home/pi/cartridge_fill_logs/web_hp_backups"
 REMOTE_WORKSPACE="/home/pi/ros2_jazzy"
 APPLY=0
 
 usage() {
     printf '%s\n' \
-        "Usage: $0 [--host user@host] [--target /absolute/web_hp.py] [--workspace /absolute/path] [--backup-dir /absolute/path] [--apply]" \
+        "Usage: $0 [--host user@host] [--target /absolute/web_hp.py] [--production-log-target /absolute/production_log.py] [--workspace /absolute/path] [--backup-dir /absolute/path] [--apply]" \
         "" \
         "Default: inspect only. --apply patches atomically and creates a backup." \
         "This script never restarts web_hp or any ROS/systemd service."
@@ -25,6 +26,10 @@ while (($#)); do
             ;;
         --target)
             REMOTE_TARGET="${2:?missing value for --target}"
+            shift 2
+            ;;
+        --production-log-target)
+            REMOTE_PRODUCTION_LOG_TARGET="${2:?missing value for --production-log-target}"
             shift 2
             ;;
         --backup-dir)
@@ -58,18 +63,22 @@ if [[ ! "$REMOTE_HOST" =~ ^[A-Za-z0-9_.-]+@[A-Za-z0-9_.:-]+$ ]]; then
     exit 2
 fi
 if [[ ! "$REMOTE_TARGET" =~ ^/[A-Za-z0-9_./-]+$ ]] ||
+   [[ ! "$REMOTE_PRODUCTION_LOG_TARGET" =~ ^/[A-Za-z0-9_./-]+$ ]] ||
    [[ ! "$REMOTE_BACKUP_DIR" =~ ^/[A-Za-z0-9_./-]+$ ]] ||
    [[ ! "$REMOTE_WORKSPACE" =~ ^/[A-Za-z0-9_./-]+$ ]]; then
     printf 'Target and backup directory must be simple absolute paths.\n' >&2
     exit 2
 fi
 
-printf 'RevPi:  %s\nTarget: %s\n' "$REMOTE_HOST" "$REMOTE_TARGET"
+printf 'RevPi:  %s\nWeb target: %s\nProduction log: %s\n' \
+    "$REMOTE_HOST" "$REMOTE_TARGET" "$REMOTE_PRODUCTION_LOG_TARGET"
 
 if ((APPLY == 0)); then
     printf '%s\n' 'CHECK ONLY — no remote files will be changed.'
     ssh -o BatchMode=yes -o ConnectTimeout=5 "$REMOTE_HOST" \
-        "test -f '$REMOTE_TARGET' && sha256sum '$REMOTE_TARGET' && grep -c 'CAM_HJ1_EXTERNAL_EVENT_LOG_V1' '$REMOTE_TARGET' || true"
+        "test -f '$REMOTE_TARGET' && test -f '$REMOTE_PRODUCTION_LOG_TARGET' && \
+         sha256sum '$REMOTE_TARGET' '$REMOTE_PRODUCTION_LOG_TARGET' && \
+         grep -c 'CAM_HJ1_EXTERNAL_EVENT_LOG_V1' '$REMOTE_TARGET' || true"
     printf '%s\n' 'Run again with --apply to install. No service will be restarted.'
     exit 0
 fi
@@ -90,7 +99,14 @@ trap cleanup EXIT
 scp -q \
     "$SCRIPT_DIR/external_event_log.py" \
     "$SCRIPT_DIR/patch_web_hp.py" \
+    "$SCRIPT_DIR/patch_production_log.py" \
     "$REMOTE_HOST:$REMOTE_STAGE/"
+
+# Parse the complete proposed production_log.py before changing any source.
+ssh -o BatchMode=yes -o ConnectTimeout=5 "$REMOTE_HOST" \
+    "python3 '$REMOTE_STAGE/patch_production_log.py' \
+        --target '$REMOTE_PRODUCTION_LOG_TARGET' \
+        --backup-dir '$REMOTE_BACKUP_DIR'"
 
 ssh -o BatchMode=yes -o ConnectTimeout=5 "$REMOTE_HOST" \
     "python3 '$REMOTE_STAGE/patch_web_hp.py' \
@@ -98,6 +114,14 @@ ssh -o BatchMode=yes -o ConnectTimeout=5 "$REMOTE_HOST" \
         --module-source '$REMOTE_STAGE/external_event_log.py' \
         --backup-dir '$REMOTE_BACKUP_DIR' \
         --module-only \
+        --apply"
+
+# Stop Errors are durable only for ERROR incidents in AUTO/AI. Manual/JOG and
+# WARN remain runtime diagnostics and are not appended to production history.
+ssh -o BatchMode=yes -o ConnectTimeout=5 "$REMOTE_HOST" \
+    "python3 '$REMOTE_STAGE/patch_production_log.py' \
+        --target '$REMOTE_PRODUCTION_LOG_TARGET' \
+        --backup-dir '$REMOTE_BACKUP_DIR' \
         --apply"
 
 # Install the companion package before web_hp.py starts importing it. A build
@@ -124,5 +148,5 @@ ssh -o BatchMode=yes -o ConnectTimeout=5 "$REMOTE_HOST" \
         --apply"
 
 printf '%s\n' \
-    'Companion module built, import verified, and patch syntax verified.' \
+    'Companion module and AUTO/AI Stop Errors policy built and verified.' \
     'No process was restarted. Restart web_hp later in a controlled maintenance window.'

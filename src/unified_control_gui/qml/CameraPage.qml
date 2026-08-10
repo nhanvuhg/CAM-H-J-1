@@ -138,7 +138,11 @@ Item {
         var lockControlMode = requestedUiMode === "auto" || requestedUiMode === "camera_ai"
         modeLocked = lockControlMode
         autoRowIndicatorsActive = lockControlMode
-        mainWindow.startSynchronizedSystems(requestedUiMode)
+        if (!mainWindow.startSynchronizedSystems(requestedUiMode)) {
+            startCommandLocked = false
+            modeLocked = false
+            autoRowIndicatorsActive = false
+        }
     }
 
     // Unlock row selection khi process idle/done
@@ -352,7 +356,7 @@ Item {
                         background: Rectangle {
                             radius: 6
                             color: "transparent"
-                            border.color: robotController.ignoreScale ? cBtnDangerEnd : cServoRunEnd
+                            border.color: cServoRunEnd
                             border.width: 1
                             gradient: Gradient {
                                 orientation: Gradient.Horizontal
@@ -374,7 +378,7 @@ Item {
                             HoverHint {
                                 visible: ignoreScaleBtn.hovered
                                 label: "Ignore Scale"
-                                bc: robotController.ignoreScale ? cBtnDangerEnd : cServoRunEnd
+                                bc: cServoRunEnd
                                 tc: robotController.ignoreScale ? cBad : cBtnBaseText
                             }
                         }
@@ -423,6 +427,21 @@ Item {
                                 tc: cBtnBaseText
                             }
                         }
+                    }
+
+                    SystemAlertButton {
+                        Layout.preferredWidth: 50
+                        Layout.preferredHeight: 50
+                        pageActive: cameraPageRoot.visible
+                        panelColor: cPanel
+                        panelColorDeep: cPanel2
+                        borderColor: cBtnBaseBorder
+                        textColor: cBtnBaseText
+                        mutedColor: cMuted
+                        accentColor: cAccent
+                        warningColor: cWarn
+                        errorColor: cBad
+                        successColor: cOk
                     }
 
                     Item {
@@ -1118,12 +1137,22 @@ Item {
                         wrapMode: Text.WordWrap
                     }
 
+                    Text {
+                        Layout.fillWidth: true
+                        visible: !cameraPageRoot.systemPaused && !systemAlertController.canStart
+                        text: systemAlertController.startBlockReason
+                        color: systemAlertController.errorCount > 0 ? cBad : cWarn
+                        font.pixelSize: 13
+                        font.bold: true
+                        wrapMode: Text.WordWrap
+                    }
+
                     GridLayout {
                         Layout.fillWidth: true; columns: 3; rowSpacing: 8; columnSpacing: 8
 
                         Rectangle { Layout.fillWidth: true; height: 52; radius: 10; color: "transparent"; border.color: startMA.containsMouse || startMA.pressed ? Qt.lighter(cBtnPrimaryEnd, 1.06) : cBtnPrimaryEnd; border.width: 1
                             // START is not a way out of PAUSE — RESUME or STOP.
-                            opacity: cameraPageRoot.systemPaused ? 0.4 : 1.0
+                            opacity: cameraPageRoot.systemPaused || !systemAlertController.canStart ? 0.4 : 1.0
                             Behavior on opacity { NumberAnimation { duration: 120 } }
                             Behavior on border.color { ColorAnimation { duration: 110 } }
                             gradient: Gradient {
