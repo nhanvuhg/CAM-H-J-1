@@ -89,8 +89,26 @@ Cần màn hình (hoặc X-forward), đây là GUI PyQt5.
 
 ```bash
 export DISPLAY=:0
-python3 ~/ros2_ws/scripts/dataset_capture_gui.py
+python3 ~/ros2_ws/scripts/dataset_capture_gui.py            # PNG không mất mát
+python3 ~/ros2_ws/scripts/dataset_capture_gui.py --jpg      # JPG q95, nhẹ ~4 lần
+python3 ~/ros2_ws/scripts/dataset_capture_gui.py --jpg 90   # nhẹ ~5 lần
 ```
+
+Định dạng cố định theo phiên, chọn lúc khởi động — trộn PNG với JPG trong cùng
+một thư mục ảnh là nguồn sai lệch âm thầm khi chia train/val. Định dạng đang
+dùng hiện trên thanh thông số và ghi vào `session_info.yaml` + `metadata.csv`.
+
+Đo trên ảnh mẫu 640×360:
+
+| | dung lượng | PSNR |
+|---|---|---|
+| PNG | 384 KB | không mất mát |
+| JPG q95 | 102 KB | 39.4 dB |
+| JPG q90 | 73 KB | 37.3 dB |
+| JPG q85 | 59 KB | 36.0 dB |
+
+q95 là điểm cân bằng hợp lý. Sai lệch nén ở mức đó không ảnh hưởng đo được tới
+detection — dataset COCO và hầu hết dataset Ultralytics đều là JPG.
 
 Phím tắt trong cửa sổ:
 
@@ -103,8 +121,8 @@ Phím tắt trong cửa sổ:
 | checkbox auto | tự lưu theo chu kỳ, tự bỏ khung hình không đổi |
 
 Tool tự từ chối lưu khi: sai shape (khác 640×360), frame cũ hơn 1 giây, ảnh
-trắng/đen bất thường, hoặc đĩa còn dưới 5 GiB. Ảnh lưu ra là **PNG không mất mát,
-không overlay, không crop, không resize**.
+trắng/đen bất thường, hoặc đĩa còn dưới 5 GiB. Ảnh lưu ra **không overlay,
+không crop, không resize** — chỉ khác nhau ở bước nén.
 
 Thư mục ra:
 
@@ -113,16 +131,16 @@ Thư mục ra:
 ├── session_info.yaml          # ghi lại toàn bộ thông số pipeline lúc chụp
 ├── metadata.csv               # mỗi ảnh 1 dòng: thời gian, độ sáng, độ nét…
 ├── input/
-│   ├── images/cam0_input_<nhóm>_000001.png     640x360
+│   ├── images/cam0_input_<nhóm>_000001.png     640x360 (.jpg nếu --jpg)
 │   ├── labels/
 │   └── classes.txt            # tray, cartridge
 └── output/
-    ├── images/cam1_output_<nhóm>_000001.png    640x360
+    ├── images/cam1_output_<nhóm>_000001.png    640x360 (.jpg nếu --jpg)
     ├── labels/
     └── classes.txt            # tray, cartridge, cartridgefall
 ```
 
-PNG 640×360 khoảng 400 KB/ảnh → 1000 ảnh ≈ 0.4 GB.
+PNG 640×360 khoảng 400 KB/ảnh → 1000 ảnh ≈ 0.4 GB. JPG q95 ≈ 0.1 GB.
 
 Chi tiết cho người train model: xem `TRAIN_SPEC.md` cùng thư mục.
 
@@ -150,9 +168,12 @@ với bbox:
 
 ```bash
 mkdir -p ~/Pictures/roi
-cp ~/Datasets/Jetson_YOLO_Data/<phiên>/input/images/cam0_input_*_000001.png  ~/Pictures/roi/cam0.png
-cp ~/Datasets/Jetson_YOLO_Data/<phiên>/output/images/cam1_output_*_000001.png ~/Pictures/roi/cam1.png
+cp ~/Datasets/Jetson_YOLO_Data/<phiên>/input/images/cam0_input_*_000001.*  ~/Pictures/roi/cam0.png
+cp ~/Datasets/Jetson_YOLO_Data/<phiên>/output/images/cam1_output_*_000001.* ~/Pictures/roi/cam1.png
 ```
+
+(Phiên chụp bằng `--jpg` thì đổi đuôi đích thành `.jpg` và truyền
+`--image ~/Pictures/roi/cam0.jpg` cho `roi_pick.py`/`roi_preview.py`.)
 
 Chọn khung hình khay **đầy và đặt đúng vị trí làm việc**, sáng đều.
 

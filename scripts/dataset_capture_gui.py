@@ -12,6 +12,7 @@ used at inference. Ultralytics must letterbox these 16:9 images to imgsz=640.
 
 from __future__ import annotations
 
+import argparse
 import csv
 import hashlib
 import os
@@ -200,10 +201,24 @@ class RosCameraWorker(QThread):
 
 
 class DatasetCaptureWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, jpeg_quality: Optional[int] = None):
         super().__init__()
         self.setWindowTitle("Jetson YOLO Dataset Capture — CAM0 Input / CAM1 Output")
         self.resize(1500, 900)
+
+        # Dinh dang co dinh theo phien. Tron PNG voi JPG trong cung mot thu muc
+        # anh la nguon sai lech am tham khi chia train/val, nen chon mot lan
+        # luc khoi dong chu khong phai checkbox bat tat giua chung.
+        if jpeg_quality is None:
+            self.image_format = "PNG"
+            self.image_suffix = ".png"
+            self.imwrite_params = [cv2.IMWRITE_PNG_COMPRESSION, 3]
+            self.format_note = "PNG lossless"
+        else:
+            self.image_format = "JPG"
+            self.image_suffix = ".jpg"
+            self.imwrite_params = [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
+            self.format_note = f"JPG q{jpeg_quality}"
 
         self.base_dir = DEFAULT_BASE_DIR
         self.session_dir: Optional[Path] = None
@@ -242,7 +257,7 @@ class DatasetCaptureWindow(QMainWindow):
 
         spec = QLabel(
             "V3Link V4L2 RG10 • ROS AI input BGR8 640×360 (16:9) • "
-            "PNG lossless • không overlay/crop/stretch • engine 640×640 • "
+            f"{self.format_note} • không overlay/crop/stretch • engine 640×640 • "
             "YOLO tự letterbox pad 140 px trên/dưới"
         )
         spec.setAlignment(Qt.AlignCenter)
@@ -440,7 +455,7 @@ requested_sensor_fps: 15
 processed_preview_resolution: [800, 450]
 saved_resolution: [{EXPECTED_WIDTH}, {EXPECTED_HEIGHT}]
 saved_encoding: "{EXPECTED_ENCODING}"
-saved_format: "PNG lossless"
+saved_format: "{self.format_note}"
 geometry: "native 16:9; no crop, stretch, rotation, or overlay after ROS image_raw"
 training:
   task: detect
@@ -449,7 +464,7 @@ training:
   rect: false
   engine_input: [1, 3, 640, 640]
   preprocess: "letterbox 640x360 to 640x640; pad value 114; top=140 bottom=140; BGR-to-RGB; divide by 255"
-  warning: "train from saved 640x360 PNG; do not save or label a pre-letterboxed 640x640 image"
+  warning: "train from the saved 640x360 images; do not save or label a pre-letterboxed 640x640 image"
 cameras:
   cam0:
     device: "/dev/video0"
@@ -493,6 +508,7 @@ notes:
                     "width",
                     "height",
                     "encoding",
+                    "file_format",
                     "ros_stamp_ns",
                     "frame_age_ms",
                     "mean_luma",
@@ -693,15 +709,13 @@ notes:
         role = ROLES[camera_id]
         sequence = self.capture_counts[camera_id] + 1
         filename = (
-            f"cam{camera_id}_{role}_{capture_group}_{sequence:06d}.png"
+            f"cam{camera_id}_{role}_{capture_group}_{sequence:06d}{self.image_suffix}"
         )
         relative = Path(role) / "images" / filename
         destination = self.session_dir / relative
-        temporary = destination.with_name(destination.stem + ".tmp.png")
-        if not cv2.imwrite(
-            str(temporary), frame, [cv2.IMWRITE_PNG_COMPRESSION, 3]
-        ):
-            return False, f"CAM{camera_id} lỗi ghi PNG"
+        temporary = destination.with_name(destination.stem + ".tmp" + self.image_suffix)
+        if not cv2.imwrite(str(temporary), frame, self.imwrite_params):
+            return False, f"CAM{camera_id} lỗi ghi {self.image_format}"
         os.replace(temporary, destination)
 
         digest = hashlib.sha256(destination.read_bytes()).hexdigest()
@@ -724,6 +738,7 @@ notes:
                     EXPECTED_WIDTH,
                     EXPECTED_HEIGHT,
                     EXPECTED_ENCODING,
+                    self.format_note,
                     metadata["ros_stamp_ns"],
                     round(age * 1000.0, 1),
                     round(mean_luma, 3),
@@ -743,10 +758,21 @@ notes:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(
+        description="Thu anh AI input 640x360 tu topic ROS de train YOLO.")
+    parser.add_argument(
+        "--jpg", nargs="?", type=int, const=95, default=None, metavar="Q",
+        help="luu JPG chat luong Q (mac dinh 95) thay vi PNG. q95 nho hon PNG "
+             "khoang 4 lan (PSNR ~39 dB), sai lech nen khong dang ke voi "
+             "detection. Bo co nay = PNG khong mat mat.")
+    args, qt_args = parser.parse_known_args()
+    if args.jpg is not None and not (1 <= args.jpg <= 100):
+        parser.error("--jpg phai trong khoang 1..100")
+
     QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
     QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
-    app = QApplication(sys.argv)
-    window = DatasetCaptureWindow()
+    app = QApplication([sys.argv[0]] + qt_args)
+    window = DatasetCaptureWindow(jpeg_quality=args.jpg)
     signal.signal(signal.SIGINT, lambda *_: window.close())
     signal.signal(signal.SIGTERM, lambda *_: window.close())
     signal_timer = QTimer()
