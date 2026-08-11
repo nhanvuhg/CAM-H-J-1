@@ -43,6 +43,7 @@ add_executable(yolo_tensorrt_node src/yolo_tensorrt_node.cpp)
 target_include_directories(
   yolo_tensorrt_node
   PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${TENSORRT_INCLUDE_DIR}
     ${OpenCV_INCLUDE_DIRS}
 )
@@ -61,6 +62,23 @@ target_link_libraries(
   ${OpenCV_LIBS}
 )
 
-install(TARGETS yolo_tensorrt_node DESTINATION lib/${PROJECT_NAME})
+# Cong cu offline: sinh nhan YOLO .txt cho anh dataset bang chinh engine
+# production. Khong phu thuoc ROS, chi TensorRT + OpenCV.
+add_executable(auto_label src/auto_label.cpp)
+target_include_directories(
+  auto_label
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${TENSORRT_INCLUDE_DIR}
+    ${OpenCV_INCLUDE_DIRS}
+)
+target_link_libraries(
+  auto_label
+  ${TENSORRT_LIBRARY}
+  CUDA::cudart
+  ${OpenCV_LIBS}
+)
+
+install(TARGETS yolo_tensorrt_node auto_label DESTINATION lib/${PROJECT_NAME})
 
 ament_package()
