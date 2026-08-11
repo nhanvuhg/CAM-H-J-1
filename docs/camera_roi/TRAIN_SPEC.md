@@ -223,6 +223,12 @@ khớp tuyệt đối với bbox model trả về.
 
 Quy trình chi tiết: xem mục 3 trong `HUONG_DAN.md`.
 
+Node còn có chế độ **neo ROI theo bbox `tray`** (mục 3.5) để bù camera xê dịch.
+Chế độ đó dựa hoàn toàn vào class 0 — nên khi train, `tray` phải được gán nhãn
+**nhất quán về mép khay** trên mọi ảnh. Nhãn `tray` lúc rộng lúc hẹp sẽ làm bbox
+co giãn giữa các khung và kéo ROI chạy theo. Đây là lý do kỹ thuật để không cẩu
+thả với class 0 dù nó chỉ dùng làm cờ "có khay".
+
 Đổi độ phân giải publish của camera thì **phải** đổi cả `image_width`/
 `image_height` của `vision_decision_node` trong launch file **và** chấm lại ROI
 **và** train lại model. Ba thứ đó đi liền nhau.

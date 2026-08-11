@@ -43,58 +43,16 @@
 #include <yaml-cpp/yaml.h>
 #include <ament_index_cpp/get_package_share_directory.hpp>
 
+// ROIQuad + hinh hoc neo ROI theo bbox khay. Tach ra header vi phan nay co the
+// — va can duoc — test doc lap voi ROS.
+#include "robot_control_main/roi_anchor.hpp"
+
 using vision_msgs::msg::Detection2D;
 using vision_msgs::msg::Detection2DArray;
 
 // ============================================================================
 // UTILITY STRUCTURES
 // ============================================================================
-
-struct Point2 {
-    float x{}, y{};
-};
-
-struct ROIQuad {
-    std::array<Point2, 4> pts;
-    int min_x{}, max_x{}, min_y{}, max_y{};
-
-    static ROIQuad FromCorners(const std::vector<std::pair<int, int>>& corners) {
-        ROIQuad r{};
-        for (size_t i = 0; i < 4; ++i) {
-            r.pts[i] = Point2{static_cast<float>(corners[i].first),
-                              static_cast<float>(corners[i].second)};
-        }
-        r.min_x = std::min({corners[0].first, corners[1].first,
-                            corners[2].first, corners[3].first});
-        r.max_x = std::max({corners[0].first, corners[1].first,
-                            corners[2].first, corners[3].first});
-        r.min_y = std::min({corners[0].second, corners[1].second,
-                            corners[2].second, corners[3].second});
-        r.max_y = std::max({corners[0].second, corners[1].second,
-                            corners[2].second, corners[3].second});
-        return r;
-    }
-
-    inline bool bbox_contains(float x, float y) const {
-        return (x >= min_x && x <= max_x && y >= min_y && y <= max_y);
-    }
-
-    inline bool contains(float x, float y) const {
-        if (!bbox_contains(x, y)) return false;
-        auto cross = [](const Point2& a, const Point2& b, const Point2& c) {
-            return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-        };
-        const Point2 p{x, y};
-        float c0 = cross(pts[0], pts[1], p);
-        float c1 = cross(pts[1], pts[2], p);
-        float c2 = cross(pts[2], pts[3], p);
-        float c3 = cross(pts[3], pts[0], p);
-        
-        bool all_nonneg = (c0 >= 0 && c1 >= 0 && c2 >= 0 && c3 >= 0);
-        bool all_nonpos = (c0 <= 0 && c1 <= 0 && c2 <= 0 && c3 <= 0);
-        return all_nonneg || all_nonpos;
-    }
-};
 
 struct RowFilter {
     size_t window = 3;
@@ -143,8 +101,6 @@ enum class SlotStableState : int {
 // ============================================================================
 // DETECTION HELPERS (Nova5-style: NMS + IoU greedy slot assignment)
 // ============================================================================
-
-struct Box { double x1, y1, x2, y2; };
 
 static double IoU(const Box& A, const Box& B) {
     double xA = std::max(A.x1, B.x1), yA = std::max(A.y1, B.y1);
@@ -447,6 +403,7 @@ private:
     ROIQuad input_tray_outer_roi_;
     std::atomic<bool> input_tray_present_{false};
     int input_present_streak_{0};   // debounce class-0 tray bbox (2 frame on, instant off)
+    TrayAnchorTracker input_anchor_;
 
     // ========================================================================
     // OUTPUT TRAY STATE
@@ -461,6 +418,10 @@ private:
     int output_tray_present_streak_{0};
     int selected_output_slot_{-1};
     std::mutex slot_detection_mutex_;
+    TrayAnchorTracker output_anchor_;
+
+    // ROI neo theo bbox khay. false = giu nguyen hanh vi ROI tinh cu.
+    bool roi_anchor_enabled_{false};
 
     // Rong = ROI OK. Non-empty -> GUI hien canh bao.
     std::string roi_error_;
@@ -525,6 +486,58 @@ private:
         return ROIQuad::FromCorners(corners);
     }
 
+    // `anchor: [x1, y1, x2, y2]` — AABB cua bbox class-0 tren dung khung hinh
+    // da dung de cham ROI. Thieu khoa nay thi tray-anchor khong bat duoc.
+    RoiAnchor anchorFromYaml(const YAML::Node& n, double sx, double sy) {
+        RoiAnchor a{};
+        if (!n || !n.IsSequence() || n.size() != 4) return a;
+        const double x1 = n[0].as<double>() * sx;
+        const double y1 = n[1].as<double>() * sy;
+        const double x2 = n[2].as<double>() * sx;
+        const double y2 = n[3].as<double>() * sy;
+        a.x1 = static_cast<float>(std::min(x1, x2));
+        a.y1 = static_cast<float>(std::min(y1, y2));
+        a.x2 = static_cast<float>(std::max(x1, x2));
+        a.y2 = static_cast<float>(std::max(y1, y2));
+        a.valid = (a.w() > 1.0F && a.h() > 1.0F);
+        return a;
+    }
+
+    // Tra ve bbox class-0 diem cao nhat co tam nam trong `gate`. Ban Pi lay
+    // detection class-0 DAU TIEN gap duoc; mot false-positive tray o mep anh la
+    // du keo lech toan bo ROI, nen o day chon theo diem.
+    static bool findTrayRect(const Detection2DArray& msg, double score_thresh,
+                             const ROIQuad& gate, Box& out) {
+        bool found = false;
+        double best_score = -1.0;
+        for (const auto& det : msg.detections) {
+            if (det.results.empty()) continue;
+            const auto& h = det.results[0].hypothesis;
+            if (h.class_id != "0" || h.score < score_thresh) continue;
+            const float cx = static_cast<float>(det.bbox.center.position.x);
+            const float cy = static_cast<float>(det.bbox.center.position.y);
+            if (!gate.bbox_contains(cx, cy) || !gate.contains(cx, cy)) continue;
+            if (h.score <= best_score) continue;
+            best_score = h.score;
+            const double hw = det.bbox.size_x / 2.0;
+            const double hh = det.bbox.size_y / 2.0;
+            out = Box{cx - hw, cy - hh, cx + hw, cy + hh};
+            found = true;
+        }
+        return found;
+    }
+
+    void logAnchor(const char* tag, const RoiTransform& tf, bool tray_seen,
+                   const TrayAnchorTracker& tracker) {
+        if (!roi_anchor_enabled_) return;
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
+            "[VISION] %s anchor: %s scale=%.3f,%.3f offset=%.1f,%.1f "
+            "tray_seen=%d rejected=%d",
+            tag, tf.identity ? "CHUA HOI TU (dang dung ROI tinh)" : "active",
+            tf.sx, tf.sy, tf.ox, tf.oy, tray_seen ? 1 : 0,
+            tracker.rejected_streak());
+    }
+
     void loadROIs() {
         const std::string default_path =
             ament_index_cpp::get_package_share_directory("robot_control_main")
@@ -532,6 +545,15 @@ private:
         const std::string path = declare_parameter<std::string>("roi_config", default_path);
         const int img_w = declare_parameter<int>("image_width", 640);
         const int img_h = declare_parameter<int>("image_height", 360);
+        // "static" = ROI tinh nhu truoc. "tray" = neo ROI theo bbox khay.
+        // Mac dinh static: bat sang tray la doi hanh vi vision, phai la quyet
+        // dinh co y sau khi da doi chieu bang roi_preview.py.
+        const std::string anchor_mode =
+            declare_parameter<std::string>("roi_anchor_mode", "static");
+        const double anchor_alpha =
+            declare_parameter<double>("roi_anchor_alpha", 0.25);
+        const double anchor_max_dev =
+            declare_parameter<double>("roi_anchor_max_scale_dev", 0.25);
 
         slot_stable_state_.fill(SlotStableState::EMPTY);
         slot_empty_streak_.fill(0);
@@ -579,9 +601,34 @@ private:
                 addRoiError("thieu row: " + std::to_string(input_tray_rois_.size()) + "/5");
             }
 
+            const RoiAnchor in_anchor =
+                anchorFromYaml(cfg["input_tray"]["anchor"], sx, sy);
+            const RoiAnchor out_anchor =
+                anchorFromYaml(cfg["output_tray"]["anchor"], sx, sy);
+            input_anchor_.configure(in_anchor, anchor_alpha, anchor_max_dev);
+            output_anchor_.configure(out_anchor, anchor_alpha, anchor_max_dev);
+
+            roi_anchor_enabled_ = (anchor_mode == "tray");
+            if (roi_anchor_enabled_ && !(in_anchor.valid && out_anchor.valid)) {
+                // Bat che do neo ma thieu anchor thi im lang chay ROI tinh la
+                // nguy hiem: van hanh tuong dang duoc bu lech nhung khong.
+                roi_anchor_enabled_ = false;
+                RCLCPP_ERROR(get_logger(),
+                    "[VISION] roi_anchor_mode=tray nhung %s thieu 'anchor' "
+                    "(input=%d output=%d) — quay ve ROI tinh",
+                    path.c_str(), in_anchor.valid ? 1 : 0, out_anchor.valid ? 1 : 0);
+                addRoiError("roi_anchor_mode=tray nhung thieu anchor — dang chay ROI tinh");
+            } else if (anchor_mode != "tray" && anchor_mode != "static") {
+                RCLCPP_WARN(get_logger(),
+                    "[VISION] roi_anchor_mode='%s' khong hop le — dung 'static'",
+                    anchor_mode.c_str());
+            }
+
             RCLCPP_INFO(get_logger(),
-                "[VISION] ROI loaded: 2 outer + %zu rows + %zu/%zu slots tu %s",
-                input_tray_rois_.size(), n_slots, N_OUTPUT_SLOTS, path.c_str());
+                "[VISION] ROI loaded: 2 outer + %zu rows + %zu/%zu slots tu %s"
+                " | anchor_mode=%s alpha=%.2f max_scale_dev=%.2f",
+                input_tray_rois_.size(), n_slots, N_OUTPUT_SLOTS, path.c_str(),
+                roi_anchor_enabled_ ? "tray" : "static", anchor_alpha, anchor_max_dev);
         } catch (const std::exception& e) {
             // Fail-safe on trung tinh: khong row -> khong bao gio chon row;
             // moi slot OCC_OK -> khong bao gio chon slot. Node van song de
@@ -592,6 +639,9 @@ private:
             input_tray_rois_.clear();
             input_tray_outer_roi_ = ROIQuad{};
             output_tray_outer_roi_ = ROIQuad{};
+            roi_anchor_enabled_ = false;
+            input_anchor_.configure(RoiAnchor{}, anchor_alpha, anchor_max_dev);
+            output_anchor_.configure(RoiAnchor{}, anchor_alpha, anchor_max_dev);
             slot_stable_state_.fill(SlotStableState::OCC_OK);
             addRoiError(std::string("KHONG load duoc — vision bi khoa: ") + e.what());
         }
@@ -662,6 +712,21 @@ private:
             std::vector<int> row_counts(5, 0);
             bool tray_frame_seen = false;
 
+            // Pass 0: neo ROI theo bbox khay. Cong doan nay chay TRUOC vong dem
+            // cartridge vi row ROI cua vong do phai la ROI da bu lech.
+            Box tray_rect{};
+            const bool tray_rect_found = findTrayRect(
+                *msg, DETECTION_SCORE_THRESH, input_tray_outer_roi_, tray_rect);
+            const RoiTransform tf = roi_anchor_enabled_
+                ? input_anchor_.update(tray_rect_found ? &tray_rect : nullptr)
+                : RoiTransform{};
+            const ROIQuad outer_roi = transformQuad(input_tray_outer_roi_, tf);
+            std::vector<ROIQuad> row_rois;
+            row_rois.reserve(input_tray_rois_.size());
+            for (const auto& r : input_tray_rois_)
+                row_rois.push_back(transformQuad(r, tf));
+            logAnchor("cam0", tf, tray_rect_found, input_anchor_);
+
             for (const auto& det : msg->detections) {
                 if (det.results.empty()) continue;
                 const std::string& class_id = det.results[0].hypothesis.class_id;
@@ -674,6 +739,9 @@ private:
                 // se thanh present=false, empty streak reset mai va khong bao gio
                 // chot duoc done_tray_input -> khong thay khay.
                 if (class_id == "0" && score >= DETECTION_SCORE_THRESH) {
+                    // Co y dung outer ROI TINH: neu gate tray-present chay tren
+                    // ROI da bu theo chinh bbox tray thi thanh vong lap kin, ROI
+                    // co the truot theo mot detection sai roi tu xac nhan minh.
                     if (input_tray_outer_roi_.bbox_contains(cx, cy))
                         tray_frame_seen = true;
                     continue;
@@ -682,16 +750,21 @@ private:
                 if (class_id != "1" || score < DETECTION_SCORE_THRESH) continue;
 
                 // L1: spatial filter — bỏ nếu nằm ngoài TRAY ROI
-                if (!input_tray_outer_roi_.bbox_contains(cx, cy)) continue;
-                if (!input_tray_outer_roi_.contains(cx, cy)) continue;
+                if (!outer_roi.bbox_contains(cx, cy)) continue;
+                if (!outer_roi.contains(cx, cy)) continue;
                 total_in_tray++;
 
                 // L2: tìm row ROI khớp
-                for (size_t i = 0; i < input_tray_rois_.size(); ++i) {
-                    if (!input_tray_rois_[i].bbox_contains(cx, cy)) continue;
-                    if (input_tray_rois_[i].contains(cx, cy)) { row_counts[i]++; break; }
+                for (size_t i = 0; i < row_rois.size(); ++i) {
+                    if (!row_rois[i].bbox_contains(cx, cy)) continue;
+                    if (row_rois[i].contains(cx, cy)) { row_counts[i]++; break; }
                 }
             }
+
+            // Khay bi nhac ra -> quen vi tri da hoi tu. Khay moi dat vao co the
+            // lech han so voi khay cu, keo transform cu sang la sai ngay khung
+            // hinh dau tien.
+            if (!tray_frame_seen) input_anchor_.reset();
 
             // Tray present = thay bbox KHUNG KHAY (class 0) trong TRAY ROI.
             // Can 2 frame de xac nhan khi dat khay vao; mat detection thi khoa
@@ -845,23 +918,12 @@ private:
         // viec khong thay cartridge — robot se dat vao khoang trong khong co khay.
         // Tam class-0 phai nam trong outer ROI; model thinh thoang nhan nham
         // ong/tui toi mau o mep phai thanh tray voi confidence > 0.60.
-        bool raw_tray_present = false;
-        for (const auto& det : msg->detections) {
-            if (det.results.empty()) continue;
-            const auto& h = det.results[0].hypothesis;
-            if (h.class_id == "0" && h.score >= OUTPUT_TRAY_SCORE_THRESH) {
-                const float cx =
-                    static_cast<float>(det.bbox.center.position.x);
-                const float cy =
-                    static_cast<float>(det.bbox.center.position.y);
-                if (output_tray_outer_roi_.bbox_contains(cx, cy) &&
-                    output_tray_outer_roi_.contains(cx, cy))
-                {
-                    raw_tray_present = true;
-                    break;
-                }
-            }
-        }
+        // outer ROI TINH, khong phai ban da bu — xem chu thich cung cho o
+        // camera1Callback: gate tray-present khong duoc phu thuoc transform mà
+        // chinh no sinh ra.
+        Box tray_rect{};
+        const bool raw_tray_present = findTrayRect(
+            *msg, OUTPUT_TRAY_SCORE_THRESH, output_tray_outer_roi_, tray_rect);
 
         // Can 2 frame de xac nhan luc dat khay vao; mat detection thi khoa ngay
         // (fail-safe). Khi khoa, coi moi slot la occupied de khong consumer nao
@@ -873,7 +935,13 @@ private:
         } else {
             output_tray_present_streak_ = 0;
             output_tray_present_.store(false);
+            output_anchor_.reset();
         }
+
+        const RoiTransform tf = roi_anchor_enabled_
+            ? output_anchor_.update(raw_tray_present ? &tray_rect : nullptr)
+            : RoiTransform{};
+        logAnchor("cam1", tf, raw_tray_present, output_anchor_);
 
         auto present_msg = std_msgs::msg::Bool();
         present_msg.data = output_tray_present_.load();
@@ -923,7 +991,7 @@ private:
         std::array<SlotStableState, N_OUTPUT_SLOTS> instant_state;
         instant_state.fill(SlotStableState::EMPTY);
         for (size_t s = 0; s < N_OUTPUT_SLOTS; ++s) {
-            const auto& roi = output_tray_rois_[s];
+            const ROIQuad roi = transformQuad(output_tray_rois_[s], tf);
             Box slot_box{(double)roi.min_x, (double)roi.min_y,
                          (double)roi.max_x, (double)roi.max_y};
             for (const auto& d : dets) {

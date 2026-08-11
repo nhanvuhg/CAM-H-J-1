@@ -104,4 +104,16 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# ============================================================================
+# TESTS
+# ============================================================================
+# Hinh hoc neo ROI khong phu thuoc ROS nen test duoc truc tiep, khong can
+# camera hay bag. Chay: colcon test --packages-select robot_control_main
+if(BUILD_TESTING)
+  add_executable(roi_anchor_test test/roi_anchor_test.cpp)
+  target_include_directories(roi_anchor_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  add_test(NAME roi_anchor_test COMMAND roi_anchor_test)
+endif()
+
 ament_package()

@@ -13,6 +13,15 @@
 # Moi ROI = 4 goc [x, y] theo vong quanh (khong bat cheo).
 # Thu tu slot1..slot10 = thu tu robot dat hang (khop pose index 14-23 trong
 # joint_pose_params.yaml va nut O1-O10 tren GUI).
+#
+# anchor: [x1, y1, x2, y2] — AABB cua bbox class-0 "tray" tren DUNG khung hinh
+# da dung de cham ROI o tren. Co no thi bat duoc ROI neo theo khay:
+#     ros2 param set /vision_decision_node roi_anchor_mode tray
+# hoac dat trong launch. Camera xe dich vai pixel thi ROI di theo khay thay vi
+# dung yen va dem nham row. Lay so bang:
+#     python3 ros2_ws/scripts/camera_tools/roi_preview.py --cam cam0
+# (script in ra dong "anchor: [...]" san de dan vao day).
+# Thieu anchor -> node tu quay ve ROI tinh va bao qua /vision/roi_status.
 
 ref_width: 640
 ref_height: 480

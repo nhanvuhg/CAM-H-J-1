@@ -241,7 +241,80 @@ ROI` là sai hệ toạ độ.
 định dạng `rows:`/`slots:` của `vision_roi.yaml`. Chạy nó trên
 `~/Pictures/roi/camX_roi.yaml` (mặc định), trước bước chuyển đổi ở 3.3.
 
-### 3.5 Nạp ROI mới
+### 3.5 ROI neo theo khay — bù camera xê dịch
+
+ROI chấm tay là toạ độ tuyệt đối. Camera trượt vài pixel là tâm cartridge rơi
+sang row bên cạnh: YOLO vẫn detect đúng, chỉ riêng bước quy ROI sai. Node có
+chế độ neo ROI theo bbox `tray` (class 0) để tự bù.
+
+Camera trên máy này chỉ trượt, không xoay, nên hình chữ nhật là đủ — phép bù
+rút gọn thành scale + translate.
+
+**Lấy `anchor`** — chạy `roi_preview.py` khi hệ thống đang chạy và khay đang
+nằm đúng vị trí làm việc. Script in sẵn dòng để dán:
+
+```
+bbox tray (class 0, score 0.94) -> dan vao input_tray trong vision_roi.yaml:
+  anchor: [133, 83, 530, 270]
+```
+
+Dán vào `vision_roi.yaml`, mỗi khay một dòng, cùng cấp với `outer`:
+
+```yaml
+input_tray:
+  anchor: [133, 83, 530, 270]
+  outer: [...]
+  rows: [...]
+```
+
+⚠️ `anchor` phải lấy trên **đúng khung hình đã dùng để chấm ROI**. Lấy ở khung
+khác là bù lệch ngay từ đầu.
+
+**Bật chế độ** — trong `dual_camera_system.launch.py`, thêm vào params của
+`vision_decision_node`:
+
+```python
+'roi_anchor_mode': 'tray',       # 'static' = ROI cố định như cũ
+'roi_anchor_alpha': 0.25,        # EMA, nhỏ hơn = mượt hơn, bám chậm hơn
+'roi_anchor_max_scale_dev': 0.25 # bbox lệch quá ±25% coi như detect sai
+```
+
+Mặc định là `static` — bật `tray` là đổi hành vi vision, nên phải là quyết định
+có ý sau khi đã đối chiếu bằng `roi_preview.py`.
+
+Kiểm tra khi chạy:
+
+```bash
+ros2 param set /vision_decision_node roi_anchor_mode tray   # thử nóng
+grep "anchor:" ~/ros2_ws/logs/dual_camera_system.log
+```
+
+Log mỗi 5 giây một dòng: `[VISION] cam0 anchor: active scale=1.002,0.998
+offset=11.3,-4.1 tray_seen=1 rejected=0`.
+
+| dấu hiệu | nghĩa |
+|---|---|
+| `scale` ≈ 1.00, `offset` nhỏ | camera đúng vị trí hiệu chuẩn |
+| `offset` lớn dần theo ngày | camera đang trôi — siết lại cơ khí |
+| `rejected` tăng | bbox tray không đáng tin, node đang giữ transform cũ |
+| `CHUA HOI TU` | chưa thấy khay lần nào, đang chạy ROI tĩnh |
+
+Ba hành vi an toàn đã có sẵn: thiếu `anchor` thì tự quay về ROI tĩnh và báo qua
+`/vision/roi_status`; mất tray một khung thì giữ nguyên transform thay vì giật
+về ROI tĩnh; khay bị nhấc ra thì quên vị trí cũ để khay mới không bị kéo theo.
+
+Gate "có khay hay không" **cố ý vẫn chạy trên ROI tĩnh** — nếu gate đó dùng ROI
+đã bù theo chính bbox tray thì thành vòng lặp kín, ROI có thể trượt theo một
+detection sai rồi tự xác nhận mình.
+
+Hình học này có test chạy độc lập, không cần camera:
+
+```bash
+cd ~/ros2_ws && colcon test --packages-select robot_control_main \
+  --ctest-args -R roi_anchor_test
+```
+
+### 3.6 Nạp ROI mới
 
 ```bash
 pkill -f vision_decision_node          # launch tự respawn sau 3 s

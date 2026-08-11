@@ -21,6 +21,7 @@ import yaml
 SECTION = {'cam0': 'input_tray', 'cam1': 'output_tray'}
 BOXES_TOPIC = {'cam0': '/cam0HP/yolo/bounding_boxes', 'cam1': '/cam1HP/yolo/bounding_boxes'}
 CARTRIDGE_CLASS = '1'   # best.onnx: {0: tray, 1: cartridge, 2: cartridgefall}
+TRAY_CLASS = '0'
 
 
 def point_in_quad(x, y, quad):
@@ -100,6 +101,24 @@ def main():
     boxes = [] if args.no_live else fetch_live_boxes(args.cam)
     carts = [b for b in boxes if b[0] == CARTRIDGE_CLASS]
     print(f'ROI: {len(rois)} | bbox live: {len(boxes)} (cartridge {len(carts)})')
+
+    # Anchor cho ROI neo theo khay: AABB cua bbox class-0 diem cao nhat. Phai
+    # lay tren DUNG anh da cham ROI, neu khong node se bu lech ngay tu dau.
+    trays = [b for b in boxes if b[0] == TRAY_CLASS]
+    if trays:
+        _, score, cx, cy, bw, bh = max(trays, key=lambda b: b[1])
+        x1, y1 = int(round(cx - bw / 2)), int(round(cy - bh / 2))
+        x2, y2 = int(round(cx + bw / 2)), int(round(cy + bh / 2))
+        print(f'\nbbox tray (class 0, score {score:.2f}) -> dan vao '
+              f'{SECTION[args.cam]} trong vision_roi.yaml:')
+        print(f'  anchor: [{x1}, {y1}, {x2}, {y2}]')
+        if (sx, sy) != (1.0, 1.0):
+            print(f'  [CANH BAO] anh xem thu khac ref -> so tren theo he '
+                  f'{w}x{h}, khong phai he {ref_w}x{ref_h} cua file YAML')
+        cv2.rectangle(img, (x1, y1), (x2, y2), (255, 0, 255), 1)
+    elif not args.no_live:
+        print('\n[CANH BAO] khong thay bbox class-0 tray -> chua lay duoc '
+              'anchor. Dat khay vao khung hinh roi chay lai.')
 
     # bbox truoc, ROI sau -> ROI luon nam tren, khong bi che
     for cid, score, cx, cy, bw, bh in boxes:
