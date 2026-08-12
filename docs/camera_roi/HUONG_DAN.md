@@ -485,7 +485,7 @@ tail -f ~/ros2_ws/logs/start_all_console.log
 | Publish ROS | **640×360 @25 fps**, `bgr8`, BEST_EFFORT depth 1 |
 | Model input | 640×640×3 FP32 NCHW, letterbox pad **140 px trên + 140 px dưới** |
 | Inference | TensorRT FP16 trên GPU, cap 20 fps/cam |
-| Model cam0 | `/home/nhan/models/data_input_hp_final_fp16.engine` — 2 class, conf 0.60 |
+| Model cam0 | `/home/nhan/models/data_input_hp_final_2_fp16.engine` — 2 class, conf 0.60 |
 | Model cam1 | `/home/nhan/models/data_output_hp1.engine` — 3 class, conf 0.30 |
 | NMS | trong node, class-aware, IoU 0.45, tối đa 300 box |
 | ROI | `robot_control_main/config/vision_roi.yaml` — 5 row + 10 slot + 2 outer |

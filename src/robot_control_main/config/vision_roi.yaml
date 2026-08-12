@@ -30,7 +30,7 @@ ref_height: 360
 # cam0 — khay input, 1 outer (tray presence) + 5 row (R1-R5)
 input_tray:
   # Cham lai 12/08/2026 tren anh 640x360 thuc te (~/Pictures/roi/cam0.jpg).
-  # anchor = bbox class-0 do data_input_hp_final_fp16.engine tra ve tren DUNG
+  # anchor = bbox class-0 do data_input_hp_final_2_fp16.engine tra ve tren DUNG
   # khung hinh do. Doi model hoac xe dich camera roi cham lai ROI thi phai lay
   # lai so nay cung luc.
   anchor: [145, 82, 487, 281]

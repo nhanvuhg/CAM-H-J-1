@@ -77,7 +77,7 @@ CLASS_NAMES = {
     1: ("tray", "cartridge", "cartridgefall"),
 }
 ENGINE_PATHS = {
-    0: Path.home() / "models" / "data_input_hp_final_fp16.engine",
+    0: Path.home() / "models" / "data_input_hp_final_2_fp16.engine",
     1: Path.home() / "models" / "data_output_hp1.engine",
 }
 DEFAULT_BASE_DIR = Path.home() / "Datasets" / "Jetson_YOLO_Data"

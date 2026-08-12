@@ -24,7 +24,7 @@ WS="$HOME/ros2_ws"
 export DISPLAY=${DISPLAY:-:0}
 export FILL_HP_USERS_FILE="${FILL_HP_USERS_FILE:-$WS/src/unified_control_gui/fill_hp_users.json}"
 # Phai khop default cam0_model trong dual_camera_system.launch.py.
-CAM0_AI_MODEL="${CAM0_AI_MODEL:-$HOME/models/data_input_hp_final_fp16.engine}"
+CAM0_AI_MODEL="${CAM0_AI_MODEL:-$HOME/models/data_input_hp_final_2_fp16.engine}"
 CAM1_AI_MODEL="${CAM1_AI_MODEL:-$HOME/models/data_output_hp1.engine}"
 CAMERA_CAPTURE_FPS="${CAMERA_CAPTURE_FPS:-25}"
 AI_MAX_FPS="${AI_MAX_FPS:-20}"
