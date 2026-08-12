@@ -165,6 +165,12 @@ camera_stack_pids() {
     } | sort -nu
 }
 
+# SIGKILL vao node camera dang STREAMOFF se treo kenh Tegra VI, va theo chinh
+# canh bao cua supervisor ben duoi thi chi reboot moi go duoc. Nen o day phai
+# doi cho no ra han, va doi ca den luc /dev/video khong con ai giu — tien trinh
+# bien mat khoi bang process khong co nghia la driver da nha buffer.
+CAMERA_STOP_GRACE_SEC="${CAMERA_STOP_GRACE_SEC:-20}"
+
 stop_jetson_camera_nodes() {
     local camera_pids
     local remaining_pids
@@ -182,13 +188,25 @@ stop_jetson_camera_nodes() {
             fi
         done
         [ -z "$remaining_pids" ] && break
-        if [ "$camera_wait" -ge 6 ]; then
-            echo "⚠️  Forcing remaining camera stack PIDs:$remaining_pids"
+        if [ "$camera_wait" -ge "$CAMERA_STOP_GRACE_SEC" ]; then
+            echo "⚠️  Camera stack khong thoat sau ${CAMERA_STOP_GRACE_SEC}s — buoc SIGKILL:$remaining_pids"
+            echo "⚠️  SIGKILL luc dang STREAMOFF co the treo kenh Tegra VI (can reboot)."
             kill -KILL $remaining_pids 2>/dev/null || true
             break
         fi
         sleep 1
         camera_wait=$((camera_wait + 1))
+    done
+
+    # Tien trinh chet roi nhung fd co the chua dong xong. Mo lai /dev/video luc
+    # nay la VIDIOC_STREAMON -> ENODEV.
+    local holder_wait=0
+    while [ "$holder_wait" -lt 10 ]; do
+        local holders
+        holders=$(camera_device_holders)
+        [ -z "${holders// /}" ] && break
+        sleep 1
+        holder_wait=$((holder_wait + 1))
     done
 }
 
@@ -381,7 +399,24 @@ cleanup() {
     for pid in "${PID_QML_GUI:-}" "${PID_WEB_GUI:-}" "${PID_CAMERA:-}" "${PID_GRIPPER:-}" "${PID_ROBOT:-}" "${PID_DOBOT:-}" "${PID_PROVIDE:-}" "${PID_VFD_LOGIC:-}"; do
         [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
     done
-    sleep 2
+
+    # Supervisor camera co trap rieng, cung goi stop_jetson_camera_nodes va co
+    # the mat toi CAMERA_STOP_GRACE_SEC. Doi no ra han truoc — "sleep 2" cu
+    # ngan hon cua so do, nen loat kill -9 ben duoi rot dung luc node camera
+    # dang STREAMOFF va treo kenh VI.
+    if [ -n "${PID_CAMERA:-}" ]; then
+        local _sup_wait=0
+        while kill -0 "$PID_CAMERA" 2>/dev/null; do
+            if [ "$_sup_wait" -ge $((CAMERA_STOP_GRACE_SEC + 12)) ]; then
+                echo "⚠️  Camera supervisor chua thoat sau $((CAMERA_STOP_GRACE_SEC + 12))s"
+                break
+            fi
+            sleep 1
+            _sup_wait=$((_sup_wait + 1))
+        done
+    else
+        sleep 2
+    fi
     stop_jetson_camera_nodes
     for pid in "${PID_QML_GUI:-}" "${PID_WEB_GUI:-}" "${PID_CAMERA:-}" "${PID_GRIPPER:-}" "${PID_ROBOT:-}" "${PID_DOBOT:-}" "${PID_PROVIDE:-}" "${PID_VFD_LOGIC:-}"; do
         [ -n "$pid" ] && kill -9 "$pid" 2>/dev/null || true

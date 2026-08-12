@@ -95,6 +95,7 @@ private:
     void markHeartbeat(const QString &source);
     void checkHeartbeats();
 
+    bool blocksStart(const Alert &alert) const;
     QString effectiveLevel(const QString &baseLevel, bool connectionIssue) const;
     QString actionForArea(const QString &area) const;
     QString localizedAlertText(const QString &text) const;

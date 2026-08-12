@@ -153,15 +153,41 @@ int SystemAlertController::unacknowledgedWarningCount() const
     return count;
 }
 
+bool SystemAlertController::blocksStart(const Alert &alert) const
+{
+    // AUTO khong dung camera: vision_decision_node thoat ngay dau ca hai
+    // callback va tu coi khay co mat / row day, nen loi camera khong the anh
+    // huong gi toi chu ky AUTO. Khoa START vi no la chan nguoi van hanh khoi
+    // viec ho van lam duoc. Alert van hien trong danh sach de khong ai quen no.
+    // AI thi nguoc lai — quyet dinh row/slot lay tu camera, phai chan.
+    if (alert.area == "CAMERA" && operation_mode_.trimmed().toLower() == "auto")
+        return false;
+    return true;
+}
+
 bool SystemAlertController::canStart() const
 {
-    return errorCount() == 0 && unacknowledgedWarningCount() == 0;
+    for (const Alert &alert : alerts_) {
+        if (!blocksStart(alert))
+            continue;
+        if (alert.level == "ERROR")
+            return false;
+        if (alert.level == "WARNING" && !alert.acknowledged)
+            return false;
+    }
+    return true;
 }
 
 QString SystemAlertController::startBlockReason() const
 {
-    const int errors = errorCount();
-    const int warnings = unacknowledgedWarningCount();
+    int errors = 0;
+    int warnings = 0;
+    for (const Alert &alert : alerts_) {
+        if (!blocksStart(alert))
+            continue;
+        errors += alert.level == "ERROR" ? 1 : 0;
+        warnings += (alert.level == "WARNING" && !alert.acknowledged) ? 1 : 0;
+    }
     if (errors > 0)
         return tr("%1 active error(s) — resolve them before START").arg(errors);
     if (warnings > 0)
@@ -182,6 +208,11 @@ void SystemAlertController::setOperationMode(const QString &mode)
     operation_mode_ = next;
     emit operationModeChanged();
     reclassifyConnectionAlerts();
+    // canStart/startBlockReason phu thuoc mode (loi CAMERA khong chan AUTO),
+    // ma ca hai notify qua alertsChanged. reclassifyConnectionAlerts() chi emit
+    // khi co alert doi muc, nen doi mode ma khong co alert nao doi se khong
+    // danh thuc binding va nut START ket o trang thai cu.
+    emit alertsChanged();
 }
 
 void SystemAlertController::setScaleIgnored(bool ignored)
