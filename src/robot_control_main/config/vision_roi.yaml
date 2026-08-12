@@ -29,13 +29,18 @@ ref_height: 360
 
 # cam0 — khay input, 1 outer (tray presence) + 5 row (R1-R5)
 input_tray:
-  outer: [[133, 274], [162, 84], [498, 83], [530, 270]]
+  # Cham lai 12/08/2026 tren anh 640x360 thuc te (~/Pictures/roi/cam0.jpg).
+  # anchor = bbox class-0 do data_input_hp_final_fp16.engine tra ve tren DUNG
+  # khung hinh do. Doi model hoac xe dich camera roi cham lai ROI thi phai lay
+  # lai so nay cung luc.
+  anchor: [145, 82, 487, 281]
+  outer: [[146, 279], [184, 76], [456, 77], [488, 277]]
   rows:
-    - [[157, 260], [180, 98], [237, 100], [226, 260]]   # row1
-    - [[234, 259], [242, 99], [295, 98], [293, 260]]   # row2
-    - [[300, 259], [300, 98], [353, 98], [361, 258]]   # row3
-    - [[367, 258], [359, 98], [410, 99], [428, 258]]   # row4
-    - [[433, 257], [415, 99], [466, 99], [496, 257]]   # row5
+    - [[170, 263], [202, 100], [244, 101], [225, 264]]   # row1
+    - [[233, 265], [249, 100], [291, 102], [286, 265]]   # row2
+    - [[292, 264], [298, 100], [339, 101], [345, 265]]   # row3
+    - [[350, 264], [345, 100], [387, 101], [402, 264]]   # row4
+    - [[408, 263], [392, 101], [434, 101], [460, 262]]   # row5
 
 # cam1 — khay output, 1 outer (tray presence) + 10 slot
 output_tray:
