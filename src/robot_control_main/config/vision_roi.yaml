@@ -1,9 +1,10 @@
-# ROI cho vision_decision_node — cham boi user 15/7/2026 bang roi_pick.py
-# tren anh /camXHP/image_raw 640x480 cu (dung he toa do bbox YOLO luc cham).
+# ROI cho vision_decision_node.
 #
-# ref_width/ref_height = kich thuoc anh luc cham. Node scale ROI tu day sang
-# image_width/image_height (param cua node). Camera Jetson hien publish 640x360
-# (16:9), nen node scale truc Y 480 -> 360 ma khong can cham lai ROI.
+# 12/08/2026: quy doi ca file tu he 640x480 (cham 15/7/2026) sang 640x360 —
+# nhan truc Y voi 0.75, dung phep lam tron nhu node. Node truoc do scale y het
+# nhu vay moi khung hinh, nen ket qua khong doi mot pixel nao; khac biet la
+# ref_* gio bang dung kich thuoc anh, scale = 1.0, va ROI cham moi dan thang
+# vao duoc.
 #
 # Cham lai: python3 ros2_ws/scripts/camera_tools/grab_roi_frames.py
 #           python3 ros2_ws/scripts/camera_tools/roi_pick.py --cam camX
@@ -24,31 +25,31 @@
 # Thieu anchor -> node tu quay ve ROI tinh va bao qua /vision/roi_status.
 
 ref_width: 640
-ref_height: 480
+ref_height: 360
 
 # cam0 — khay input, 1 outer (tray presence) + 5 row (R1-R5)
 input_tray:
-  outer: [[133, 365], [162, 112], [498, 111], [530, 360]]
+  outer: [[133, 274], [162, 84], [498, 83], [530, 270]]
   rows:
-    - [[157, 346], [180, 131], [237, 133], [226, 346]]   # row1
-    - [[234, 345], [242, 132], [295, 131], [293, 347]]   # row2
-    - [[300, 345], [300, 131], [353, 131], [361, 344]]   # row3
-    - [[367, 344], [359, 131], [410, 132], [428, 344]]   # row4
-    - [[433, 343], [415, 132], [466, 132], [496, 343]]   # row5
+    - [[157, 260], [180, 98], [237, 100], [226, 260]]   # row1
+    - [[234, 259], [242, 99], [295, 98], [293, 260]]   # row2
+    - [[300, 259], [300, 98], [353, 98], [361, 258]]   # row3
+    - [[367, 258], [359, 98], [410, 99], [428, 258]]   # row4
+    - [[433, 257], [415, 99], [466, 99], [496, 257]]   # row5
 
 # cam1 — khay output, 1 outer (tray presence) + 10 slot
 output_tray:
   # Class-0 "tray" chi duoc phep bat tray-present khi tam bbox nam trong
   # vung nay. Margin nho bao quanh 10 slot de chong false-positive o mep anh.
-  outer: [[145, 350], [155, 110], [505, 110], [525, 350]]
+  outer: [[145, 263], [155, 83], [505, 83], [525, 263]]
   slots:
-    - [[513, 335], [498, 225], [440, 225], [452, 333]]   # slot1
-    - [[495, 220], [484, 125], [428, 125], [438, 218]]   # slot2
-    - [[444, 334], [432, 227], [380, 226], [389, 334]]   # slot3
-    - [[429, 219], [420, 124], [372, 124], [378, 219]]   # slot4
-    - [[376, 335], [368, 228], [314, 226], [316, 335]]   # slot5
-    - [[368, 221], [364, 124], [314, 122], [314, 221]]   # slot6
-    - [[302, 336], [301, 232], [242, 227], [237, 337]]   # slot7
-    - [[301, 225], [300, 124], [248, 123], [244, 221]]   # slot8
-    - [[227, 338], [231, 230], [163, 226], [155, 338]]   # slot9
-    - [[232, 225], [241, 126], [181, 125], [165, 220]]   # slot10
+    - [[513, 251], [498, 169], [440, 169], [452, 250]]   # slot1
+    - [[495, 165], [484, 94], [428, 94], [438, 164]]   # slot2
+    - [[444, 251], [432, 170], [380, 170], [389, 251]]   # slot3
+    - [[429, 164], [420, 93], [372, 93], [378, 164]]   # slot4
+    - [[376, 251], [368, 171], [314, 170], [316, 251]]   # slot5
+    - [[368, 166], [364, 93], [314, 92], [314, 166]]   # slot6
+    - [[302, 252], [301, 174], [242, 170], [237, 253]]   # slot7
+    - [[301, 169], [300, 93], [248, 92], [244, 166]]   # slot8
+    - [[227, 254], [231, 173], [163, 170], [155, 254]]   # slot9
+    - [[232, 169], [241, 95], [181, 94], [165, 165]]   # slot10
