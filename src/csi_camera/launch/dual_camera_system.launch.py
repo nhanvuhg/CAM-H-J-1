@@ -17,6 +17,7 @@ def generate_launch_description():
     max_inference_fps = LaunchConfiguration('max_inference_fps')
     cam0_device = LaunchConfiguration('cam0_device')
     cam1_device = LaunchConfiguration('cam1_device')
+    roi_anchor_mode = LaunchConfiguration('roi_anchor_mode')
     # The camera node owns both V4L2 devices and performs the validated CUDA
     # debayer/tone path. It publishes BGR8 640x360 with depth=1 semantics.
     camera_topic_parameters = {
@@ -148,6 +149,11 @@ def generate_launch_description():
             # doi output size camera thi PHAI doi cap so nay theo.
             'image_width': 640,
             'image_height': 360,
+            # 'tray' = ROI bam theo bbox class-0 cua khay, bu camera xe dich.
+            # Bat rieng tung khay: khay nao co 'anchor' trong vision_roi.yaml
+            # thi dung, khay chua co thi tu chay ROI tinh. Quay lai hoan toan
+            # hanh vi cu bang roi_anchor_mode:=static.
+            'roi_anchor_mode': roi_anchor_mode,
             # Cam0 chi hop le khi truc InX da ve vi tri nhan khay cua robot.
             'inx_camera_position_mm': -60.0,
             'inx_camera_tolerance_mm': 2.0,
@@ -188,6 +194,12 @@ def generate_launch_description():
             'cam1_device',
             default_value='1',
             description='V4L2 index for logical CAM1 output-tray camera',
+        ),
+        DeclareLaunchArgument(
+            'roi_anchor_mode',
+            default_value='tray',
+            description="'tray' anchors ROIs to the detected tray box; "
+                        "'static' restores fixed image-space ROIs",
         ),
         DeclareLaunchArgument(
             'cam0_model',

@@ -420,8 +420,9 @@ private:
     std::mutex slot_detection_mutex_;
     TrayAnchorTracker output_anchor_;
 
-    // ROI neo theo bbox khay. false = giu nguyen hanh vi ROI tinh cu.
-    bool roi_anchor_enabled_{false};
+    // ROI neo theo bbox khay, bat rieng tung khay. false = ROI tinh nhu cu.
+    bool input_anchor_enabled_{false};
+    bool output_anchor_enabled_{false};
 
     // Rong = ROI OK. Non-empty -> GUI hien canh bao.
     std::string roi_error_;
@@ -527,9 +528,9 @@ private:
         return found;
     }
 
-    void logAnchor(const char* tag, const RoiTransform& tf, bool tray_seen,
-                   const TrayAnchorTracker& tracker) {
-        if (!roi_anchor_enabled_) return;
+    void logAnchor(const char* tag, bool enabled, const RoiTransform& tf,
+                   bool tray_seen, const TrayAnchorTracker& tracker) {
+        if (!enabled) return;
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
             "[VISION] %s anchor: %s scale=%.3f,%.3f offset=%.1f,%.1f "
             "tray_seen=%d rejected=%d",
@@ -608,17 +609,25 @@ private:
             input_anchor_.configure(in_anchor, anchor_alpha, anchor_max_dev);
             output_anchor_.configure(out_anchor, anchor_alpha, anchor_max_dev);
 
-            roi_anchor_enabled_ = (anchor_mode == "tray");
-            if (roi_anchor_enabled_ && !(in_anchor.valid && out_anchor.valid)) {
-                // Bat che do neo ma thieu anchor thi im lang chay ROI tinh la
-                // nguy hiem: van hanh tuong dang duoc bu lech nhung khong.
-                roi_anchor_enabled_ = false;
-                RCLCPP_ERROR(get_logger(),
+            // Hai khay doc lap nhau: thieu anchor ben nay khong co ly do gi
+            // phai tat luon ben kia. Cho phep chay tung khay mot de trien khai
+            // dan, khay nao chua co anchor thi chay ROI tinh nhu cu.
+            const bool want_anchor = (anchor_mode == "tray");
+            input_anchor_enabled_ = want_anchor && in_anchor.valid;
+            output_anchor_enabled_ = want_anchor && out_anchor.valid;
+            if (want_anchor && !(in_anchor.valid && out_anchor.valid)) {
+                // Bao ra ngoai chu khong im lang: van hanh phai biet khay nao
+                // dang duoc bu lech va khay nao thi khong.
+                RCLCPP_WARN(get_logger(),
                     "[VISION] roi_anchor_mode=tray nhung %s thieu 'anchor' "
-                    "(input=%d output=%d) — quay ve ROI tinh",
+                    "(input=%d output=%d) — khay thieu chay ROI tinh",
                     path.c_str(), in_anchor.valid ? 1 : 0, out_anchor.valid ? 1 : 0);
-                addRoiError("roi_anchor_mode=tray nhung thieu anchor — dang chay ROI tinh");
-            } else if (anchor_mode != "tray" && anchor_mode != "static") {
+                addRoiError(std::string("thieu anchor: ") +
+                            (in_anchor.valid ? "" : "input_tray ") +
+                            (out_anchor.valid ? "" : "output_tray ") +
+                            "— khay do dang chay ROI tinh");
+            }
+            if (anchor_mode != "tray" && anchor_mode != "static") {
                 RCLCPP_WARN(get_logger(),
                     "[VISION] roi_anchor_mode='%s' khong hop le — dung 'static'",
                     anchor_mode.c_str());
@@ -626,9 +635,11 @@ private:
 
             RCLCPP_INFO(get_logger(),
                 "[VISION] ROI loaded: 2 outer + %zu rows + %zu/%zu slots tu %s"
-                " | anchor_mode=%s alpha=%.2f max_scale_dev=%.2f",
+                " | anchor cam0=%s cam1=%s alpha=%.2f max_scale_dev=%.2f",
                 input_tray_rois_.size(), n_slots, N_OUTPUT_SLOTS, path.c_str(),
-                roi_anchor_enabled_ ? "tray" : "static", anchor_alpha, anchor_max_dev);
+                input_anchor_enabled_ ? "tray" : "static",
+                output_anchor_enabled_ ? "tray" : "static",
+                anchor_alpha, anchor_max_dev);
         } catch (const std::exception& e) {
             // Fail-safe on trung tinh: khong row -> khong bao gio chon row;
             // moi slot OCC_OK -> khong bao gio chon slot. Node van song de
@@ -639,7 +650,8 @@ private:
             input_tray_rois_.clear();
             input_tray_outer_roi_ = ROIQuad{};
             output_tray_outer_roi_ = ROIQuad{};
-            roi_anchor_enabled_ = false;
+            input_anchor_enabled_ = false;
+            output_anchor_enabled_ = false;
             input_anchor_.configure(RoiAnchor{}, anchor_alpha, anchor_max_dev);
             output_anchor_.configure(RoiAnchor{}, anchor_alpha, anchor_max_dev);
             slot_stable_state_.fill(SlotStableState::OCC_OK);
@@ -717,7 +729,7 @@ private:
             Box tray_rect{};
             const bool tray_rect_found = findTrayRect(
                 *msg, DETECTION_SCORE_THRESH, input_tray_outer_roi_, tray_rect);
-            const RoiTransform tf = roi_anchor_enabled_
+            const RoiTransform tf = input_anchor_enabled_
                 ? input_anchor_.update(tray_rect_found ? &tray_rect : nullptr)
                 : RoiTransform{};
             const ROIQuad outer_roi = transformQuad(input_tray_outer_roi_, tf);
@@ -725,7 +737,7 @@ private:
             row_rois.reserve(input_tray_rois_.size());
             for (const auto& r : input_tray_rois_)
                 row_rois.push_back(transformQuad(r, tf));
-            logAnchor("cam0", tf, tray_rect_found, input_anchor_);
+            logAnchor("cam0", input_anchor_enabled_, tf, tray_rect_found, input_anchor_);
 
             for (const auto& det : msg->detections) {
                 if (det.results.empty()) continue;
@@ -938,10 +950,10 @@ private:
             output_anchor_.reset();
         }
 
-        const RoiTransform tf = roi_anchor_enabled_
+        const RoiTransform tf = output_anchor_enabled_
             ? output_anchor_.update(raw_tray_present ? &tray_rect : nullptr)
             : RoiTransform{};
-        logAnchor("cam1", tf, raw_tray_present, output_anchor_);
+        logAnchor("cam1", output_anchor_enabled_, tf, raw_tray_present, output_anchor_);
 
         auto present_msg = std_msgs::msg::Bool();
         present_msg.data = output_tray_present_.load();

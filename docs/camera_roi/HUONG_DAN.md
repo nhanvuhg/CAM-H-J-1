@@ -291,22 +291,33 @@ input_tray:
 ⚠️ `anchor` phải lấy trên **đúng khung hình đã dùng để chấm ROI**. Lấy ở khung
 khác là bù lệch ngay từ đầu.
 
-**Bật chế độ** — trong `dual_camera_system.launch.py`, thêm vào params của
-`vision_decision_node`:
+**Bật chế độ** — đã là mặc định của launch. Tắt để so sánh:
+
+```bash
+ros2 launch csi_camera dual_camera_system.launch.py roi_anchor_mode:=static
+```
+
+Bật riêng từng khay: khay nào có `anchor` trong `vision_roi.yaml` thì được neo,
+khay chưa có tự chạy ROI tĩnh. Log lúc khởi động nói rõ khay nào đang ở chế độ
+nào:
+
+```
+[VISION] ROI loaded: ... | anchor cam0=tray cam1=static alpha=0.25 max_scale_dev=0.25
+```
+
+⚠️ `roi_anchor_mode` chỉ đọc **một lần lúc khởi động**. `ros2 param set` không
+có tác dụng — phải launch lại.
+
+Hai tham số tinh chỉnh, sửa trong params của `vision_decision_node`:
 
 ```python
-'roi_anchor_mode': 'tray',       # 'static' = ROI cố định như cũ
 'roi_anchor_alpha': 0.25,        # EMA, nhỏ hơn = mượt hơn, bám chậm hơn
 'roi_anchor_max_scale_dev': 0.25 # bbox lệch quá ±25% coi như detect sai
 ```
 
-Mặc định là `static` — bật `tray` là đổi hành vi vision, nên phải là quyết định
-có ý sau khi đã đối chiếu bằng `roi_preview.py`.
-
 Kiểm tra khi chạy:
 
 ```bash
-ros2 param set /vision_decision_node roi_anchor_mode tray   # thử nóng
 grep "anchor:" ~/ros2_ws/logs/dual_camera_system.log
 ```
 
