@@ -44,17 +44,24 @@ input_tray:
 
 # cam1 — khay output, 1 outer (tray presence) + 10 slot
 output_tray:
+  # Cham lai 12/08/2026 tren anh 640x360 thuc te (~/Pictures/roi/cam1.jpg).
+  # Bo ROI cu (15/7) da lech han: tren khay day 10 cartridge chi 5 cai roi vao
+  # slot, ca hang tren truot ra ngoai — khay nam cao va lon hon trong khung so
+  # voi luc do.
+  # anchor = bbox class-0 do data_output_hp_final_fp16.engine tra ve tren DUNG
+  # khung hinh do.
+  anchor: [113, 9, 579, 278]
   # Class-0 "tray" chi duoc phep bat tray-present khi tam bbox nam trong
-  # vung nay. Margin nho bao quanh 10 slot de chong false-positive o mep anh.
-  outer: [[145, 263], [155, 83], [505, 83], [525, 263]]
+  # vung nay; cartridge ngoai vung cung bi loai. Lay dung khung khay.
+  outer: [[113, 278], [113, 9], [579, 9], [579, 278]]
   slots:
-    - [[513, 251], [498, 169], [440, 169], [452, 250]]   # slot1
-    - [[495, 165], [484, 94], [428, 94], [438, 164]]   # slot2
-    - [[444, 251], [432, 170], [380, 170], [389, 251]]   # slot3
-    - [[429, 164], [420, 93], [372, 93], [378, 164]]   # slot4
-    - [[376, 251], [368, 171], [314, 170], [316, 251]]   # slot5
-    - [[368, 166], [364, 93], [314, 92], [314, 166]]   # slot6
-    - [[302, 252], [301, 174], [242, 170], [237, 253]]   # slot7
-    - [[301, 169], [300, 93], [248, 92], [244, 166]]   # slot8
-    - [[227, 254], [231, 173], [163, 170], [155, 254]]   # slot9
-    - [[232, 169], [241, 95], [181, 94], [165, 165]]   # slot10
+    - [[458, 129], [510, 129], [492, 33], [442, 34]]   # slot1
+    - [[475, 254], [530, 254], [509, 138], [457, 137]]   # slot2
+    - [[384, 130], [442, 130], [429, 35], [378, 37]]   # slot3
+    - [[393, 255], [456, 254], [441, 137], [385, 139]]   # slot4
+    - [[317, 254], [381, 253], [373, 142], [311, 141]]   # slot5
+    - [[311, 133], [372, 134], [366, 37], [309, 35]]   # slot6
+    - [[237, 254], [305, 254], [302, 144], [241, 142]]   # slot7
+    - [[242, 137], [302, 136], [302, 35], [244, 34]]   # slot8
+    - [[161, 255], [228, 253], [234, 140], [169, 140]]   # slot9
+    - [[170, 135], [232, 134], [237, 37], [181, 40]]   # slot10
