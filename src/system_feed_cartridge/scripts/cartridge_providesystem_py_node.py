@@ -252,12 +252,6 @@ class CartridgeSystem(Node):
         # Cache vị trí (mm) lần đọc gần nhất — dùng cho _publish_positions khi lock
         # bận để fallback giá trị thay vì miss frame và GUI nhấp nháy "--".
         self._pos_cache: dict   = {}     # sid -> mm
-        # Timestamp của feedback hardware thành công gần nhất. Bên ngoài chỉ có
-        # LIVE/OFFLINE; timeout ngắn cho trục đang chạy và dài hơn khi idle vì
-        # monitor hardware chủ động ping mỗi 5 giây.
-        self._servo_feedback_monotonic: dict = {}
-        self._servo_feedback_active_timeout_s = 1.5
-        self._servo_feedback_idle_timeout_s = 12.0
         self.io_module          = None
         self.io_module_2        = None
         self._io_sensor_cache: list = []
@@ -920,11 +914,11 @@ class CartridgeSystem(Node):
                 mot.acknowledge_faults()
                 with self._servo_lock:
                     self.servos[sid] = mot
-                    # MotionHandler mới phải có ít nhất một actual-position
-                    # read thành công trước khi được gọi là LIVE. Không mang
-                    # cache/timestamp của connection cũ qua reconnect.
+                    # Không mang cache vị trí của connection cũ qua reconnect.
+                    # Trạng thái LIVE/OFFLINE lấy theo membership trong
+                    # ``self.servos``; monitor chỉ remove sau hai ping fail liên
+                    # tiếp để GUI không nhấp nháy vì một frame feedback chậm.
                     self._pos_cache.pop(sid, None)
-                    self._servo_feedback_monotonic.pop(sid, None)
                 self.get_logger().info(f"S{sid} ({ip}) OK (attempt {attempt})")
                 return True
             except Exception as e:
@@ -984,7 +978,6 @@ class CartridgeSystem(Node):
             try:
                 with self._servo_lock:
                     mot.current_position()
-                    self._servo_feedback_monotonic[sid] = time.monotonic()
                 consecutive_fail = 0
             except Exception:
                 consecutive_fail += 1
@@ -994,7 +987,6 @@ class CartridgeSystem(Node):
                     self._notify('warn', f'Servo S{sid} mat ket noi', f'Dang reconnect...')
                     with self._servo_lock:
                         self.servos.pop(sid, None)
-                        self._servo_feedback_monotonic.pop(sid, None)
                     if self._connect_servo(sid, ip, attempts=1):
                         consecutive_fail = 0
                         offline_notified = False
@@ -4077,8 +4069,10 @@ class CartridgeSystem(Node):
         """Đọc vị trí tất cả servo và publish JSON lên /providesystem/servo_positions.
         JSON giữ các key vị trí cũ và bổ sung
         ``_servo_status: {sid: "LIVE"|"OFFLINE"}`` cho toàn bộ servo cấu hình.
-        Servo OFFLINE không xuất vị trí cache cũ, tránh để GUI hiểu nhầm một
-        giá trị hardware đã mất kết nối là feedback đang sống.
+        Trạng thái kết nối lấy từ monitor servo có hysteresis: chỉ OFFLINE khi
+        MotionHandler bị monitor remove sau hai ping fail liên tiếp. Một lần
+        đọc vị trí chậm/lock busy vẫn giữ LIVE và dùng cache, tránh badge GUI
+        nhấp nháy LIVE/OFFLINE trong khi socket Modbus vẫn kết nối.
 
         Tối ưu hot path:
         1. Per-servo: các trục trong _live_position_servos luôn đọc actual
@@ -4104,7 +4098,6 @@ class CartridgeSystem(Node):
                 sid: self.servos.get(sid)
                 for sid in self.config.servo_ips
             }
-            active_feedback = {}
             for sid, mot in servo_snapshot.items():
                 if mot is None:
                     continue
@@ -4114,11 +4107,6 @@ class CartridgeSystem(Node):
                 # chuyển liên tục mà không có loop refresh _servo_motion_t.
                 last_motion = self._servo_motion_t.get(sid, 0.0)
                 live_position = sid in getattr(self, '_live_position_servos', set())
-                active_feedback[sid] = (
-                    live_position
-                    or sid in jog_active
-                    or now - last_motion <= idle_skip
-                )
                 if (not live_position
                         and sid not in jog_active
                         and now - last_motion > idle_skip
@@ -4133,7 +4121,6 @@ class CartridgeSystem(Node):
                 try:
                     counts = mot.current_position()
                     p = (counts - self.zero_offset.get(sid, 0)) / COUNTS_PER_MM
-                    self._servo_feedback_monotonic[sid] = time.monotonic()
                 except Exception:
                     p = cached
                 finally:
@@ -4142,22 +4129,15 @@ class CartridgeSystem(Node):
                     val = round(p, 2)
                     pos[str(sid)] = val
                     self._pos_cache[sid] = val
-            # Xác nhận lại identity ngay trước khi publish. Nếu monitor vừa loại
-            # một drive hoặc reconnect bằng MotionHandler mới, frame này được
-            # xem là OFFLINE và tuyệt đối không mang position của instance cũ.
+            # Xác nhận identity ngay trước khi publish. ``self.servos`` là nguồn
+            # trạng thái ổn định do monitor quản lý (hai ping fail mới remove),
+            # không dùng tuổi feedback từng frame vì năm trục chia sẻ servo lock
+            # có thể làm một lượt đọc vượt ngưỡng và gây LIVE/OFFLINE giả.
             servo_status = {}
-            status_now = time.monotonic()
             for sid, sampled_mot in servo_snapshot.items():
-                feedback_age = status_now - self._servo_feedback_monotonic.get(sid, 0.0)
-                freshness_limit = (
-                    self._servo_feedback_active_timeout_s
-                    if active_feedback.get(sid, False)
-                    else self._servo_feedback_idle_timeout_s
-                )
                 is_live = (
                     sampled_mot is not None
                     and self.servos.get(sid) is sampled_mot
-                    and feedback_age <= freshness_limit
                 )
                 servo_status[str(sid)] = 'LIVE' if is_live else 'OFFLINE'
                 if not is_live:

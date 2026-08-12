@@ -1390,7 +1390,7 @@ class TestZoneToRow:
 
 
 class TestServoPositionStatusContract:
-    """Position topic must never present an offline cache as live hardware."""
+    """Servo status follows the reconnect monitor, not per-frame read timing."""
 
     @staticmethod
     def _position_node():
@@ -1400,9 +1400,6 @@ class TestServoPositionStatusContract:
         node._live_position_servos = set()
         node._fas_jog_vel = {}
         node._jog_velocity_ms = 0.03
-        node._servo_feedback_monotonic = {}
-        node._servo_feedback_active_timeout_s = 1.5
-        node._servo_feedback_idle_timeout_s = 12.0
         return node
 
     @staticmethod
@@ -1476,37 +1473,47 @@ class TestServoPositionStatusContract:
         assert payload['1'] == 21.0
         assert payload['_servo_status']['1'] == 'LIVE'
 
-    def test_expired_feedback_never_publishes_cached_position_as_live(self):
+    def test_read_timeout_keeps_live_status_until_monitor_disconnects(self):
         node = self._position_node()
         mot = MagicMock()
-        mot.current_position.side_effect = TimeoutError('drive offline')
+        mot.current_position.side_effect = TimeoutError('transient read delay')
         node.servos = {1: mot}
         node._pos_cache[1] = 87.0
         node._jog_active = {1}
-        node._servo_feedback_monotonic[1] = (
-            time.monotonic() - node._servo_feedback_active_timeout_s - 0.1
-        )
-
-        node._publish_positions()
-
-        payload = self._published_payload(node)
-        assert payload['_servo_status']['1'] == 'OFFLINE'
-        assert '1' not in payload
-
-    def test_recent_feedback_survives_one_short_read_hiccup(self):
-        node = self._position_node()
-        mot = MagicMock()
-        mot.current_position.side_effect = TimeoutError('transient')
-        node.servos = {1: mot}
-        node._pos_cache[1] = 87.0
-        node._jog_active = {1}
-        node._servo_feedback_monotonic[1] = time.monotonic()
 
         node._publish_positions()
 
         payload = self._published_payload(node)
         assert payload['_servo_status']['1'] == 'LIVE'
         assert payload['1'] == 87.0
+
+    def test_lock_contention_keeps_live_status_and_cached_position(self):
+        node = self._position_node()
+        mot = MagicMock()
+        node.servos = {1: mot}
+        node._pos_cache[1] = 87.0
+        node._jog_active = {1}
+
+        lock_held = threading.Event()
+        release_lock = threading.Event()
+
+        def hold_lock():
+            with node._servo_lock:
+                lock_held.set()
+                release_lock.wait(timeout=1.0)
+
+        holder = threading.Thread(target=hold_lock)
+        holder.start()
+        assert lock_held.wait(timeout=1.0)
+
+        node._publish_positions()
+        release_lock.set()
+        holder.join(timeout=1.0)
+
+        payload = self._published_payload(node)
+        assert payload['_servo_status']['1'] == 'LIVE'
+        assert payload['1'] == 87.0
+        mot.current_position.assert_not_called()
 
     def test_optional_output_servos_display_offline_but_are_not_required(self):
         node = self._position_node()
