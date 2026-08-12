@@ -79,10 +79,10 @@ như trên (pad 114, giữ tỉ lệ). Không tự pad trước — sẽ bị pa
 
 | | cam0 — khay đầu vào | cam1 — khay đầu ra |
 |---|---|---|
-| Engine | `/home/nhan/models/data_input_hp_final_2_fp16.engine` | `/home/nhan/models/data_output_hp1.engine` |
-| ONNX/PT | `data_input_hp_final_2_yolov8s.onnx` / `.pt` | `data_output_hp1.onnx` / `.pt` |
+| Engine | `/home/nhan/models/data_input_hp_final_2_fp16.engine` | `/home/nhan/models/data_output_hp_final_fp16.engine` |
+| ONNX/PT | `data_input_hp_final_2_yolov8s.onnx` / `.pt` | `data_output_hp_final_yolov8s.onnx` / `.pt` |
 | Kiến trúc | YOLOv8 (Ultralytics) | YOLOv8 (Ultralytics) |
-| Dataset gốc | `dataset_trainHP_Input_final_2_prepared` | `tray_output_datasets` |
+| Dataset gốc | `dataset_trainHP_Input_final_2_prepared` | `dataset_trainHP_Output_Final_prepared` |
 | Input tensor | FP32 NCHW `1×3×640×640` | FP32 NCHW `1×3×640×640` |
 | Output tensor | FP32 `1×6×N` (4 + 2 class) | FP32 `1×7×N` (4 + 3 class) |
 | Số class | **2** | **3** |

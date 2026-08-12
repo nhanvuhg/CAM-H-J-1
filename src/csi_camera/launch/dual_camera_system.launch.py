@@ -212,7 +212,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'cam1_model',
-            default_value='/home/nhan/models/data_output_hp1.engine',
+            default_value='/home/nhan/models/data_output_hp_final_fp16.engine',
             description='TensorRT engine used by camera 1 output-tray inference',
         ),
         cuda_camera_node,
