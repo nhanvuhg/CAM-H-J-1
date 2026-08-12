@@ -616,16 +616,15 @@ private:
             input_anchor_enabled_ = want_anchor && in_anchor.valid;
             output_anchor_enabled_ = want_anchor && out_anchor.valid;
             if (want_anchor && !(in_anchor.valid && out_anchor.valid)) {
-                // Bao ra ngoai chu khong im lang: van hanh phai biet khay nao
-                // dang duoc bu lech va khay nao thi khong.
+                // Chi log, KHONG dua vao roi_error_. Khay chua co anchor van
+                // chay ROI tinh dung nhu truoc gio — do la mot cau hinh hop le
+                // dang trien khai dan, khong phai su co. GUI bien moi chuoi
+                // roi_status khac rong thanh ERROR "ROI validation", nen bao o
+                // day se la bao dong gia keo dai, che mat loi ROI that su.
                 RCLCPP_WARN(get_logger(),
                     "[VISION] roi_anchor_mode=tray nhung %s thieu 'anchor' "
                     "(input=%d output=%d) — khay thieu chay ROI tinh",
                     path.c_str(), in_anchor.valid ? 1 : 0, out_anchor.valid ? 1 : 0);
-                addRoiError(std::string("thieu anchor: ") +
-                            (in_anchor.valid ? "" : "input_tray ") +
-                            (out_anchor.valid ? "" : "output_tray ") +
-                            "— khay do dang chay ROI tinh");
             }
             if (anchor_mode != "tray" && anchor_mode != "static") {
                 RCLCPP_WARN(get_logger(),
