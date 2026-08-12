@@ -309,6 +309,7 @@ PID_CAMERA=""
 PID_WEB_GUI=""
 PID_QML_GUI=""
 CAMERA_SUPERVISOR_STATUS="/tmp/camera_stack_supervisor.status"
+CAMERA_SUPERVISOR_PIDFILE="/tmp/camera_stack_supervisor.pid"
 
 camera_devices_ready() {
     [ -c /dev/video0 ] && [ -c /dev/video1 ]
@@ -395,7 +396,7 @@ cleanup() {
     _CLEANUP_DONE=1
     echo ""
     echo "🛑 Shutting down..."
-    rm -f "$PIDFILE"
+    rm -f "$PIDFILE" "$CAMERA_SUPERVISOR_PIDFILE"
     for pid in "${PID_QML_GUI:-}" "${PID_WEB_GUI:-}" "${PID_CAMERA:-}" "${PID_GRIPPER:-}" "${PID_ROBOT:-}" "${PID_DOBOT:-}" "${PID_PROVIDE:-}" "${PID_VFD_LOGIC:-}"; do
         [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
     done
@@ -603,6 +604,7 @@ camera_stack_supervisor() {
 : > "$LOG_CAMERA"
 camera_stack_supervisor >> "$LOG_CAMERA" 2>&1 &
 PID_CAMERA=$!
+echo "$PID_CAMERA" > "$CAMERA_SUPERVISOR_PIDFILE"
 echo "        Supervisor PID=$PID_CAMERA  Log: $LOG_CAMERA"
 echo "$PID_CAMERA" >> "$PIDFILE"
 
@@ -638,7 +640,7 @@ GUI_RESTART_FLAG="/tmp/unified_gui_restart_requested"
 start_qml_gui() {
   if [ -n "${DISPLAY:-}" ]; then
     echo "  [8] 🖥️  QML GUI (DISPLAY=$DISPLAY)..."
-    "$QML_BIN" > "$LOG_QML" 2>&1 &
+    UNIFIED_GUI_MANAGED_RESTART=1 "$QML_BIN" > "$LOG_QML" 2>&1 &
     PID_QML_GUI=$!
     echo "        PID=$PID_QML_GUI  Log: $LOG_QML"
     echo "$PID_QML_GUI" >> "$PIDFILE"
@@ -722,8 +724,11 @@ echo ""
 # GUI; tránh "zombie restart" che lỗi cứng (CUDA OOM, TensorRT, segfault...).
 while true; do
     if [ -n "${PID_QML_GUI:-}" ]; then
-        wait "$PID_QML_GUI" 2>/dev/null
-        GUI_EXIT=$?
+        if wait "$PID_QML_GUI" 2>/dev/null; then
+            GUI_EXIT=0
+        else
+            GUI_EXIT=$?
+        fi
         if [ "$GUI_EXIT" -eq 42 ] || [ -f "$GUI_RESTART_FLAG" ]; then
             echo "[GUI] 🔄 Restart requested (code=$GUI_EXIT)"
             rm -f "$GUI_RESTART_FLAG"

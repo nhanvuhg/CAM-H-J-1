@@ -115,8 +115,13 @@ echo ""
 # Wait indefinitely; exit code 42 means GUI requested a self-restart.
 while true; do
   if [ -n "${PID_GUI:-}" ]; then
-    wait "$PID_GUI" 2>/dev/null
-    GUI_EXIT=$?
+    # `set -e` must not abort the launcher before we can inspect the deliberate
+    # exit code 42 used by the Restart GUI button.
+    if wait "$PID_GUI" 2>/dev/null; then
+      GUI_EXIT=0
+    else
+      GUI_EXIT=$?
+    fi
     if [ "$GUI_EXIT" -eq 42 ] || [ -f "$GUI_RESTART_FLAG" ]; then
       echo "  🔄 GUI restart requested (code=$GUI_EXIT)"
       rm -f "$GUI_RESTART_FLAG"

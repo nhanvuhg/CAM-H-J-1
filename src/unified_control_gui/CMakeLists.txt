@@ -108,6 +108,7 @@ install(FILES ${QM_FILES}
 if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_i18n_catalog tests/test_i18n_catalog.py)
+  ament_add_pytest_test(test_restart_contract tests/test_restart_contract.py)
 endif()
 
 ament_package()
