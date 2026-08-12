@@ -1,6 +1,6 @@
 # Thông số train lại YOLO — hệ thống Jetson Orin Nano (CAM-H-J-1)
 
-Cập nhật: 2026-08-11. Mọi số liệu lấy trực tiếp từ code đang chạy
+Cập nhật: 2026-08-12. Mọi số liệu lấy trực tiếp từ code đang chạy
 (`csi_camera`, `yolo_tensorrt_ros2`, `robot_control_main`) và từ metadata của
 ONNX/engine đang deploy, không phải ước lượng.
 
@@ -79,10 +79,10 @@ như trên (pad 114, giữ tỉ lệ). Không tự pad trước — sẽ bị pa
 
 | | cam0 — khay đầu vào | cam1 — khay đầu ra |
 |---|---|---|
-| Engine | `/home/nhan/models/data_input_hp1.engine` | `/home/nhan/models/data_output_hp1.engine` |
-| ONNX/PT | `data_input_hp1.onnx` / `.pt` | `data_output_hp1.onnx` / `.pt` |
+| Engine | `/home/nhan/models/data_input_hp_final_fp16.engine` | `/home/nhan/models/data_output_hp1.engine` |
+| ONNX/PT | `data_input_hp_final_yolov8s.onnx` | `data_output_hp1.onnx` / `.pt` |
 | Kiến trúc | YOLOv8 (Ultralytics) | YOLOv8 (Ultralytics) |
-| Dataset gốc | `tray_input_hp2_dataset` | `tray_output_datasets` |
+| Dataset gốc | `dataset_trainHP_Input_final_lightaug_prepared` | `tray_output_datasets` |
 | Input tensor | FP32 NCHW `1×3×640×640` | FP32 NCHW `1×3×640×640` |
 | Output tensor | FP32 `1×6×N` (4 + 2 class) | FP32 `1×7×N` (4 + 3 class) |
 | Số class | **2** | **3** |

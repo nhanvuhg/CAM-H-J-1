@@ -13,7 +13,7 @@ Production models:
 
 | Camera | Engine | Classes | ROS image | ROS detections |
 | --- | --- | --- | --- | --- |
-| Input tray | `/home/nhan/models/data_input_hp1.engine` | `tray`, `cartridge` | `/cam0HP/image_raw` | `/cam0HP/yolo/bounding_boxes` |
+| Input tray | `/home/nhan/models/data_input_hp_final_fp16.engine` | `tray`, `cartridge` | `/cam0HP/image_raw` | `/cam0HP/yolo/bounding_boxes` |
 | Output tray | `/home/nhan/models/data_output_hp1.engine` | `tray`, `cartridge`, `cartridgefall` | `/cam1HP/image_raw` | `/cam1HP/yolo/bounding_boxes` |
 
 Build:

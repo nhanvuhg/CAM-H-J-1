@@ -191,7 +191,11 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'cam0_model',
-            default_value='/home/nhan/models/data_input_hp1.engine',
+            # Retrained 12/08/2026 on 640x360 frames from this camera. The
+            # previous data_input_hp1.engine missed the two far rows and the
+            # glare-blown right column entirely — 30 of 40 cartridges on a full
+            # tray — because it was trained before the Jetson image path.
+            default_value='/home/nhan/models/data_input_hp_final_fp16.engine',
             description='TensorRT engine used by camera 0 input-tray inference',
         ),
         DeclareLaunchArgument(

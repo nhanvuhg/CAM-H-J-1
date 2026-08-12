@@ -9,7 +9,7 @@
 // node chay that dung — yolo_trt_engine.hpp la mot ban duy nhat cho ca hai.
 //
 //   ros2 run yolo_tensorrt_ros2 auto_label
-//       --engine /home/nhan/models/data_input_hp1.engine
+//       --engine /home/nhan/models/data_input_hp_final_fp16.engine
 //       --images ~/Datasets/.../input/images
 //
 // Nhan xuat ra dung dinh dang YOLO: "<class> <cx> <cy> <w> <h>", toa do chuan
