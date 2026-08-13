@@ -360,8 +360,27 @@ Item {
                     boundsBehavior: Flickable.StopAtBounds
                     model: systemAlertController.activeAlerts
 
+                    // AsNeeded chi hien luc dang vuot roi tu mo di. Tren man hinh
+                    // cam ung khong co con lan chuot, van hanh khong co cach nao
+                    // biet danh sach con loi phia duoi. Giu thanh hien thuong
+                    // truc khi tran, va du day de cham duoc bang ngon tay.
                     ScrollBar.vertical: ScrollBar {
-                        policy: ScrollBar.AsNeeded
+                        id: alertScrollBar
+                        policy: alertList.contentHeight > alertList.height
+                                ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                        width: 12
+                        background: Rectangle {
+                            radius: 6
+                            color: "#0d1522"
+                            border.color: root.borderColor
+                            border.width: 1
+                        }
+                        contentItem: Rectangle {
+                            implicitWidth: 8
+                            radius: 4
+                            color: alertScrollBar.pressed ? root.accentColor : root.mutedColor
+                            opacity: alertScrollBar.pressed ? 1.0 : 0.75
+                        }
                     }
 
                     delegate: Rectangle {
