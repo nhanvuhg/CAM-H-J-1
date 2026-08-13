@@ -3,6 +3,7 @@
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/int32.hpp"
 #include "std_msgs/msg/int32_multi_array.hpp"
+#include "std_msgs/msg/int64_multi_array.hpp"
 #include "std_msgs/msg/header.hpp"
 #include "std_srvs/srv/set_bool.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -33,6 +34,7 @@
 #include <cmath>
 #include <limits>
 #include <cstdint>
+#include <chrono>
 #include <thread>
 
 using EnableRobot   = dobot_msgs_v3::srv::EnableRobot;
@@ -113,6 +115,8 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   vision_empty_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  vision_slot_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32MultiArray>::SharedPtr vision_slot_status_sub_;
+    rclcpp::Subscription<std_msgs::msg::Int64MultiArray>::SharedPtr vision_output_snapshot_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   vision_output_present_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   ignore_scale_sub_;
 
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   feed_chamber_sub_;
@@ -130,6 +134,7 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   new_trayoutput_sub_;
     rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr motion_hb_sub_;
     rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr vision_hb_sub_;
+    rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr cartridge_hb_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   motion_busy_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   soft_stop_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   stop_button_sub_;
@@ -141,12 +146,30 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_pos2_busy_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_busy_sub_;     // /cartridge/busy — interlock Pos1
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   output_tray_full_sub_;   // /vision/output_tray/full — AI mode
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cam1_view_clear_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   output_zone_clear_sub_;
 
     rclcpp::Time last_motion_hb_;
     rclcpp::Time last_vision_hb_;
+    std::mutex heartbeat_mutex_;
+    std::atomic<bool> motion_hb_seen_{false};
+    std::atomic<bool> vision_hb_seen_{false};
+    std::atomic<int64_t> motion_hb_last_steady_ns_{0};
+    std::atomic<int64_t> vision_hb_last_steady_ns_{0};
+    std::atomic<int64_t> cartridge_hb_last_steady_ns_{0};
+    std::atomic<int64_t> cartridge_sensors_last_steady_ns_{0};
+    std::atomic<int64_t> cartridge_drain_last_steady_ns_{0};
+    std::atomic<bool> output_tray_present_{false};
+    std::atomic<int64_t> last_output_slot_rx_ns_{0};
+    std::atomic<int64_t> last_output_status_rx_ns_{0};
+    std::atomic<int64_t> last_output_present_rx_ns_{0};
     std::atomic<bool> motion_busy_{false};
     std::atomic<bool> cartridge_busy_{false};
     std::atomic<bool> cartridge_pos2_busy_{false};  // STATE 3/4 OutX/OutY đang chạy — block PLACE_TO_OUTPUT
+    std::atomic<bool> cam1_view_clear_{false};
+    std::atomic<int64_t> cam1_view_last_steady_ns_{0};
+    std::atomic<bool> mechanical_output_zone_clear_{false};
+    std::atomic<int64_t> mechanical_output_zone_last_steady_ns_{0};
 
     // ========================================================================
     // PUBLISHERS
@@ -298,6 +321,32 @@ private:
     std::mutex output_slot_selection_mutex_;
     std::atomic<bool> output_scan_allowed_{true};
     std::atomic<bool> output_scan_recovery_required_{false};
+    // A cam1 decision is accepted only as one coherent, frame-stamped sample.
+    // These fields are protected by output_slot_selection_mutex_.
+    bool output_snapshot_valid_{false};
+    bool output_snapshot_present_{false};
+    int output_snapshot_slot_{SLOT_UNSET};
+    std::array<bool, TOTAL_OUTPUT_SLOTS> output_snapshot_occupied_{};
+    int64_t output_snapshot_frame_ns_{0};
+    int64_t output_snapshot_rx_ns_{0};
+    int64_t output_snapshot_accept_after_ns_{0};
+    // Normal AI flow reuses the raised post-refill camera checkpoint armed by
+    // AI_INPUT_TRAY_BUFFER and scans while scale processing continues.  A
+    // dedicated HOME action is only a fallback for drain/restart/no-snapshot.
+    std::atomic<bool> output_prescan_home_done_{false};
+    std::atomic<bool> output_prescan_zone_verified_{false};
+    // At the PLACE_TO_OUTPUT edge, invalidate only Robot Logic's aggregate
+    // cache (Vision remains warm). The next cam1 frame is then the actual
+    // event-time snapshot; no additional HOME/cooldown is introduced.
+    std::atomic<bool> output_place_snapshot_requested_{false};
+    std::atomic<bool> output_tray_change_home_pending_{false};
+    std::atomic<bool> output_tray_change_home_motion_done_{false};
+    std::atomic<int64_t> output_tray_change_home_wait_since_ns_{0};
+    // SCALE_OUTPUT already returns to index 0. Before leaving PLACE_TO_OUTPUT
+    // for WAIT_FILLING, use that dwell as a second cam1 checkpoint and confirm
+    // whether the just-updated tray is full. No additional HOME action.
+    std::atomic<bool> post_place_output_check_pending_{false};
+    std::atomic<bool> post_place_output_scan_started_{false};
 
     // ========================================================================
     // ROBOT STATE
@@ -313,6 +362,11 @@ private:
     // ========================================================================
     std::atomic<bool> motion_in_progress_{false};
     std::atomic<bool> motion_result_{false};
+    std::atomic<bool> last_motion_interlock_rejected_{false};
+    std::atomic<bool> startup_home_pending_{false};
+    std::atomic<bool> startup_home_motion_done_{false};
+    std::atomic<int64_t> startup_home_wait_since_ns_{0};
+    std::atomic<bool> startup_home_required_{false};
     std::string       motion_current_cmd_;
     std::mutex        motion_cmd_mutex_;
     std::atomic<int>  async_slot_{0};
@@ -439,6 +493,22 @@ private:
     void transitionTo(SystemState new_state);
     void setInputScanAllowed(bool allowed);
     void setOutputScanAllowed(bool allowed);
+    void invalidateOutputSnapshot();
+    bool claimFreshOutputSnapshot(int& slot);
+    bool claimFreshFullOutputSnapshot();
+    void requestOutputSnapshotNow();
+    bool cam1ViewClearFresh() const;
+    bool mechanicalOutputZoneClearFresh() const;
+    bool visionHeartbeatFresh();
+    bool cartridgeHeartbeatFresh() const;
+    bool cartridgeSafetyFreshAndClear(bool require_pos2 = true) const;
+    bool cartridgeDrainEvidenceFresh() const;
+    bool servicePendingOutputTrayChangeHome();
+    bool servicePendingStartupHome();
+    void requestStartupHome(const char* source);
+    bool consumeTemporaryMotionInterlockReject(const char* context, bool reopen_input_scan);
+    void routeAfterOutputPlacement();
+    static int64_t steadyNowNs();
     void softStopToManual(const std::string& source);
     void forceScalePass(const std::string& source);
     bool checkConnection();
@@ -471,7 +541,7 @@ private:
 
     // Helper: publish done_tray_output + set waiting flag
     void publishDoneTrayOutput();
-    void requestOutputTrayChangeForDrain(const char* reason);
+    bool requestOutputTrayChangeForDrain(const char* reason);
 
     // Helper: check if BOTH trays are ready (used in IDLE to restart)
     bool bothTraysReady() const {
@@ -509,6 +579,7 @@ RobotLogicNode::RobotLogicNode()
     row_full_.assign(TOTAL_ROWS, false);
     // Fail-safe cho toi khi vision gui status dau tien.
     output_slot_occupied_.assign(TOTAL_OUTPUT_SLOTS, true);
+    output_snapshot_occupied_.fill(true);
 
     callback_group_reentrant_ = this->create_callback_group(
         rclcpp::CallbackGroupType::Reentrant);
@@ -699,6 +770,7 @@ void RobotLogicNode::initSubscriptions()
                 return;
             }
             selected_output_slot_ = msg->data;
+            last_output_slot_rx_ns_ = this->now().nanoseconds();
         });
 
     // Cung nguon voi 10 den O tren GUI: 0=empty/den sang/co the dat,
@@ -721,6 +793,95 @@ void RobotLogicNode::initSubscriptions()
                 output_slot_occupied_[selected_output_slot_ - 1]) {
                 selected_output_slot_ = SLOT_UNSET;
             }
+            last_output_status_rx_ns_ = this->now().nanoseconds();
+        });
+
+    vision_output_present_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/vision/output_tray/present", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            output_tray_present_ = msg->data;
+            last_output_present_rx_ns_ = this->now().nanoseconds();
+            if (!msg->data) {
+                std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+                selected_output_slot_ = SLOT_UNSET;
+                std::fill(output_slot_occupied_.begin(), output_slot_occupied_.end(), true);
+            }
+        });
+
+    vision_output_snapshot_sub_ = create_subscription<std_msgs::msg::Int64MultiArray>(
+        "/vision/output_tray/snapshot", 10,
+        [this](const std_msgs::msg::Int64MultiArray::SharedPtr msg) {
+            constexpr size_t SNAPSHOT_FIELDS = 5 + TOTAL_OUTPUT_SLOTS;
+            const int64_t now_ns = this->now().nanoseconds();
+            std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+
+            auto reject = [this]() {
+                output_snapshot_valid_ = false;
+                output_snapshot_present_ = false;
+                output_snapshot_slot_ = SLOT_UNSET;
+                output_snapshot_occupied_.fill(true);
+                output_snapshot_frame_ns_ = 0;
+                output_snapshot_rx_ns_ = 0;
+            };
+
+            if (!output_scan_allowed_.load() || !cam1ViewClearFresh() ||
+                msg->data.size() != SNAPSHOT_FIELDS || msg->data[0] != 1) {
+                reject();
+                return;
+            }
+
+            const int64_t sec = msg->data[1];
+            const int64_t nanosec = msg->data[2];
+            if (sec < 0 || nanosec < 0 || nanosec >= 1000000000LL ||
+                sec > (std::numeric_limits<int64_t>::max() - nanosec) / 1000000000LL) {
+                reject();
+                return;
+            }
+            const int64_t frame_ns = sec * 1000000000LL + nanosec;
+            const int selected = static_cast<int>(msg->data[4]);
+            const bool present = msg->data[3] == 1;
+            bool schema_ok = msg->data[3] == 0 || msg->data[3] == 1;
+            std::array<bool, TOTAL_OUTPUT_SLOTS> occupied{};
+            for (size_t i = 0; i < TOTAL_OUTPUT_SLOTS; ++i) {
+                const int64_t value = msg->data[5 + i];
+                schema_ok = schema_ok && (value == 0 || value == 1);
+                occupied[i] = value != 0;
+            }
+            const bool selected_ok = selected == SLOT_UNSET ||
+                (selected >= 1 && selected <= TOTAL_OUTPUT_SLOTS &&
+                 !occupied[static_cast<size_t>(selected - 1)]);
+            const bool frame_fresh = frame_ns > 0 && now_ns >= frame_ns &&
+                now_ns - frame_ns <= 2000000000LL;
+            // Both receipt time and camera capture time must be after the gate
+            // reopened.  This rejects YOLO/DDS samples queued while the arm was
+            // still moving or while cam1 was occluded.
+            const bool clean_epoch = frame_fresh && output_snapshot_accept_after_ns_ > 0 &&
+                now_ns >= output_snapshot_accept_after_ns_ &&
+                frame_ns >= output_snapshot_accept_after_ns_ &&
+                frame_ns <= now_ns;
+            if (!schema_ok || !selected_ok || !clean_epoch) {
+                if (frame_ns <= 0) {
+                    RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 5000,
+                        "[SAFETY][CAM1] Reject snapshot: camera frame stamp is zero/invalid");
+                }
+                reject();
+                return;
+            }
+
+            output_snapshot_valid_ = true;
+            output_snapshot_present_ = present;
+            output_snapshot_slot_ = selected;
+            output_snapshot_occupied_ = occupied;
+            output_snapshot_frame_ns_ = frame_ns;
+            output_snapshot_rx_ns_ = now_ns;
+
+            // Mirror the coherent sample into the legacy fields used by the
+            // GUI; motion admission below reads only the snapshot fields.
+            output_tray_present_ = present;
+            selected_output_slot_ = selected;
+            for (size_t i = 0; i < TOTAL_OUTPUT_SLOTS; ++i)
+                output_slot_occupied_[i] = occupied[i];
+            notifyStateChange();
         });
 
     feed_chamber_sub_ = create_subscription<std_msgs::msg::Bool>(
@@ -771,6 +932,7 @@ void RobotLogicNode::initSubscriptions()
     sensors_state_sub_ = create_subscription<std_msgs::msg::String>(
         "/providesystem/sensors_state", 10,
         [this](const std_msgs::msg::String::SharedPtr msg) {
+            cartridge_sensors_last_steady_ns_ = steadyNowNs();
             if (msg->data.size() >= 3) {
                 bool s1 = (msg->data[0] == '1');
                 bool s2 = (msg->data[1] == '1');
@@ -826,6 +988,7 @@ void RobotLogicNode::initSubscriptions()
     cartridge_drain_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/cartridge/drain", rclcpp::QoS(10).reliable(),
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            cartridge_drain_last_steady_ns_ = steadyNowNs();
             bool prev = cartridge_drain_confirmed_.load();
             bool accept = false;
             if (msg->data) {
@@ -852,7 +1015,8 @@ void RobotLogicNode::initSubscriptions()
 
     // new_trayoutput_loaded: output tray ready after cartridge system change
     new_trayoutput_sub_ = create_subscription<std_msgs::msg::Bool>(
-        "/cartridge_providesystem/new_trayoutput_loaded", 10,
+        "/cartridge_providesystem/new_trayoutput_loaded",
+        rclcpp::QoS(1).reliable().transient_local(),
         std::bind(&RobotLogicNode::newTrayOutputCallback, this, std::placeholders::_1));
 
     selected_row_sub_ = create_subscription<std_msgs::msg::Int32>(
@@ -882,11 +1046,76 @@ void RobotLogicNode::initSubscriptions()
     // Heartbeat & busy
     motion_hb_sub_ = create_subscription<std_msgs::msg::Header>(
         "/robot/motion_heartbeat", 10,
-        [this](const std_msgs::msg::Header::SharedPtr msg) { last_motion_hb_ = msg->stamp; });
+        [this](const std_msgs::msg::Header::SharedPtr msg) {
+            {
+                std::lock_guard<std::mutex> lock(heartbeat_mutex_);
+                last_motion_hb_ = msg->stamp;
+            }
+            motion_hb_seen_ = true;
+            motion_hb_last_steady_ns_ = steadyNowNs();
+        });
 
     vision_hb_sub_ = create_subscription<std_msgs::msg::Header>(
         "/vision/heartbeat", 10,
-        [this](const std_msgs::msg::Header::SharedPtr msg) { last_vision_hb_ = msg->stamp; });
+        [this](const std_msgs::msg::Header::SharedPtr msg) {
+            const bool was_seen = vision_hb_seen_.exchange(true);
+            {
+                std::lock_guard<std::mutex> lock(heartbeat_mutex_);
+                last_vision_hb_ = msg->stamp;
+            }
+            vision_hb_last_steady_ns_ = steadyNowNs();
+            if (!was_seen && use_ai_for_control_) {
+                RCLCPP_INFO(get_logger(),
+                    "[SAFETY][CAM1] Vision heartbeat connected — waiting for a fresh slot snapshot");
+            }
+        });
+
+    cartridge_hb_sub_ = create_subscription<std_msgs::msg::Header>(
+        "/cartridge/heartbeat", 10,
+        [this](const std_msgs::msg::Header::SharedPtr) {
+            cartridge_hb_last_steady_ns_ = steadyNowNs();
+        });
+
+    cam1_view_clear_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/robot/cam1_view_clear", rclcpp::QoS(1).reliable().transient_local(),
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            cam1_view_last_steady_ns_ = steadyNowNs();
+            const bool was_clear = cam1_view_clear_.exchange(msg->data);
+            if (!msg->data) {
+                invalidateOutputSnapshot();
+                const bool was_verified = output_prescan_zone_verified_.exchange(false);
+                // Repeated FALSE samples during the 0.5 s settle interval after
+                // an already completed HOME action are expected.  Invalidate a
+                // checkpoint only on a real CLEAR->BLOCKED edge (or after state
+                // logic had already verified it).
+                const bool had_home_checkpoint =
+                    (was_clear || was_verified) && output_prescan_home_done_.exchange(false);
+                // FALSE is expected while OUTPUT_SCAN_HOME is travelling and
+                // after a claimed SCALE_OUTPUT starts.  If permission vanished
+                // after verification but before claim, treat it as a fault.
+                if (was_verified) {
+                    RCLCPP_ERROR(get_logger(),
+                        "[SAFETY][CAM1] Camera view became blocked after verification — "
+                        "snapshot invalidated; a new clear checkpoint is required");
+                } else if (had_home_checkpoint) {
+                    RCLCPP_WARN(get_logger(),
+                        "[SAFETY][CAM1] Camera snapshot checkpoint consumed/invalidated");
+                }
+            }
+            if (was_clear != msg->data) {
+                RCLCPP_INFO(get_logger(), "[SAFETY][CAM1] Robot camera view: %s",
+                    msg->data ? "CLEAR" : "BLOCKED");
+            }
+            notifyStateChange();
+        });
+
+    output_zone_clear_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/robot/output_zone_clear", rclcpp::QoS(1).reliable().transient_local(),
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            mechanical_output_zone_last_steady_ns_ = steadyNowNs();
+            mechanical_output_zone_clear_ = msg->data;
+            notifyStateChange();
+        });
 
     motion_busy_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/robot/motion_busy", 10,
@@ -908,7 +1137,7 @@ void RobotLogicNode::initSubscriptions()
     // sub bị destruct ngay, callback không bao giờ fire. Bug history: interlock cartridge_busy_
     // không hoạt động → motion thread chạy đè cartridge → kẹt khay.
     cartridge_busy_sub_ = create_subscription<std_msgs::msg::Bool>(
-        "/cartridge/busy", 10,
+        "/cartridge/busy", rclcpp::QoS(1).reliable().transient_local(),
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
             cartridge_busy_ = msg->data;
             if (msg->data)
@@ -920,13 +1149,31 @@ void RobotLogicNode::initSubscriptions()
     // Pos2 busy: STATE 3 (cấp khay thành phẩm) hoặc STATE 4 (thay khay output)
     // đang chạy → cụm OutX/OutY có thể đang di chuyển → block PLACE_TO_OUTPUT.
     cartridge_pos2_busy_sub_ = create_subscription<std_msgs::msg::Bool>(
-        "/cartridge/pos2_busy", 10,
+        "/cartridge/pos2_busy", rclcpp::QoS(1).reliable().transient_local(),
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
-            cartridge_pos2_busy_ = msg->data;
-            if (msg->data)
+            const bool was_busy = cartridge_pos2_busy_.exchange(msg->data);
+            if (msg->data) {
                 RCLCPP_WARN(get_logger(), "[INTERLOCK] 🔒 Cartridge Pos2 BUSY");
-            else
+                if (use_ai_for_control_) {
+                    output_prescan_zone_verified_ = false;
+                    setOutputScanAllowed(false);
+                }
+            } else {
                 RCLCPP_INFO(get_logger(), "[INTERLOCK] 🔓 Cartridge Pos2 FREE");
+                if (was_busy && use_ai_for_control_ &&
+                    !waiting_for_new_output_.load() &&
+                    !output_scan_recovery_required_.load()) {
+                    const bool robot_still_home = cam1ViewClearFresh();
+                    output_prescan_home_done_ = robot_still_home;
+                    output_prescan_zone_verified_ = false;
+                    setOutputScanAllowed(robot_still_home);
+                    if (!robot_still_home) {
+                        RCLCPP_WARN(get_logger(),
+                            "[SAFETY][CAM1] Pos2 FREE but robot HOME is not verified — "
+                            "output scan remains blocked");
+                    }
+                }
+            }
         });
 
     // AI mode: Camera báo output tray full → set waiting flag.
@@ -935,16 +1182,24 @@ void RobotLogicNode::initSubscriptions()
         "/vision/output_tray/full", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
             if (msg->data && use_ai_for_control_) {
+                if (!visionHeartbeatFresh() || !cam1ViewClearFresh() ||
+                    !output_scan_allowed_.load() ||
+                    !claimFreshFullOutputSnapshot()) {
+                    RCLCPP_ERROR(get_logger(),
+                        "[SAFETY][CAM1] Ignore OUTPUT FULL — heartbeat/zone/coherent "
+                        "full snapshot missing or stale");
+                    return;
+                }
+                // The claim above already closed/invalidate the admission cache;
+                // this publishes the matching latched gate without a TOCTOU gap.
                 setOutputScanAllowed(false);
                 RCLCPP_WARN(get_logger(),
-                    "[VISION_SYNC] 📦 Camera báo OUTPUT TRAY FULL → set waiting_for_new_output_");
-                waiting_for_new_output_ = true;
-                // Reset slot counter for when new tray arrives
-                {
-                    std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
-                    selected_output_slot_ = SLOT_UNSET;
-                }
-                current_auto_slot_ = 1;
+                    "[VISION_SYNC][CAM1_FULL] 📦 Fresh camera reports OUTPUT FULL — "
+                    "Robot Logic locked placement; evacuating robot to HOME before State 4");
+                output_tray_change_home_motion_done_ = false;
+                output_tray_change_home_wait_since_ns_ = 0;
+                output_tray_change_home_pending_ = true;
+                notifyStateChange();
             }
         });
 }
@@ -1101,6 +1356,16 @@ void RobotLogicNode::softStopToManual(const std::string& source)
     motion_busy_        = false;
     motion_in_progress_ = false;
     clearMotionCmd();
+    output_prescan_home_done_ = false;
+    output_prescan_zone_verified_ = false;
+    output_tray_change_home_pending_ = false;
+    output_tray_change_home_motion_done_ = false;
+    post_place_output_check_pending_ = false;
+    post_place_output_scan_started_ = false;
+    startup_home_pending_ = false;
+    startup_home_motion_done_ = false;
+    startup_home_required_ = false;
+    setOutputScanAllowed(false);
 
     notifyStateChange();
 }
@@ -1198,26 +1463,55 @@ void RobotLogicNode::advanceAutoRow()
 
 void RobotLogicNode::publishDoneTrayOutput()
 {
+    bool expected = false;
+    if (!waiting_for_new_output_.compare_exchange_strong(expected, true)) {
+        RCLCPP_WARN(get_logger(),
+            "[TRAY_OUT] Change request already pending — duplicate suppressed");
+        return;
+    }
+    output_prescan_home_done_ = false;
+    output_prescan_zone_verified_ = false;
+    output_tray_change_home_pending_ = false;
+    output_tray_change_home_motion_done_ = false;
+    output_tray_change_home_wait_since_ns_ = 0;
+    setOutputScanAllowed(false);
+    new_trayoutput_loaded_ = false;
+    {
+        std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+        selected_output_slot_ = SLOT_UNSET;
+    }
     auto msg = std_msgs::msg::Bool();
     msg.data = true;
     done_output_tray_pub_->publish(msg);
-    new_trayoutput_loaded_ = false;
     new_trayoutput_pub_->publish(std_msgs::msg::Bool()); // Publish false to GUI
-    waiting_for_new_output_ = true;
     RCLCPP_WARN(get_logger(), "[TRAY_OUT] 📤 done_tray_output published — waiting for new_trayoutput_loaded");
 }
 
-void RobotLogicNode::requestOutputTrayChangeForDrain(const char* reason)
+bool RobotLogicNode::requestOutputTrayChangeForDrain(const char* reason)
 {
     if (waiting_for_new_output_.load()) {
         RCLCPP_WARN(get_logger(),
             "[DRAIN] Output tray change already pending — %s", reason);
-        return;
+        return true;
+    }
+
+    if (!cartridgeDrainEvidenceFresh() ||
+        !cartridge_input_sensors_seen_.load() ||
+        !input_belt_empty_from_sensors_.load() ||
+        !cartridge_drain_confirmed_.load()) {
+        cartridge_drain_confirmed_ = false;
+        RCLCPP_ERROR(get_logger(),
+            "[DRAIN][PIPELINE_DRAIN] Request blocked (%s) — Cartridge heartbeat/"
+            "S1-S3/drain evidence missing or stale", reason);
+        return false;
     }
 
     RCLCPP_WARN(get_logger(),
-        "[DRAIN] Pipeline drained — request output tray change for STATE4/STATE3 (%s)", reason);
+        "[DRAIN][PIPELINE_DRAIN] Pipeline drained — request output tray change "
+        "for STATE4/STATE3 (%s); vision heartbeat is not required", reason);
+    setOutputScanAllowed(false);
     publishDoneTrayOutput();
+    return waiting_for_new_output_.load();
 }
 
 // ============================================================================
@@ -1317,23 +1611,52 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
 
 void RobotLogicNode::newTrayOutputCallback(const std_msgs::msg::Bool::SharedPtr msg)
 {
-    if (!msg->data) return;
-
-    // Manual mode: bỏ qua trigger từ cartridge — robot không auto chạy ở manual.
-    if (manual_mode_.load()) {
-        RCLCPP_WARN(get_logger(), "[TRAY_OUT] Manual mode — bỏ qua new_trayoutput_loaded trigger");
+    output_tray_change_home_pending_ = false;
+    output_tray_change_home_motion_done_ = false;
+    output_tray_change_home_wait_since_ns_ = 0;
+    if (!msg->data) {
+        // Authoritative physical state: output tray is absent/not ready.  This
+        // may originate from manual State3/4, so do not depend solely on Robot
+        // Logic having initiated the tray change.
+        new_trayoutput_loaded_ = false;
+        waiting_for_new_output_ = true;
+        output_prescan_home_done_ = false;
+        output_prescan_zone_verified_ = false;
+        output_tray_change_home_pending_ = false;
+        output_tray_change_home_motion_done_ = false;
+        post_place_output_check_pending_ = false;
+        post_place_output_scan_started_ = false;
+        setOutputScanAllowed(false);
+        RCLCPP_WARN(get_logger(),
+            "[TRAY_OUT] Output tray NOT READY — all placement paths locked");
+        notifyStateChange();
         return;
     }
 
-    if (use_ai_for_control_ && output_scan_recovery_required_.load()) {
-        RCLCPP_ERROR(get_logger(),
-            "[TRAY_OUT] Ignore new tray: output motion has not recovered to HOME/index 0");
-        return;
-    }
-
+    output_prescan_zone_verified_ = false;
+    post_place_output_check_pending_ = false;
+    post_place_output_scan_started_ = false;
+    // New physical tray = new camera epoch.  Never retain an old-tray sample.
+    setOutputScanAllowed(false);
     new_trayoutput_loaded_ = true;
     waiting_for_new_output_ = false;
-    setOutputScanAllowed(true);
+    if (manual_mode_.load()) {
+        output_prescan_home_done_ = false;
+        RCLCPP_INFO(get_logger(),
+            "[TRAY_OUT] New output tray recorded in MANUAL — no automatic motion");
+    } else if (use_ai_for_control_ && output_scan_recovery_required_.load()) {
+        output_prescan_home_done_ = false;
+        RCLCPP_ERROR(get_logger(),
+            "[TRAY_OUT] New tray recorded, but cam1 remains blocked until robot HOME recovery");
+    } else if (use_ai_for_control_ && cartridge_pos2_busy_.load()) {
+        RCLCPP_WARN(get_logger(),
+            "[SAFETY][CAM1] New tray reported while Pos2 still BUSY — "
+            "scan remains blocked until Pos2 FREE");
+    } else {
+        const bool robot_still_home = !use_ai_for_control_ || cam1ViewClearFresh();
+        output_prescan_home_done_ = robot_still_home && use_ai_for_control_.load();
+        setOutputScanAllowed(robot_still_home);
+    }
     // Reset output slot counter for new tray
     current_auto_slot_ = 1;
     {
@@ -1436,6 +1759,13 @@ void RobotLogicNode::startButtonCallback(const std_msgs::msg::Bool::SharedPtr ms
 {
     if (!msg->data) return;
 
+    if (system_running_.load() && !startup_home_required_.load() &&
+        !startup_home_pending_.load()) {
+        RCLCPP_WARN(get_logger(),
+            "[START] Ignored duplicate START — automatic cycle is already running");
+        return;
+    }
+
     // Same rule as the service path, and it matters more here: this topic is
     // what /api/start on the web HMI publishes, which never sees the GUI's
     // START lock. Continue() below would hand the held trajectory back to the
@@ -1451,6 +1781,7 @@ void RobotLogicNode::startButtonCallback(const std_msgs::msg::Bool::SharedPtr ms
     if (emergency_stop_) emergency_stop_ = false;
     system_enabled_ = true;
     system_running_ = true;
+    startup_home_required_ = true;
     // REMOVED: waiting_for_new_input_ = false; (operator pressed start -> we must still wait for tray to be strictly loaded)
     system_start_time_ = this->now();
 
@@ -1463,17 +1794,14 @@ void RobotLogicNode::startButtonCallback(const std_msgs::msg::Bool::SharedPtr ms
     callService<EnableRobot>(enable_client_, enable_req, "EnableRobot");
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    auto continue_req = std::make_shared<Continues::Request>();
-    callService<Continues>(continue_client_, continue_req, "Continue");
+    // START never resumes an old paused trajectory. Only explicit RESUME may
+    // call Continue(), after revalidating the live Cartridge interlocks.
     std::this_thread::sleep_for(std::chrono::milliseconds(800));
 
     if (!manual_mode_) {
         if (cartridge_is_homed_) {
             RCLCPP_INFO(get_logger(), "[INIT] Cartridge is already homed. Executing Robot HOME and starting process.");
-            // HOME async: callback này chạy trên executor thread. sendMotionAction (blocking)
-            // sẽ block executor 60s+ → heartbeat sub không fire → MOTION_NODE_LOST false alarm.
-            sendMotionActionAsync("HOME");
-            system_started_ = true;
+            requestStartupHome("start_button");
         } else {
             RCLCPP_INFO(get_logger(), "[INIT] Auto/AI mode — waiting for Cartridge Homing to finish before moving HOME.");
             // system_started_ will be set to true in cartridgeHomingDoneCallback
@@ -1498,11 +1826,18 @@ void RobotLogicNode::selectedRowCallback(const std_msgs::msg::Int32::SharedPtr m
 
 void RobotLogicNode::selectedSlotCallback(const std_msgs::msg::Int32::SharedPtr msg)
 {
+    if (!output_scan_allowed_.load()) {
+        std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+        selected_output_slot_ = SLOT_UNSET;
+        return;
+    }
     int slot = msg->data;
-    if (slot < 1 || slot > TOTAL_OUTPUT_SLOTS) return;
     {
         std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
-        selected_output_slot_ = slot;
+        selected_output_slot_ =
+            (slot >= 1 && slot <= TOTAL_OUTPUT_SLOTS) ? slot : SLOT_UNSET;
+        if (selected_output_slot_ != SLOT_UNSET)
+            last_output_slot_rx_ns_ = this->now().nanoseconds();
     }
     notifyStateChange();
 }
@@ -1726,15 +2061,15 @@ void RobotLogicNode::enableSystemCallback(
         callService<EnableRobot>(enable_client_, enable_req, "EnableRobot");
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-        auto continue_req = std::make_shared<Continues::Request>();
-        callService<Continues>(continue_client_, continue_req, "Continue");
-
         response->success = true;
-        response->message = "Robot Power ON";
+        response->message = "Robot Power ON (paused trajectory remains held until RESUME)";
     } else {
         system_enabled_ = false;
         system_started_ = false;
         system_running_ = false;
+        startup_home_pending_ = false;
+        startup_home_motion_done_ = false;
+        startup_home_required_ = false;
         response->success = true;
         response->message = "System DISABLED";
     }
@@ -1748,6 +2083,14 @@ void RobotLogicNode::startSystemCallback(
         if (!system_enabled_) {
             response->success = false;
             response->message = "Robot DISABLED (E-Stop). Press ENABLE first.";
+            return;
+        }
+        if (system_running_.load() && !startup_home_required_.load() &&
+            !startup_home_pending_.load()) {
+            RCLCPP_WARN(get_logger(),
+                "[START] Ignored duplicate service START — automatic cycle is already running");
+            response->success = true;
+            response->message = "System already running";
             return;
         }
 
@@ -1766,6 +2109,7 @@ void RobotLogicNode::startSystemCallback(
         }
 
         system_running_ = true;
+        startup_home_required_ = true;
         stop_after_single_motion_ = false;
         system_start_time_ = this->now();
 
@@ -1778,7 +2122,14 @@ void RobotLogicNode::startSystemCallback(
         // REMOVED: waiting_for_new_input_ = false; (must wait for actual tray)
 
         if (!manual_mode_) {
-            RCLCPP_INFO(get_logger(), "[INIT] Auto/AI mode — waiting for Cartridge Homing to finish before moving HOME.");
+            if (cartridge_is_homed_) {
+                RCLCPP_INFO(get_logger(),
+                    "[INIT] Auto/AI service START — Cartridge already homed; queue verified Robot HOME");
+                requestStartupHome("start_service");
+            } else {
+                RCLCPP_INFO(get_logger(),
+                    "[INIT] Auto/AI mode — waiting for Cartridge Homing to finish before moving HOME.");
+            }
         } else {
             RCLCPP_INFO(get_logger(), "[INIT] ⚡ Manual mode — skipping HOME command, holding position");
         }
@@ -1790,6 +2141,9 @@ void RobotLogicNode::startSystemCallback(
     } else {
         system_started_ = false;
         system_running_ = false;
+        startup_home_pending_ = false;
+        startup_home_motion_done_ = false;
+        startup_home_required_ = false;
         response->success = true;
         response->message = "System Stopped";
     }
@@ -1861,6 +2215,16 @@ void RobotLogicNode::emergencyStopCallback(
         skipped_buffer_load_     = false;
         feed_chamber_wait_active_ = false;
         clearMotionCmd();
+        output_prescan_home_done_ = false;
+        output_prescan_zone_verified_ = false;
+        output_tray_change_home_pending_ = false;
+        output_tray_change_home_motion_done_ = false;
+        post_place_output_check_pending_ = false;
+        post_place_output_scan_started_ = false;
+        startup_home_pending_ = false;
+        startup_home_motion_done_ = false;
+        startup_home_required_ = false;
+        setOutputScanAllowed(false);
 
         if (motion_action_client_) {
             motion_action_client_->async_cancel_all_goals();
@@ -1962,6 +2326,17 @@ void RobotLogicNode::resetStateCallback(
     tray_count_              = 0;
     cartridge_counter_       = 0;
     selected_output_slot_    = 1;
+    output_prescan_home_done_ = false;
+    output_prescan_zone_verified_ = false;
+    output_scan_recovery_required_ = false;
+    output_tray_change_home_pending_ = false;
+    output_tray_change_home_motion_done_ = false;
+    post_place_output_check_pending_ = false;
+    post_place_output_scan_started_ = false;
+    startup_home_pending_ = false;
+    startup_home_motion_done_ = false;
+    startup_home_required_ = false;
+    setOutputScanAllowed(false);
 
     RCLCPP_INFO(get_logger(), "[RESET] ✅ Reset complete");
 
@@ -2069,6 +2444,13 @@ void RobotLogicNode::pauseSystemCallback(
         }
         const bool native_pause_engaged = dobot_motion_paused_.load();
         if (native_pause_engaged) {
+            if (!cartridgeSafetyFreshAndClear(true)) {
+                RCLCPP_ERROR(get_logger(),
+                    "[RESUME] Blocked — Cartridge heartbeat missing/stale or mechanism BUSY");
+                response->success = false;
+                response->message = "Still paused: Cartridge safety interlock is busy/stale";
+                return;
+            }
             if (!continue_client_ || !continue_client_->service_is_ready()) {
                 RCLCPP_ERROR(get_logger(), "[RESUME] Dobot Continue service not ready");
                 response->success = false;
@@ -2152,24 +2534,43 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
                     s_msg.data = 1;
                     selected_slot_pub_->publish(s_msg);
                 }
+                output_prescan_home_done_ = false;
+                output_prescan_zone_verified_ = false;
+                output_tray_change_home_pending_ = false;
+                output_tray_change_home_motion_done_ = false;
+                post_place_output_check_pending_ = false;
+                post_place_output_scan_started_ = false;
+                setOutputScanAllowed(false);
             }
             RCLCPP_INFO(get_logger(),
                 "[MODE] AUTO (giữ nguyên new_tray_loaded — tray vẫn còn vật lý)%s",
                 entering_auto ? " — slot counter reset to 1" : "");
             break;
         }
-        case 2:
+        case 2: {
+            const bool entering_ai = manual_mode_ || !use_ai_for_control_;
             manual_mode_ = false;
             use_ai_for_control_ = true;
             // AI phai thuan vision-driven: xoa selected mo coi (MANUAL set =1)
             // de neu vision chua/khong publish thi robot CHO camera ("Waiting
             // for slot selection...") thay vi dat theo du lieu cu.
-            {
-                std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
-                selected_output_slot_ = SLOT_UNSET;
+            if (entering_ai) {
+                {
+                    std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+                    selected_output_slot_ = SLOT_UNSET;
+                }
+                output_prescan_home_done_ = false;
+                output_prescan_zone_verified_ = false;
+                output_tray_change_home_pending_ = false;
+                output_tray_change_home_motion_done_ = false;
+                post_place_output_check_pending_ = false;
+                post_place_output_scan_started_ = false;
+                setOutputScanAllowed(false);
             }
-            RCLCPP_INFO(get_logger(), "[MODE] AI camera (Cartridge System syncs as AUTO)");
+            if (entering_ai)
+                RCLCPP_INFO(get_logger(), "[MODE] AI camera");
             break;
+        }
         case 3:
             manual_mode_ = true;
             use_ai_for_control_ = false;
@@ -2181,7 +2582,20 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
                 selected_input_row_ = ROW_UNSET;
             }
             buffer_is_empty_ = true;
-            selected_output_slot_ = 1;
+            {
+                std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+                selected_output_slot_ = 1;
+            }
+            output_prescan_home_done_ = false;
+            output_prescan_zone_verified_ = false;
+            output_tray_change_home_pending_ = false;
+            output_tray_change_home_motion_done_ = false;
+            post_place_output_check_pending_ = false;
+            post_place_output_scan_started_ = false;
+            startup_home_pending_ = false;
+            startup_home_motion_done_ = false;
+            startup_home_required_ = false;
+            setOutputScanAllowed(false);
             break;
         default:
             RCLCPP_ERROR(get_logger(), "[MODE] Invalid: %d", msg->data);
@@ -2192,12 +2606,11 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
     // first while the node is still in MANUAL.  If AUTO/AI arrives afterwards,
     // continue the pending start here instead of remaining idle forever.
     if ((msg->data == 1 || msg->data == 2) &&
-        system_running_ && !system_started_) {
+        system_running_ && startup_home_required_.load() && !system_started_) {
         if (cartridge_is_homed_) {
             RCLCPP_INFO(get_logger(),
                 "[MODE] AUTO/AI arrived after START — executing pending Robot HOME");
-            sendMotionActionAsync("HOME");
-            system_started_ = true;
+            requestStartupHome("mode_after_start");
         } else {
             RCLCPP_INFO(get_logger(),
                 "[MODE] AUTO/AI arrived after START — waiting for Cartridge Homing");
@@ -2222,11 +2635,10 @@ void RobotLogicNode::cartridgeHomingDoneCallback(const std_msgs::msg::Bool::Shar
     //   - !system_started_ (chưa bao giờ chạy chain init — đây mới là lần đầu)
     // → Operator nhấn HOMING thủ công trong manual/jog hoặc giữa cycle KHÔNG kéo
     //    theo robot home.
-    if (system_running_ && !manual_mode_ && !system_started_) {
+    if (system_running_ && startup_home_required_.load() &&
+        !manual_mode_ && !system_started_) {
         RCLCPP_INFO(get_logger(), "[INIT] Cartridge Homing Done. Executing Robot HOME and starting process.");
-        // HOME async: cartridgeHomingDoneCallback chạy trên executor — KHÔNG block.
-        sendMotionActionAsync("HOME");
-        system_started_ = true;
+        requestStartupHome("cartridge_homing_done");
         notifyStateChange();
     } else {
         RCLCPP_INFO(get_logger(),
@@ -2243,6 +2655,345 @@ void RobotLogicNode::notifyStateChange()
 {
     state_changed_ = true;
     state_cv_.notify_all();
+}
+
+int64_t RobotLogicNode::steadyNowNs()
+{
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+void RobotLogicNode::invalidateOutputSnapshot()
+{
+    std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+    output_snapshot_valid_ = false;
+    output_snapshot_present_ = false;
+    output_snapshot_slot_ = SLOT_UNSET;
+    output_snapshot_occupied_.fill(true);
+    output_snapshot_frame_ns_ = 0;
+    output_snapshot_rx_ns_ = 0;
+    selected_output_slot_ = SLOT_UNSET;
+    std::fill(output_slot_occupied_.begin(), output_slot_occupied_.end(), true);
+}
+
+bool RobotLogicNode::claimFreshOutputSnapshot(int& slot)
+{
+    const int64_t now_ns = this->now().nanoseconds();
+    std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+    const int candidate = output_snapshot_slot_;
+    const bool fresh = output_snapshot_rx_ns_ > 0 && now_ns >= output_snapshot_rx_ns_ &&
+        now_ns - output_snapshot_rx_ns_ <= 2000000000LL &&
+        output_snapshot_frame_ns_ > 0 && now_ns >= output_snapshot_frame_ns_ &&
+        now_ns - output_snapshot_frame_ns_ <= 2000000000LL;
+    const bool usable = output_snapshot_valid_ && output_snapshot_present_ && fresh &&
+        candidate >= 1 && candidate <= TOTAL_OUTPUT_SLOTS &&
+        !output_snapshot_occupied_[static_cast<size_t>(candidate - 1)];
+    if (!usable)
+        return false;
+
+    slot = candidate;
+    // Claim before releasing the mutex so neither legacy callbacks nor the
+    // aggregate callback can replace the selected destination in the small
+    // interval before the scan-gate DDS message is published.
+    output_scan_allowed_ = false;
+    output_snapshot_valid_ = false;
+    output_snapshot_present_ = false;
+    output_snapshot_slot_ = SLOT_UNSET;
+    output_snapshot_occupied_.fill(true);
+    output_snapshot_frame_ns_ = 0;
+    output_snapshot_rx_ns_ = 0;
+    selected_output_slot_ = SLOT_UNSET;
+    std::fill(output_slot_occupied_.begin(), output_slot_occupied_.end(), true);
+    return true;
+}
+
+void RobotLogicNode::requestOutputSnapshotNow()
+{
+    const int64_t now_ns = this->now().nanoseconds();
+    std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+    // Keep Vision's gate open and its debouncers warm. Only reject aggregate
+    // samples captured before the PLACE_TO_OUTPUT event, so the next camera
+    // frame becomes the decision without an extra HOME or 1.5 s cooldown.
+    output_snapshot_valid_ = false;
+    output_snapshot_present_ = false;
+    output_snapshot_slot_ = SLOT_UNSET;
+    output_snapshot_occupied_.fill(true);
+    output_snapshot_frame_ns_ = 0;
+    output_snapshot_rx_ns_ = 0;
+    selected_output_slot_ = SLOT_UNSET;
+    std::fill(output_slot_occupied_.begin(), output_slot_occupied_.end(), true);
+    output_snapshot_accept_after_ns_ = now_ns;
+    output_place_snapshot_requested_ = true;
+}
+
+bool RobotLogicNode::claimFreshFullOutputSnapshot()
+{
+    const int64_t now_ns = this->now().nanoseconds();
+    std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
+    const bool fresh = output_snapshot_rx_ns_ > 0 && now_ns >= output_snapshot_rx_ns_ &&
+        now_ns - output_snapshot_rx_ns_ <= 2000000000LL &&
+        output_snapshot_frame_ns_ > 0 && now_ns >= output_snapshot_frame_ns_ &&
+        now_ns - output_snapshot_frame_ns_ <= 2000000000LL;
+    const bool full = output_snapshot_valid_ && output_snapshot_present_ && fresh &&
+        output_snapshot_slot_ == SLOT_UNSET &&
+        std::all_of(output_snapshot_occupied_.begin(), output_snapshot_occupied_.end(),
+                    [](bool occupied) { return occupied; });
+    if (!full)
+        return false;
+
+    // Claim the full decision under the same lock used by aggregate updates.
+    output_scan_allowed_ = false;
+    output_snapshot_valid_ = false;
+    output_snapshot_present_ = false;
+    output_snapshot_slot_ = SLOT_UNSET;
+    output_snapshot_occupied_.fill(true);
+    output_snapshot_frame_ns_ = 0;
+    output_snapshot_rx_ns_ = 0;
+    selected_output_slot_ = SLOT_UNSET;
+    std::fill(output_slot_occupied_.begin(), output_slot_occupied_.end(), true);
+    return true;
+}
+
+bool RobotLogicNode::cam1ViewClearFresh() const
+{
+    const int64_t seen_ns = cam1_view_last_steady_ns_.load();
+    const int64_t now_ns = steadyNowNs();
+    return cam1_view_clear_.load() && seen_ns > 0 && now_ns >= seen_ns &&
+        now_ns - seen_ns <= 2000000000LL;
+}
+
+bool RobotLogicNode::mechanicalOutputZoneClearFresh() const
+{
+    const int64_t seen_ns = mechanical_output_zone_last_steady_ns_.load();
+    const int64_t now_ns = steadyNowNs();
+    return mechanical_output_zone_clear_.load() && seen_ns > 0 &&
+        now_ns >= seen_ns && now_ns - seen_ns <= 2000000000LL;
+}
+
+bool RobotLogicNode::visionHeartbeatFresh()
+{
+    const int64_t seen_ns = vision_hb_last_steady_ns_.load();
+    const int64_t now_ns = steadyNowNs();
+    return vision_hb_seen_.load() && seen_ns > 0 && now_ns >= seen_ns &&
+        now_ns - seen_ns <= 2000000000LL;
+}
+
+bool RobotLogicNode::cartridgeHeartbeatFresh() const
+{
+    const int64_t seen_ns = cartridge_hb_last_steady_ns_.load();
+    const int64_t now_ns = steadyNowNs();
+    return seen_ns > 0 && now_ns >= seen_ns && now_ns - seen_ns <= 2000000000LL;
+}
+
+bool RobotLogicNode::cartridgeSafetyFreshAndClear(bool require_pos2) const
+{
+    return cartridgeHeartbeatFresh() && !cartridge_busy_.load() &&
+        (!require_pos2 || !cartridge_pos2_busy_.load());
+}
+
+bool RobotLogicNode::cartridgeDrainEvidenceFresh() const
+{
+    const int64_t now_ns = steadyNowNs();
+    const int64_t sensor_ns = cartridge_sensors_last_steady_ns_.load();
+    const int64_t drain_ns = cartridge_drain_last_steady_ns_.load();
+    return cartridgeHeartbeatFresh() && sensor_ns > 0 && drain_ns > 0 &&
+        now_ns >= sensor_ns && now_ns >= drain_ns &&
+        now_ns - sensor_ns <= 2000000000LL &&
+        now_ns - drain_ns <= 2000000000LL;
+}
+
+void RobotLogicNode::requestStartupHome(const char* source)
+{
+    startup_home_required_ = true;
+    if (startup_home_pending_.exchange(true)) {
+        RCLCPP_INFO(get_logger(),
+            "[STARTUP_HOME] Already pending (%s) — duplicate suppressed", source);
+        return;
+    }
+    startup_home_motion_done_ = false;
+    startup_home_wait_since_ns_ = 0;
+    system_started_ = false;
+    RCLCPP_INFO(get_logger(),
+        "[STARTUP_HOME] Requested by %s — pipeline held until HOME is physically verified",
+        source);
+    notifyStateChange();
+}
+
+bool RobotLogicNode::servicePendingStartupHome()
+{
+    if (!startup_home_pending_.load())
+        return false;
+
+    if (!system_running_.load() || manual_mode_.load()) {
+        startup_home_pending_ = false;
+        startup_home_motion_done_ = false;
+        return false;
+    }
+
+    const std::string cmd = getMotionCmd();
+    if (cmd == "STARTUP_HOME") {
+        if (motion_in_progress_.load())
+            return true;
+        clearMotionCmd();
+        if (!motion_result_.load()) {
+            if (last_motion_interlock_rejected_.exchange(false)) {
+                RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                    "[STARTUP_HOME] Admission temporarily vetoed by Cartridge — retry pending");
+                return true;
+            }
+            startup_home_pending_ = false;
+            startup_home_motion_done_ = false;
+            startup_home_required_ = false;
+            system_started_ = false;
+            publishError("STARTUP_HOME_FAILED");
+            RCLCPP_ERROR(get_logger(),
+                "[STARTUP_HOME] HOME failed — automatic pipeline remains IDLE");
+            return true;
+        }
+        startup_home_motion_done_ = true;
+        startup_home_wait_since_ns_ = steadyNowNs();
+        RCLCPP_INFO(get_logger(),
+            "[STARTUP_HOME] Motion complete — waiting 0.5 s live HOME-zone confirmation");
+    }
+
+    if (startup_home_motion_done_.load()) {
+        if (mechanicalOutputZoneClearFresh()) {
+            startup_home_pending_ = false;
+            startup_home_motion_done_ = false;
+            startup_home_wait_since_ns_ = 0;
+            startup_home_required_ = false;
+            input_scan_recovery_required_ = false;
+            output_scan_recovery_required_ = false;
+            setInputScanAllowed(true);
+            if (use_ai_for_control_.load()) {
+                output_prescan_home_done_ = true;
+                output_prescan_zone_verified_ = false;
+                setOutputScanAllowed(false);
+                setOutputScanAllowed(true);
+            }
+            system_started_ = true;
+            RCLCPP_INFO(get_logger(),
+                "[STARTUP_HOME] HOME physically verified — automatic pipeline released");
+            notifyStateChange();
+            return true;
+        }
+        const int64_t since_ns = startup_home_wait_since_ns_.load();
+        const int64_t now_ns = steadyNowNs();
+        if (since_ns > 0 && now_ns >= since_ns && now_ns - since_ns > 5000000000LL) {
+            startup_home_pending_ = false;
+            startup_home_motion_done_ = false;
+            startup_home_required_ = false;
+            system_started_ = false;
+            publishError("STARTUP_HOME_ZONE_NOT_VERIFIED");
+            RCLCPP_ERROR(get_logger(),
+                "[STARTUP_HOME] Motion reported success but HOME zone was not verified within 5 s");
+        }
+        return true;
+    }
+
+    if (motion_in_progress_.load() || motion_busy_.load())
+        return true;
+    if (!cartridgeSafetyFreshAndClear(true)) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[STARTUP_HOME] Waiting for fresh Cartridge heartbeat and FREE locks");
+        return true;
+    }
+    sendMotionActionAsync("STARTUP_HOME");
+    return true;
+}
+
+bool RobotLogicNode::consumeTemporaryMotionInterlockReject(
+    const char* context, bool reopen_input_scan)
+{
+    if (!last_motion_interlock_rejected_.exchange(false))
+        return false;
+    if (reopen_input_scan && use_ai_for_control_.load())
+        setInputScanAllowed(true);
+    RCLCPP_WARN(get_logger(),
+        "[%s] Motion admission temporarily vetoed by live Cartridge interlock; "
+        "no Dobot primitive ran — state will retry", context);
+    return true;
+}
+
+bool RobotLogicNode::servicePendingOutputTrayChangeHome()
+{
+    if (!output_tray_change_home_pending_.load())
+        return false;
+
+    if (waiting_for_new_output_.load()) {
+        output_tray_change_home_pending_ = false;
+        output_tray_change_home_motion_done_ = false;
+        output_tray_change_home_wait_since_ns_ = 0;
+        return false;
+    }
+
+    const std::string cmd = getMotionCmd();
+    if (cmd == "OUTPUT_TRAY_CHANGE_HOME") {
+        if (motion_in_progress_.load())
+            return true;
+        clearMotionCmd();
+        if (!motion_result_.load()) {
+            if (last_motion_interlock_rejected_.exchange(false)) {
+                RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                    "[CAM1_FULL] HOME admission temporarily vetoed by Cartridge — retry pending");
+                return true;
+            }
+            output_tray_change_home_pending_ = false;
+            output_tray_change_home_motion_done_ = false;
+            output_scan_recovery_required_ = true;
+            publishError("OUTPUT_TRAY_CHANGE_HOME_FAILED");
+            RCLCPP_ERROR(get_logger(),
+                "[CAM1_FULL] Robot could not evacuate to HOME — State 4 request NOT sent");
+            return true;
+        }
+        output_tray_change_home_motion_done_ = true;
+        output_tray_change_home_wait_since_ns_ = steadyNowNs();
+        RCLCPP_INFO(get_logger(),
+            "[CAM1_FULL] HOME motion complete — waiting for live mechanical-zone dwell");
+    }
+
+    if (mechanicalOutputZoneClearFresh()) {
+        output_tray_change_home_pending_ = false;
+        output_tray_change_home_motion_done_ = false;
+        output_tray_change_home_wait_since_ns_ = 0;
+        RCLCPP_WARN(get_logger(),
+            "[CAM1_FULL] Robot HOME mechanically verified — request State 4 now");
+        publishDoneTrayOutput();
+        return true;
+    }
+
+    // Once the HOME action succeeds, never send it again while Motion
+    // Executor's 0.5 s joint-feedback dwell is still becoming valid. Re-sending
+    // would reset that dwell forever and State 4 would never start.
+    if (output_tray_change_home_motion_done_.load()) {
+        const int64_t since_ns = output_tray_change_home_wait_since_ns_.load();
+        const int64_t now_ns = steadyNowNs();
+        if (since_ns > 0 && now_ns >= since_ns && now_ns - since_ns > 5000000000LL) {
+            output_tray_change_home_pending_ = false;
+            output_tray_change_home_motion_done_ = false;
+            output_scan_recovery_required_ = true;
+            publishError("OUTPUT_TRAY_CHANGE_HOME_ZONE_NOT_VERIFIED");
+            RCLCPP_ERROR(get_logger(),
+                "[CAM1_FULL] HOME action succeeded but mechanical output zone "
+                "was not verified within 5 s — State 4 remains blocked");
+        }
+        return true;
+    }
+
+    if (motion_in_progress_.load() || motion_busy_.load())
+        return true;
+    if (!cartridgeSafetyFreshAndClear(true)) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[CAM1_FULL] Waiting Cartridge FREE/fresh before HOME evacuation");
+        return true;
+    }
+
+    output_prescan_zone_verified_ = false;
+    setOutputScanAllowed(false);
+    RCLCPP_WARN(get_logger(),
+        "[CAM1_FULL] Robot at camera scan pose — moving HOME once to release State 4 zone");
+    sendMotionActionAsync("OUTPUT_TRAY_CHANGE_HOME");
+    return true;
 }
 
 void RobotLogicNode::setInputScanAllowed(bool allowed)
@@ -2267,10 +3018,25 @@ void RobotLogicNode::setInputScanAllowed(bool allowed)
 
 void RobotLogicNode::setOutputScanAllowed(bool allowed)
 {
-    output_scan_allowed_ = allowed;
+    bool changed = false;
     {
         std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
-        selected_output_slot_ = SLOT_UNSET;
+        changed = output_scan_allowed_.load() != allowed;
+        output_scan_allowed_ = allowed;
+        // Repeating TRUE must not move the acceptance window forever.  Every
+        // real edge starts a new epoch; FALSE is always destructive.
+        if (changed || !allowed) {
+            selected_output_slot_ = SLOT_UNSET;
+            output_snapshot_valid_ = false;
+            output_snapshot_present_ = false;
+            output_snapshot_slot_ = SLOT_UNSET;
+            output_snapshot_occupied_.fill(true);
+            output_snapshot_frame_ns_ = 0;
+            output_snapshot_rx_ns_ = 0;
+            output_snapshot_accept_after_ns_ = allowed
+                ? this->now().nanoseconds() + 1500000000LL
+                : 0;
+        }
         // Same snapshot policy as input rows: do not blank the GUI during the
         // place motion, but require a fresh slot decision after it completes.
         if (allowed)
@@ -2347,6 +3113,19 @@ void RobotLogicNode::handleCurrentState()
         transitionTo(SystemState::ERROR_MOTION_LOST);
         return;
     }
+
+    // START does not release INIT until the async HOME result and the live
+    // joint-feedback HOME dwell are both confirmed. This also serializes the
+    // mode/start/homing callbacks so they cannot enqueue duplicate HOME goals.
+    if (servicePendingStartupHome())
+        return;
+
+    // A cam1 FULL decision made at the nearby scan pose must first move the
+    // robot to the mechanically clear HOME zone. Hold all normal pipeline
+    // transitions until that one evacuation action is verified and State 4 is
+    // requested.
+    if (use_ai_for_control_.load() && servicePendingOutputTrayChangeHome())
+        return;
 
     switch (current_state_) {
         case SystemState::IDLE:                    stateIdle();                  break;
@@ -2446,6 +3225,8 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         clearMotionCmd();
 
         if (!motion_result_) {
+            if (consumeTemporaryMotionInterlockReject("INIT_LOAD", true))
+                return;
             // Fail-safe: a failed/aborted pick can leave the arm above the tray.
             // Keep vision blocked so an occluded frame cannot request tray change.
             input_scan_recovery_required_ = true;
@@ -2576,6 +3357,8 @@ void RobotLogicNode::stateInitRefillBuffer()
         clearMotionCmd();
 
         if (!motion_result_) {
+            if (consumeTemporaryMotionInterlockReject("INIT_REFILL", true))
+                return;
             // The arm position is unknown after failure; do not trust camera.
             input_scan_recovery_required_ = true;
             motion_fail_count_++;
@@ -2670,8 +3453,9 @@ void RobotLogicNode::stateInitRefillBuffer()
 
 // ============================================================================
 // STATE: AI_CHECK_INPUT_TRAY
-// Robot is confirmed at index 0 by the completed AI pick action.  Hold the
-// pipeline here until vision publishes a fresh READY row or confirms EMPTY.
+// Robot is confirmed at a configured camera-safe checkpoint (HOME for init,
+// fixed scan pose after a normal refill). Hold the pipeline here until vision
+// publishes a fresh READY row or confirms EMPTY.
 // ============================================================================
 
 void RobotLogicNode::stateAiCheckInputTray()
@@ -2690,14 +3474,14 @@ void RobotLogicNode::stateAiCheckInputTray()
                 ? SystemState::WAIT_FILLING
                 : input_check_next_state_;
         RCLCPP_WARN(get_logger(),
-            "[AI_CHECK_TRAY] EMPTY confirmed at index 0 -> tray change requested");
+            "[AI_CHECK_TRAY] EMPTY confirmed at verified camera checkpoint -> tray change requested");
         transitionTo(next);
         return;
     }
 
     if (input_scan_recovery_required_.load() || !input_scan_allowed_.load()) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[AI_CHECK_TRAY] Camera locked — waiting for HOME/index 0 recovery");
+            "[AI_CHECK_TRAY] Camera locked — waiting for verified camera checkpoint/recovery");
         return;
     }
 
@@ -2753,8 +3537,8 @@ void RobotLogicNode::stateWaitFilling()
             if (cartridge_drain_confirmed_.load()) {
                 RCLCPP_INFO(get_logger(),
                     "[WAIT_FILLING] Pipeline drained + cartridge DRAIN confirmed → IDLE");
-                requestOutputTrayChangeForDrain("WAIT_FILLING");
-                transitionTo(SystemState::IDLE);
+                if (requestOutputTrayChangeForDrain("WAIT_FILLING"))
+                    transitionTo(SystemState::IDLE);
                 return;
             }
 
@@ -2803,6 +3587,8 @@ void RobotLogicNode::stateTakeChamberToScale()
         clearMotionCmd();
 
         if (!motion_result_) {
+            if (consumeTemporaryMotionInterlockReject("CHAMBER_SCALE", false))
+                return;
             chamber_has_cartridge_ = true;  // assume didn't move
             return;
         }
@@ -2859,6 +3645,8 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
         clearMotionCmd();
 
         if (!motion_result_) {
+            if (consumeTemporaryMotionInterlockReject("BUFFER_CHAMBER", false))
+                return;
             RCLCPP_ERROR(get_logger(), "[LOAD_BUFFER] ❌ Motion failed");
             return;
         }
@@ -2990,6 +3778,8 @@ void RobotLogicNode::stateRefillBuffer()
         clearMotionCmd();
 
         if (!motion_result_) {
+            if (consumeTemporaryMotionInterlockReject("REFILL", true))
+                return;
             // Keep scan locked until an explicit recovery/HOME.  Continuing
             // vision here previously converted robot occlusion into EMPTY.
             input_scan_recovery_required_ = true;
@@ -3004,7 +3794,20 @@ void RobotLogicNode::stateRefillBuffer()
             }
             // Don't crash — go process scale anyway
         } else {
-            if (use_ai_for_control_) setInputScanAllowed(true);
+            if (use_ai_for_control_) {
+                setInputScanAllowed(true);
+                // Motion Executor has armed the completed, raised post-refill
+                // pose as a live cam1-view checkpoint. Scan there while scale
+                // processing continues; PLACE_TO_OUTPUT then consumes the next
+                // event-time frame without an extra HOME trip.
+                output_prescan_home_done_ = true;
+                output_prescan_zone_verified_ = false;
+                setOutputScanAllowed(false);
+                setOutputScanAllowed(true);
+                RCLCPP_INFO(get_logger(),
+                    "[SAFETY][CAM1] Refill finished at camera checkpoint — collecting output "
+                    "snapshot in parallel with scale processing");
+            }
             buffer_is_empty_ = false;
             RCLCPP_INFO(get_logger(), "[BUFFER] ✅ Buffer refilled");
 
@@ -3185,6 +3988,51 @@ void RobotLogicNode::stateErrorScaleTimeout()
     if (!system_enabled_) transitionTo(SystemState::IDLE);
 }
 
+void RobotLogicNode::routeAfterOutputPlacement()
+{
+    // Skipped BUFFER→CHAMBER (feed_chamber timeout) → wait operator choice.
+    if (skipped_buffer_load_.load()) {
+        RCLCPP_WARN(get_logger(),
+            "[PLACE_OUT] ⚠️ skipped_buffer_load active → WAIT_RESUME_CHOICE");
+        transitionTo(SystemState::WAIT_RESUME_CHOICE);
+        return;
+    }
+
+    const bool pipeline_empty = !chamber_has_cartridge_ && buffer_is_empty_;
+    if (pipeline_empty) {
+        if (waiting_for_new_input_.load()) {
+            if (cartridge_drain_confirmed_.load()) {
+                RCLCPP_WARN(get_logger(),
+                    "[PIPELINE] 📦 Pipeline drained + Cartridge DRAIN confirmed");
+                if (requestOutputTrayChangeForDrain("PLACE_TO_OUTPUT"))
+                    transitionTo(SystemState::IDLE);
+                else
+                    transitionTo(SystemState::WAIT_FILLING);
+            } else {
+                RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
+                    "[PIPELINE] Pipeline drained but Cartridge has not confirmed DRAIN — WAIT_FILLING");
+                transitionTo(SystemState::WAIT_FILLING);
+            }
+        } else {
+            RCLCPP_INFO(get_logger(),
+                "[PIPELINE] Pipeline drained + new input tray available → INIT_LOAD_CHAMBER_DIRECT");
+            transitionTo(SystemState::INIT_LOAD_CHAMBER_DIRECT);
+        }
+        return;
+    }
+
+    if (chamber_has_cartridge_ && buffer_is_empty_ &&
+        !waiting_for_new_input_.load() && new_tray_loaded_.load()) {
+        cartridge_drain_confirmed_ = false;
+        RCLCPP_INFO(get_logger(),
+            "[PIPELINE] New tray arrived during drain scale processing → REFILL_BUFFER");
+        transitionTo(SystemState::REFILL_BUFFER);
+        return;
+    }
+
+    transitionTo(SystemState::WAIT_FILLING);
+}
+
 // ============================================================================
 // STATE: PLACE_TO_OUTPUT
 // SCALE → OUTPUT slot
@@ -3203,6 +4051,34 @@ void RobotLogicNode::statePlaceToOutput()
     }
 
     // ── Motion result handling ──
+    if (getMotionCmd() == "OUTPUT_SCAN_HOME") {
+        if (motion_in_progress_) return;
+        clearMotionCmd();
+
+        if (!motion_result_) {
+            if (consumeTemporaryMotionInterlockReject("OUTPUT_SCAN_HOME", false)) {
+                output_prescan_zone_verified_ = false;
+                setOutputScanAllowed(false);
+                return;
+            }
+            output_scan_recovery_required_ = true;
+            output_prescan_home_done_ = false;
+            output_prescan_zone_verified_ = false;
+            setOutputScanAllowed(false);
+            publishError("OUTPUT_SCAN_HOME_FAILED");
+            RCLCPP_ERROR(get_logger(),
+                "[SAFETY][CAM1] Pre-scan HOME failed — output placement remains locked");
+            return;
+        }
+
+        output_prescan_home_done_ = true;
+        output_prescan_zone_verified_ = false;
+        RCLCPP_INFO(get_logger(),
+            "[SAFETY][CAM1] Pre-scan HOME action complete — waiting for live "
+            "joint feedback and 0.5 s stable-zone confirmation");
+        return;
+    }
+
     if (getMotionCmd() == "SCALE_OUTPUT") {
         if (motion_in_progress_) return;
         clearMotionCmd();
@@ -3210,14 +4086,35 @@ void RobotLogicNode::statePlaceToOutput()
         int placed_slot = async_slot_.load();
 
         if (!motion_result_) {
+            if (last_motion_interlock_rejected_.exchange(false)) {
+                // Motion Executor vetoed before any Dobot/RobotMode primitive.
+                // This is a temporary concurrent Cartridge lock, not an unknown
+                // robot pose; wait and take a new frame instead of forcing HOME.
+                // Goal admission briefly closes the camera-view gate, but no
+                // Dobot primitive ran. Preserve the nearby scan checkpoint and
+                // wait for its 0.5 s re-dwell instead of taking a long HOME.
+                output_prescan_home_done_ = true;
+                output_prescan_zone_verified_ = false;
+                output_place_snapshot_requested_ = false;
+                setOutputScanAllowed(false);
+                RCLCPP_WARN(get_logger(),
+                    "[PLACE] SCALE_OUTPUT admission vetoed by live Cartridge "
+                    "interlock — no robot motion occurred; waiting to rescan/retry");
+                return;
+            }
             // Failed place may leave the arm covering output tray/slots.
             // Never reopen output decisions from an unknown robot pose.
             output_scan_recovery_required_ = true;
+            output_prescan_home_done_ = false;
+            output_prescan_zone_verified_ = false;
+            setOutputScanAllowed(false);
             RCLCPP_ERROR(get_logger(), "[PLACE] ❌ SCALE_OUTPUT motion failed");
             return;
         }
         output_scan_recovery_required_ = false;
-        if (use_ai_for_control_) setOutputScanAllowed(true);
+        output_prescan_home_done_ = false;
+        output_prescan_zone_verified_ = false;
+        if (use_ai_for_control_) setOutputScanAllowed(false);
 
         scale_has_cartridge_ = false;
         tray_count_++;
@@ -3250,50 +4147,70 @@ void RobotLogicNode::statePlaceToOutput()
             selected_slot_pub_->publish(next_msg);
         }
 
-        // Skipped BUFFER→CHAMBER (feed_chamber timeout) → wait operator choice
-        if (skipped_buffer_load_) {
-            RCLCPP_WARN(get_logger(),
-                "[PLACE_OUT] ⚠️  skipped_buffer_load active → WAIT_RESUME_CHOICE");
-            transitionTo(SystemState::WAIT_RESUME_CHOICE);
-            return;
-        }
-
-        // Check pipeline drain condition
-        bool pipeline_empty = !chamber_has_cartridge_ && buffer_is_empty_;
-        if (pipeline_empty) {
-            if (waiting_for_new_input_.load()) {
-                if (cartridge_drain_confirmed_.load()) {
-                    RCLCPP_WARN(get_logger(),
-                        "[PIPELINE] 📦 Pipeline drained + cartridge DRAIN confirmed -> Waiting in IDLE for new tray to auto-restart");
-
-                    requestOutputTrayChangeForDrain("PLACE_TO_OUTPUT");
-
-                    transitionTo(SystemState::IDLE);
-                } else {
-                    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
-                        "[PIPELINE] 📦 Pipeline drained but cartridge has not confirmed DRAIN → Waiting in WAIT_FILLING");
-                    transitionTo(SystemState::WAIT_FILLING);
-                }
-            } else {
-                RCLCPP_INFO(get_logger(),
-                    "[PIPELINE] 📦 Pipeline drained + NEW tray available → Restarting pipeline cycle (INIT_LOAD_CHAMBER_DIRECT)");
-                transitionTo(SystemState::INIT_LOAD_CHAMBER_DIRECT);
-            }
-            return;
-        }
-
-        if (chamber_has_cartridge_ && buffer_is_empty_
-            && !waiting_for_new_input_.load() && new_tray_loaded_.load())
-        {
-            cartridge_drain_confirmed_ = false;
+        if (use_ai_for_control_.load()) {
+            // executeScaleOutput() already ends at index 0. Keep this state
+            // active and use that natural HOME dwell as a second cam1
+            // checkpoint after the newly placed cartridge.
+            output_prescan_home_done_ = true;
+            output_prescan_zone_verified_ = false;
+            post_place_output_scan_started_ = false;
+            post_place_output_check_pending_ = true;
+            setOutputScanAllowed(false);
             RCLCPP_INFO(get_logger(),
-                "[PIPELINE] New tray arrived during drain scale processing → REFILL_BUFFER");
-            transitionTo(SystemState::REFILL_BUFFER);
+                "[POST_PLACE][CAM1] SCALE_OUTPUT returned HOME — verify tray "
+                "FULL/non-FULL before WAIT_FILLING (no extra HOME)");
             return;
         }
 
-        // Continue cycle
-        transitionTo(SystemState::WAIT_FILLING);
+        routeAfterOutputPlacement();
+        return;
+    }
+
+    if (post_place_output_check_pending_.load()) {
+        // The FULL coordinator runs before this state handler. Once it has
+        // requested State 4, finish the normal pipeline routing while the
+        // robot remains mechanically clear at HOME.
+        if (waiting_for_new_output_.load()) {
+            post_place_output_check_pending_ = false;
+            post_place_output_scan_started_ = false;
+            RCLCPP_WARN(get_logger(),
+                "[POST_PLACE][CAM1] FULL confirmed at HOME — State 4 requested");
+            routeAfterOutputPlacement();
+            return;
+        }
+        if (!visionHeartbeatFresh()) {
+            RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 3000,
+                "[POST_PLACE][CAM1] Waiting — vision heartbeat missing/stale; robot held at HOME");
+            return;
+        }
+        if (!mechanicalOutputZoneClearFresh() || !cam1ViewClearFresh()) {
+            RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+                "[POST_PLACE][CAM1] Waiting for stable HOME/cam1-view confirmation");
+            return;
+        }
+        if (!post_place_output_scan_started_.exchange(true)) {
+            setOutputScanAllowed(false);
+            setOutputScanAllowed(true);
+            RCLCPP_INFO(get_logger(),
+                "[POST_PLACE][CAM1] HOME verified — opened fresh scan epoch to confirm tray");
+            return;
+        }
+
+        int next_empty_slot = SLOT_UNSET;
+        if (claimFreshOutputSnapshot(next_empty_slot)) {
+            // A coherent aggregate with a confirmed EMPTY slot proves non-full.
+            // If all slots are occupied, wait for Vision's longer FULL debounce.
+            post_place_output_check_pending_ = false;
+            post_place_output_scan_started_ = false;
+            setOutputScanAllowed(false);
+            RCLCPP_INFO(get_logger(),
+                "[POST_PLACE][CAM1] Tray NOT FULL confirmed at HOME "
+                "(next empty O%d) — continue pipeline", next_empty_slot);
+            routeAfterOutputPlacement();
+            return;
+        }
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+            "[POST_PLACE][CAM1] Waiting for coherent FULL/non-FULL camera decision...");
         return;
     }
 
@@ -3303,15 +4220,96 @@ void RobotLogicNode::statePlaceToOutput()
         return;
     }
 
-    if (!use_ai_for_control_) {
-        // AUTO: Camera not needed for slot selection
+    // Check this before any AI pre-scan/HOME action.  A CAM1_FULL request may
+    // already have latched State4 while the scale result is arriving; moving
+    // the robot then would revoke output-zone permission underneath State4.
+    if (waiting_for_new_output_.load() || !new_trayoutput_loaded_.load()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[INTERLOCK] Output tray is not confirmed ready — no pre-scan/place motion");
+        return;
     }
 
     // ── Slot selection ──
     int slot = SLOT_UNSET;
-    {
+    if (use_ai_for_control_) {
+        // Vision or upstream camera failure is fail-closed.  A pipeline drain
+        // after an already completed final placement remains a separate path.
+        if (!visionHeartbeatFresh()) {
+            RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 3000,
+                "[SAFETY][CAM1] PLACE_TO_OUTPUT locked — vision heartbeat missing/stale");
+            return;
+        }
+        if (output_scan_recovery_required_.load()) {
+            RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 3000,
+                "[SAFETY][CAM1] PLACE_TO_OUTPUT locked — manual HOME recovery required");
+            return;
+        }
+
+        // Normal flow already collected this checkpoint after REFILL_BUFFER.
+        // Drain/restart paths may not have passed that point; only those paths
+        // use the dedicated HOME fallback below while the cartridge stays on
+        // the scale.
+        if (!output_prescan_home_done_.load()) {
+            output_prescan_zone_verified_ = false;
+            // A previous generic HOME/recovery may already have put the robot
+            // at the verified checkpoint.  Start a fresh camera epoch in place
+            // instead of commanding a redundant long HOME trajectory.
+            if (cam1ViewClearFresh()) {
+                output_prescan_home_done_ = true;
+                setOutputScanAllowed(false);
+                setOutputScanAllowed(true);
+                RCLCPP_INFO(get_logger(),
+                    "[SAFETY][CAM1] Robot already at verified HOME — start fresh "
+                    "output snapshot without additional motion");
+                return;
+            }
+            setOutputScanAllowed(false);
+            RCLCPP_INFO(get_logger(),
+                "[SAFETY][CAM1] Moving to verified HOME for a clean output snapshot");
+            sendMotionActionAsync("OUTPUT_SCAN_HOME");
+            return;
+        }
+
+        if (!cam1ViewClearFresh()) {
+            setOutputScanAllowed(false);
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                "[SAFETY][CAM1] At pre-scan checkpoint — waiting for fresh, stable "
+                "/robot/cam1_view_clear");
+            return;
+        }
+
+        if (!output_prescan_zone_verified_.exchange(true)) {
+            // Both Robot Logic and Vision wait 1.5 s.  The aggregate frame stamp
+            // must also be newer than this edge, so queued pre-HOME YOLO output
+            // cannot become a motion command.
+            setOutputScanAllowed(true);
+            RCLCPP_INFO(get_logger(),
+                "[SAFETY][CAM1] Camera checkpoint verified — cam1 opened; "
+                "waiting 1.5 s + fresh frames");
+            return;
+        }
+
+        if (!output_place_snapshot_requested_.load()) {
+            requestOutputSnapshotNow();
+            RCLCPP_INFO(get_logger(),
+                "[SAFETY][CAM1] PLACE request armed — wait for next frame captured "
+                "at this checkpoint (no extra HOME)");
+            return;
+        }
+
+        if (!output_scan_allowed_.load() || !claimFreshOutputSnapshot(slot)) {
+            RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 3000,
+                "[SAFETY][CAM1] PLACE_TO_OUTPUT waiting — no coherent fresh "
+                "tray/slot snapshot from the current camera epoch");
+            return;
+        }
+        // claimFreshOutputSnapshot closes admission atomically.  Publish the
+        // matching gate after releasing its mutex.
+        output_place_snapshot_requested_ = false;
+        setOutputScanAllowed(false);
+    } else {
         std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
-        if (!use_ai_for_control_) {
+        {
             // AUTO: use counter managed by vision/logic
             if (selected_output_slot_ != SLOT_UNSET) {
                 slot = selected_output_slot_;
@@ -3319,8 +4317,6 @@ void RobotLogicNode::statePlaceToOutput()
                 // Vision node hasn't provided slot yet — use local counter
                 slot = current_auto_slot_;
             }
-        } else {
-            slot = selected_output_slot_;
         }
     }
 
@@ -3330,23 +4326,7 @@ void RobotLogicNode::statePlaceToOutput()
         return;
     }
 
-    // Bao ve lan cuoi ngay truoc motion: status co the doi sau callback
-    // selected_slot. O tat nghia la occupied, tuyet doi khong dat lai.
-    // CHI ap dung o AI mode: vision moi la nguon cap slot_status. O AUTO mode
-    // vision KHONG publish slot_status (camera2Callback return som), nen
-    // output_slot_occupied_ giu nguyen all-true fail-safe -> guard nay se
-    // chan MOI slot va treo robot o PLACE_TO_OUTPUT. AUTO tu quan ly bang
-    // current_auto_slot_ nen bo qua guard.
-    if (use_ai_for_control_) {
-        std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
-        if (slot > TOTAL_OUTPUT_SLOTS || output_slot_occupied_[slot - 1]) {
-            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                "[OUTPUT] Slot O%d da occupied (den tat) — cho vision chon slot khac",
-                slot);
-            selected_output_slot_ = SLOT_UNSET;
-            return;
-        }
-    } else if (slot > TOTAL_OUTPUT_SLOTS) {
+    if (slot > TOTAL_OUTPUT_SLOTS) {
         // AUTO: chi bao ve gioi han tray, khong tham chieu occupied.
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
             "[OUTPUT] Slot O%d vuot TOTAL_OUTPUT_SLOTS — bo qua", slot);
@@ -3372,14 +4352,23 @@ void RobotLogicNode::statePlaceToOutput()
     // ── Send motion ──
     // Final edge guard: scale result/slot selection can arrive while a
     // cartridge state starts in parallel.  Re-check immediately before goal.
-    if (cartridge_busy_.load() || cartridge_pos2_busy_.load()) {
+    if (cartridge_busy_.load() || cartridge_pos2_busy_.load() ||
+        waiting_for_new_output_.load() || !new_trayoutput_loaded_.load() ||
+        (use_ai_for_control_.load() &&
+         (!cam1ViewClearFresh() || output_scan_recovery_required_.load() ||
+          !visionHeartbeatFresh()))) {
+        if (use_ai_for_control_ && !cam1ViewClearFresh())
+            output_prescan_home_done_ = false;
+        output_prescan_zone_verified_ = false;
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[INTERLOCK] Cartridge became BUSY — SCALE_OUTPUT not sent");
+            "[INTERLOCK] Output permission changed — SCALE_OUTPUT not sent");
         return;
     }
     RCLCPP_INFO(get_logger(), "[PLACE] 📦 SCALE → Slot %d [ASYNC]", slot);
     async_slot_ = slot;
-    if (use_ai_for_control_) setOutputScanAllowed(false);
+    // Zone FALSE is expected as soon as this action is accepted; disarm the
+    // pre-scan violation latch before Motion Executor starts moving.
+    if (use_ai_for_control_) output_prescan_zone_verified_ = false;
     sendMotionActionAsync("SCALE_OUTPUT", slot);
 }
 
@@ -3402,6 +4391,8 @@ void RobotLogicNode::statePlaceToFail()
         clearMotionCmd();
 
         if (!motion_result_) {
+            if (consumeTemporaryMotionInterlockReject("SCALE_FAIL", false))
+                return;
             RCLCPP_ERROR(get_logger(), "[FAIL] ❌ SCALE_FAIL motion failed");
             return;
         }
@@ -3425,8 +4416,10 @@ void RobotLogicNode::statePlaceToFail()
                 if (cartridge_drain_confirmed_.load()) {
                     RCLCPP_WARN(get_logger(),
                         "[PIPELINE] 📦 Pipeline drained (fail) + cartridge DRAIN confirmed -> Waiting in IDLE for new tray to auto-restart");
-                    requestOutputTrayChangeForDrain("PLACE_TO_FAIL");
-                    transitionTo(SystemState::IDLE);
+                    if (requestOutputTrayChangeForDrain("PLACE_TO_FAIL"))
+                        transitionTo(SystemState::IDLE);
+                    else
+                        transitionTo(SystemState::WAIT_FILLING);
                 } else {
                     RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
                         "[PIPELINE] 📦 Pipeline drained (fail) but cartridge has not confirmed DRAIN → Waiting in WAIT_FILLING");
@@ -3501,9 +4494,14 @@ void RobotLogicNode::stateErrorMotionLost()
     RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 3000,
         "[ERROR] 🚨 Motion Executor lost — waiting for recovery...");
     if (checkMotionAlive(2.0)) {
-        RCLCPP_WARN(get_logger(), "[RECOVERY] Heartbeat restored → IDLE");
-        motion_busy_ = false;
-        transitionTo(SystemState::IDLE);
+        if (!motion_busy_.load()) {
+            RCLCPP_WARN(get_logger(),
+                "[RECOVERY] Heartbeat restored + motion_busy=false → IDLE");
+            transitionTo(SystemState::IDLE);
+        } else {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                "[RECOVERY] Heartbeat restored but robot still motion_busy — remain locked");
+        }
     }
 }
 
@@ -3513,8 +4511,16 @@ void RobotLogicNode::stateErrorMotionLost()
 
 bool RobotLogicNode::checkMotionAlive(double timeout_sec)
 {
-    if (last_motion_hb_.nanoseconds() == 0) return true;
-    double dt = (this->now() - last_motion_hb_).seconds();
+    const int64_t seen_ns = motion_hb_last_steady_ns_.load();
+    const int64_t now_ns = steadyNowNs();
+    if (!motion_hb_seen_.load() || seen_ns <= 0) {
+        RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 1000,
+            "[WATCHDOG] Motion node heartbeat has not been received");
+        return false;
+    }
+    const double dt = now_ns >= seen_ns
+        ? static_cast<double>(now_ns - seen_ns) / 1.0e9
+        : std::numeric_limits<double>::infinity();
     if (dt > timeout_sec) {
         RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 1000,
             "[WATCHDOG] Motion node lost! Last HB %.2fs ago", dt);
@@ -3592,6 +4598,7 @@ void RobotLogicNode::sendMotionActionAsync(const std::string& cmd, int slot)
                 RCLCPP_ERROR(get_logger(), "[ASYNC] ❌ Goal '%s' rejected", cmd.c_str());
                 motion_in_progress_ = false;
                 motion_result_       = false;
+                last_motion_interlock_rejected_ = false;
                 state_changed_       = true;
                 state_cv_.notify_one();
             } else {
@@ -3601,6 +4608,9 @@ void RobotLogicNode::sendMotionActionAsync(const std::string& cmd, int slot)
 
     opts.result_callback =
         [this, cmd](const GoalHandleExecuteMotion::WrappedResult& result) {
+            const bool interlock_rejected = result.result &&
+                result.result->message == "CARTRIDGE_INTERLOCK_BUSY_OR_STALE";
+            last_motion_interlock_rejected_ = interlock_rejected;
             switch (result.code) {
                 case rclcpp_action::ResultCode::SUCCEEDED:
                     motion_result_ = result.result->success;
@@ -3611,7 +4621,10 @@ void RobotLogicNode::sendMotionActionAsync(const std::string& cmd, int slot)
                     if (cmd == "HOME" && result.result->success && use_ai_for_control_) {
                         input_scan_recovery_required_ = false;
                         output_scan_recovery_required_ = false;
+                        output_prescan_home_done_ = true;
+                        output_prescan_zone_verified_ = false;
                         setInputScanAllowed(true);
+                        setOutputScanAllowed(false);
                         setOutputScanAllowed(true);
                     }
                     break;
@@ -3634,6 +4647,7 @@ void RobotLogicNode::sendMotionActionAsync(const std::string& cmd, int slot)
 
     motion_in_progress_  = true;
     motion_result_       = false;
+    last_motion_interlock_rejected_ = false;
     setMotionCmd(cmd);
     motion_started_at_   = this->now();
     motion_action_client_->async_send_goal(goal, opts);
@@ -3646,6 +4660,16 @@ void RobotLogicNode::sendMotionActionAsync(const std::string& cmd, int slot)
 void RobotLogicNode::transitionTo(SystemState new_state)
 {
     SystemState old_state = current_state_;
+    bool entered_ai_output_place = false;
+
+    if (old_state == SystemState::PLACE_TO_OUTPUT &&
+        new_state != SystemState::PLACE_TO_OUTPUT) {
+        // Normal post-place routes clear these first. This additionally makes
+        // operator GOTO/STOP transitions unable to resurrect an old pending
+        // HOME snapshot when PLACE_TO_OUTPUT is entered again later.
+        post_place_output_check_pending_ = false;
+        post_place_output_scan_started_ = false;
+    }
 
     if (new_state == SystemState::INIT_CHECK ||
         new_state == SystemState::INIT_LOAD_CHAMBER_DIRECT ||
@@ -3666,6 +4690,31 @@ void RobotLogicNode::transitionTo(SystemState new_state)
             state_changed_ = true;
             if (new_state == SystemState::PROCESSING_SCALE)
                 scale_wait_start_ = this->now();
+            entered_ai_output_place =
+                new_state == SystemState::PLACE_TO_OUTPUT &&
+                use_ai_for_control_.load();
+        }
+    }
+    if (entered_ai_output_place) {
+        if (output_prescan_home_done_.load()) {
+            if (cam1ViewClearFresh() && output_scan_allowed_.load()) {
+                requestOutputSnapshotNow();
+                RCLCPP_INFO(get_logger(),
+                    "[SAFETY][CAM1] PLACE_TO_OUTPUT edge — waiting for the next "
+                    "cam1 frame captured now (no additional HOME)");
+            } else {
+                output_place_snapshot_requested_ = false;
+            }
+            RCLCPP_INFO(get_logger(),
+                "[SAFETY][CAM1] PLACE_TO_OUTPUT entered — reuse the warm camera "
+                "checkpoint after REFILL_BUFFER (no extra HOME)");
+        } else {
+            output_place_snapshot_requested_ = false;
+            output_prescan_zone_verified_ = false;
+            setOutputScanAllowed(false);
+            RCLCPP_WARN(get_logger(),
+                "[SAFETY][CAM1] PLACE_TO_OUTPUT has no valid camera checkpoint — "
+                "fallback scan recovery may be required");
         }
     }
     state_cv_.notify_all();

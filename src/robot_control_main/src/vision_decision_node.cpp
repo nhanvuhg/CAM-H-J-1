@@ -24,6 +24,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/int32.hpp"
 #include "std_msgs/msg/int32_multi_array.hpp"
+#include "std_msgs/msg/int64_multi_array.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/header.hpp"
 #include "std_msgs/msg/string.hpp"
@@ -130,6 +131,7 @@ static int select_contiguous_empty(const std::vector<int>& empty_slots, int tota
 // fell through to default AUTO branch (fill rows true), making AI threshold
 // never apply.
 enum class ControlMode : uint8_t {
+    UNKNOWN = 0,
     AUTO   = 1,
     AI     = 2,
     MANUAL = 3
@@ -169,6 +171,12 @@ public:
             "/camera/ai/selected_slot", 10);
         pub_slot_status_ = create_publisher<std_msgs::msg::Int32MultiArray>(
             "/vision/output_tray/slot_status", 10);
+        // Safety-critical aggregate: one frame stamp, tray-present bit,
+        // selected slot and all ten occupancy bits in a single DDS sample.
+        // Robot Logic uses this topic for motion admission; the legacy topics
+        // above remain available for the GUI.
+        pub_output_snapshot_ = create_publisher<std_msgs::msg::Int64MultiArray>(
+            "/vision/output_tray/snapshot", 10);
         pub_output_present_ = create_publisher<std_msgs::msg::Bool>(
             "/vision/output_tray/present", 10);
         pub_heartbeat_ = create_publisher<std_msgs::msg::Header>(
@@ -187,8 +195,6 @@ public:
 
         // Tray change publishers
         // Camera → Cartridge trực tiếp (AI mode output tray full)
-        pub_change_tray_output_ = create_publisher<std_msgs::msg::Bool>(
-            "/robot/done_tray_output", 10);
         // Camera → Robot logic (để robot biết tray đang thay)
         pub_output_tray_full_ = create_publisher<std_msgs::msg::Bool>(
             "/vision/output_tray/full", 10);
@@ -213,8 +219,17 @@ public:
         sub_mode_ = create_subscription<std_msgs::msg::Int32>(
             "/robot/set_mode", 10,
             [this](const std_msgs::msg::Int32::SharedPtr msg) {
-                current_mode_ = static_cast<ControlMode>(msg->data);
-                RCLCPP_INFO(get_logger(), "[VISION] Mode changed to: %d", msg->data);
+                if (msg->data < static_cast<int>(ControlMode::AUTO) ||
+                    msg->data > static_cast<int>(ControlMode::MANUAL)) {
+                    current_mode_ = ControlMode::UNKNOWN;
+                    RCLCPP_ERROR(get_logger(),
+                        "[SAFETY][VISION] Invalid mode %d — decisions BLOCKED", msg->data);
+                    return;
+                }
+                const auto next_mode = static_cast<ControlMode>(msg->data);
+                const auto previous_mode = current_mode_.exchange(next_mode);
+                if (previous_mode != next_mode)
+                    RCLCPP_INFO(get_logger(), "[VISION] Mode changed to: %d", msg->data);
             });
 
         inx_camera_position_mm_ =
@@ -280,6 +295,33 @@ public:
                     msg->data ? "ENABLED" : "BLOCKED during input pick");
             });
 
+        sub_cam0_view_clear_ = create_subscription<std_msgs::msg::Bool>(
+            "/robot/cam0_view_clear",
+            rclcpp::QoS(1).reliable().transient_local(),
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                const auto now = std::chrono::steady_clock::now();
+                cam0_view_last_ns_.store(
+                    std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        now.time_since_epoch()).count());
+                const bool was_clear = cam0_view_clear_.exchange(msg->data);
+                if (!msg->data) {
+                    input_empty_streak_ = 0;
+                    input_present_streak_ = 0;
+                    input_tray_empty_ = false;
+                    input_tray_present_ = false;
+                    selected_input_row_ = -1;
+                    std::fill(row_full_.begin(), row_full_.end(), false);
+                    for (auto& filter : row_filters_) filter.clear();
+                } else if (!was_clear) {
+                    vision_resume_after_ = now + 1500ms;
+                }
+                if (was_clear != msg->data) {
+                    RCLCPP_INFO(get_logger(),
+                        "[SAFETY][CAM0] Robot camera view %s",
+                        msg->data ? "CLEAR — wait 1.5s" : "BLOCKED");
+                }
+            });
+
         sub_output_scan_allowed_ = create_subscription<std_msgs::msg::Bool>(
             "/vision/output_scan_allowed",
             rclcpp::QoS(1).reliable().transient_local(),
@@ -300,6 +342,40 @@ public:
                 }
                 RCLCPP_INFO(get_logger(), "[VISION] Output scan %s",
                     msg->data ? "ENABLED" : "BLOCKED during place/full");
+            });
+
+        sub_output_zone_clear_ = create_subscription<std_msgs::msg::Bool>(
+            "/robot/cam1_view_clear",
+            rclcpp::QoS(1).reliable().transient_local(),
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                const auto now = std::chrono::steady_clock::now();
+                const int64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    now.time_since_epoch()).count();
+                output_zone_last_ns_.store(now_ns);
+                const bool was_clear = output_zone_clear_.exchange(msg->data);
+                if (!msg->data) {
+                    output_zone_fresh_state_.store(false);
+                    // Do not let a partial pre-motion FULL streak survive an
+                    // interval in which the arm may obscure cam1.
+                    std::lock_guard<std::mutex> lock(slot_detection_mutex_);
+                    selected_output_slot_ = -1;
+                    slot_stable_state_.fill(SlotStableState::OCC_OK);
+                    slot_empty_streak_.fill(0);
+                    slot_occ_streak_.fill(0);
+                    slot_mis_streak_.fill(0);
+                    output_full_streak_ = 0;
+                } else if (!was_clear) {
+                    output_resume_after_ = now + 1500ms;
+                }
+                if (was_clear != msg->data) {
+                    if (msg->data) {
+                        RCLCPP_INFO(get_logger(),
+                            "[SAFETY][CAM1] Camera view CLEAR — wait 1.5s for a clean frame");
+                    } else {
+                        RCLCPP_WARN(get_logger(),
+                            "[SAFETY][CAM1] Camera view BLOCKED — freeze output decisions");
+                    }
+                }
             });
 
         sub_new_input_tray_ = create_subscription<std_msgs::msg::Bool>(
@@ -370,6 +446,7 @@ private:
     static constexpr int    INPUT_EMPTY_CONFIRM_FRAMES = 15;
     static constexpr int    INX_READY_CONFIRM_SAMPLES = 3;
     static constexpr int64_t INX_POSITION_MAX_AGE_NS = 500000000LL;
+    static constexpr int64_t ROBOT_ZONE_MAX_AGE_NS = 2000000000LL;
     // Phai khop: nut O1-O10 tren GUI, pose index 14-23 trong
     // joint_pose_params.yaml, va so slot trong config/vision_roi.yaml.
     static constexpr size_t N_OUTPUT_SLOTS         = 10;
@@ -377,18 +454,23 @@ private:
     // ========================================================================
     // MODE STATE
     // ========================================================================
-    // [HP] Default AI để khi vision khởi động trước GUI mode publish, vẫn dùng
-    // YOLO threshold thay vì AUTO branch (fill rows true bỏ qua YOLO).
-    std::atomic<ControlMode> current_mode_{ControlMode::AI};
+    // Restarting vision must not silently assume AI and command tray changes.
+    std::atomic<ControlMode> current_mode_{ControlMode::UNKNOWN};
     std::atomic<bool> inx_camera_ready_{false};
     std::atomic<int64_t> inx_position_last_ns_{0};
     int inx_ready_streak_{0};
     double inx_camera_position_mm_{-60.0};
     double inx_camera_tolerance_mm_{2.0};
     std::atomic<bool> input_scan_allowed_{true};
+    std::atomic<bool> cam0_view_clear_{false};
+    std::atomic<int64_t> cam0_view_last_ns_{0};
     std::chrono::steady_clock::time_point vision_resume_after_{};
     std::atomic<bool> output_scan_allowed_{true};
+    std::atomic<bool> output_zone_clear_{false};
+    std::atomic<int64_t> output_zone_last_ns_{0};
+    std::atomic<bool> output_zone_fresh_state_{false};
     std::chrono::steady_clock::time_point output_resume_after_{};
+    std::chrono::steady_clock::time_point last_cam1_frame_rx_{};
 
     // ========================================================================
     // INPUT TRAY STATE
@@ -440,7 +522,9 @@ private:
     rclcpp::Subscription<Detection2DArray>::SharedPtr sub_cam1_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr sub_mode_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_input_scan_allowed_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_cam0_view_clear_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_output_scan_allowed_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_output_zone_clear_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_new_input_tray_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_servo_positions_;
     
@@ -452,12 +536,12 @@ private:
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_selected_slot_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr pub_ai_slot_;
     rclcpp::Publisher<std_msgs::msg::Int32MultiArray>::SharedPtr pub_slot_status_;
+    rclcpp::Publisher<std_msgs::msg::Int64MultiArray>::SharedPtr pub_output_snapshot_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_output_present_;
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr pub_heartbeat_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_roi_status_;
     
     // Tray change publishers
-    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_change_tray_output_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_output_tray_full_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_gui_notify_;
     
@@ -556,7 +640,10 @@ private:
         const double anchor_max_dev =
             declare_parameter<double>("roi_anchor_max_scale_dev", 0.25);
 
-        slot_stable_state_.fill(SlotStableState::EMPTY);
+        // Restart fail-safe: unknown slots are blocked until clean cam1 frames
+        // explicitly confirm EMPTY.  Starting EMPTY could select O1 for one
+        // frame even when an existing cartridge occupies it.
+        slot_stable_state_.fill(SlotStableState::OCC_OK);
         slot_empty_streak_.fill(0);
         slot_occ_streak_.fill(0);
         slot_mis_streak_.fill(0);
@@ -679,6 +766,16 @@ private:
         return last_ns > 0 && (now_ns - last_ns) <= INX_POSITION_MAX_AGE_NS;
     }
 
+    bool isCam0ViewClearFresh() const {
+        if (!cam0_view_clear_.load()) return false;
+        const int64_t now_ns =
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+        const int64_t last_ns = cam0_view_last_ns_.load();
+        return last_ns > 0 && now_ns >= last_ns &&
+            now_ns - last_ns <= ROBOT_ZONE_MAX_AGE_NS;
+    }
+
     void publishInputGateBlocked() {
         // Reset decision internals, but publish nothing while blocked.  The GUI
         // must keep the last trustworthy camera snapshot (for example row 4
@@ -705,6 +802,7 @@ private:
         // Khay chi dung he toa do camera khi InX da ve vi tri safe -60mm.
         // Ngoai vi tri nay moi detection cam0 deu co the la khay dang di chuyen.
         if (use_ai && (!isInxCameraReady() ||
+                       !isCam0ViewClearFresh() ||
                        !input_scan_allowed_.load() ||
                        std::chrono::steady_clock::now() < vision_resume_after_)) {
             publishInputGateBlocked();
@@ -829,7 +927,7 @@ private:
         const bool any_row_ready = std::any_of(
             row_full_.begin(), row_full_.end(), [](bool full) { return full; });
         const bool safe_to_conclude_empty =
-            input_scan_allowed_.load() &&
+            input_scan_allowed_.load() && isCam0ViewClearFresh() &&
             std::chrono::steady_clock::now() >= vision_resume_after_;
         if (use_ai && safe_to_conclude_empty &&
             input_tray_present_.load() && !any_row_ready) {
@@ -905,22 +1003,89 @@ private:
         }
     }
 
+    void publishOutputSnapshot(const Detection2DArray& frame, int selected_slot)
+    {
+        auto snapshot = std_msgs::msg::Int64MultiArray();
+        snapshot.data.reserve(5 + N_OUTPUT_SLOTS);
+        snapshot.data.push_back(1);  // schema version
+        snapshot.data.push_back(static_cast<int64_t>(frame.header.stamp.sec));
+        snapshot.data.push_back(static_cast<int64_t>(frame.header.stamp.nanosec));
+        snapshot.data.push_back(output_tray_present_.load() ? 1 : 0);
+        snapshot.data.push_back(static_cast<int64_t>(selected_slot));
+        for (size_t i = 0; i < N_OUTPUT_SLOTS; ++i) {
+            snapshot.data.push_back(
+                slot_stable_state_[i] == SlotStableState::EMPTY ? 0 : 1);
+        }
+        pub_output_snapshot_->publish(snapshot);
+    }
+
     // ========================================================================
     // OUTPUT TRAY CALLBACK (from robot_logic_node.cpp)
     // ========================================================================
     void camera2Callback(const Detection2DArray::SharedPtr msg) {
-        if (current_mode_ == ControlMode::MANUAL) return;
+        if (current_mode_ == ControlMode::MANUAL ||
+            current_mode_ == ControlMode::UNKNOWN) return;
         
         if (current_mode_ == ControlMode::AUTO) {
             // AUTO: Robot logic tự quản lý slot, camera không can thiệp
             return;
         }
 
-        if (!output_scan_allowed_.load() ||
-            std::chrono::steady_clock::now() < output_resume_after_) {
+        const auto now = std::chrono::steady_clock::now();
+        if (last_cam1_frame_rx_.time_since_epoch().count() > 0 &&
+            now - last_cam1_frame_rx_ > 2s) {
+            std::lock_guard<std::mutex> lock(slot_detection_mutex_);
+            selected_output_slot_ = -1;
+            slot_stable_state_.fill(SlotStableState::OCC_OK);
+            slot_empty_streak_.fill(0);
+            slot_occ_streak_.fill(0);
+            slot_mis_streak_.fill(0);
+            output_tray_present_.store(false);
+            output_tray_present_streak_ = 0;
+            output_full_streak_ = 0;
+            output_anchor_.reset();
+            // A reconnected camera/YOLO pipeline must settle just like a robot
+            // occlusion edge.  Do not let the first delayed frame reuse the old
+            // anchor or immediately become a placement decision.
+            output_resume_after_ = now + 1500ms;
+            RCLCPP_WARN(get_logger(),
+                "[SAFETY][CAM1] Detection stream gap >2s — anchor/debounce reset; "
+                "wait 1.5s clean frames");
+        }
+        last_cam1_frame_rx_ = now;
+        const int64_t now_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now.time_since_epoch()).count();
+        const int64_t zone_seen_ns = output_zone_last_ns_.load();
+        const bool zone_fresh = zone_seen_ns > 0 &&
+            now_ns - zone_seen_ns <= ROBOT_ZONE_MAX_AGE_NS;
+        const bool effective_zone_clear = output_zone_clear_.load() && zone_fresh;
+        const bool was_effectively_clear =
+            output_zone_fresh_state_.exchange(effective_zone_clear);
+        if (!effective_zone_clear) {
+            if (was_effectively_clear) {
+                std::lock_guard<std::mutex> lock(slot_detection_mutex_);
+                selected_output_slot_ = -1;
+                slot_stable_state_.fill(SlotStableState::OCC_OK);
+                slot_empty_streak_.fill(0);
+                slot_occ_streak_.fill(0);
+                slot_mis_streak_.fill(0);
+            }
+            output_full_streak_ = 0;
+        } else if (!was_effectively_clear) {
+            output_resume_after_ = now + 1500ms;
+            RCLCPP_INFO(get_logger(),
+                "[SAFETY][CAM1] Camera-view freshness restored — wait 1.5s clean frames");
+        }
+        if (!output_scan_allowed_.load() || !effective_zone_clear ||
+            now < output_resume_after_) {
             // Freeze the last trustworthy GUI snapshot during robot occlusion.
             // Internal slot state was reset by the gate callback and a fresh
             // decision will be published after the cooldown.
+            if (!zone_fresh) {
+                RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                    "[SAFETY][CAM1] Output decisions BLOCKED — "
+                    "/robot/cam1_view_clear missing/stale");
+            }
             return;
         }
 
@@ -976,6 +1141,7 @@ private:
             auto status_msg = std_msgs::msg::Int32MultiArray();
             status_msg.data.assign(N_OUTPUT_SLOTS, 1);
             pub_slot_status_->publish(status_msg);
+            publishOutputSnapshot(*msg, -1);
             return;
         }
 
@@ -1064,21 +1230,23 @@ private:
             status_msg.data[i] = (slot_stable_state_[i] == SlotStableState::EMPTY) ? 0 : 1;
         }
         pub_slot_status_->publish(status_msg);
+        publishOutputSnapshot(*msg, local_selected_slot);
         
         // Output tray full detection with debounce
         bool output_full = (local_selected_slot == -1);  // No empty slot found
         if (output_full) {
             output_full_streak_++;
-            if (output_full_streak_ >= TRAY_CHANGE_CONFIRM_FRAMES && !tray_output_change_sent_) {
+            if (output_full_streak_ >= TRAY_CHANGE_CONFIRM_FRAMES) {
                 auto change_msg = std_msgs::msg::Bool();
                 change_msg.data = true;
-                // Gửi trực tiếp tới cartridge system
-                pub_change_tray_output_->publish(change_msg);
-                // Thông báo robot logic để set waiting_for_new_output_
+                // Robot Logic is the single coordinator. It closes placement
+                // first, then publishes done_tray_output to Cartridge; vision
+                // must never move State 4 directly across unordered topics.
                 pub_output_tray_full_->publish(change_msg);
                 tray_output_change_sent_ = true;
-                output_scan_allowed_ = false;
-                RCLCPP_WARN(get_logger(), "[VISION] 📦 OUTPUT TRAY FULL - Change tray signal sent to cartridge + robot");
+                RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
+                    "[VISION] 📦 OUTPUT TRAY FULL — request sent to Robot Logic coordinator; "
+                    "waiting for coordinator scan gate");
             }
         } else {
             output_full_streak_ = 0;

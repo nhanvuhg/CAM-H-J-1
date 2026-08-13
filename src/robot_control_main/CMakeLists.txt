@@ -6,6 +6,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(dobot_msgs_v3 REQUIRED)
 find_package(vision_msgs REQUIRED)    # <--- QUAN TRỌNG
 find_package(geometry_msgs REQUIRED)  # <--- QUAN TRỌNG
@@ -84,6 +85,7 @@ ament_target_dependencies(motion_executor
   rclcpp
   std_msgs
   std_srvs
+  sensor_msgs
   dobot_msgs_v3
   rclcpp_action
   robot_control_interfaces

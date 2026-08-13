@@ -15,6 +15,10 @@
  * - /robot/motion_status (String) - Current motion status
  * - /robot/motion_busy (Bool) - Is motion in progress
  * - /robot/motion_heartbeat (Header) - Node aliveness with timestamp
+ * - /robot/input_zone_clear (Bool) - Fresh joint feedback confirms HOME/index 0
+ * - /robot/output_zone_clear (Bool) - Fresh joint feedback confirms HOME/index 0
+ * - /robot/cam0_view_clear (Bool) - HOME or stable fixed camera scan pose
+ * - /robot/cam1_view_clear (Bool) - HOME or stable fixed camera scan pose
 
  * - /robot/gripper_cmd (Bool) - Gripper state feedback
  * - /robot/picker_cmd (Bool) - Picker state feedback
@@ -25,6 +29,7 @@
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/int32.hpp"
 #include "std_msgs/msg/header.hpp"
+#include "sensor_msgs/msg/joint_state.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "robot_control_interfaces/action/execute_motion.hpp"
 
@@ -62,6 +67,8 @@
 #include <atomic>
 #include <chrono>
 #include <algorithm>
+#include <array>
+#include <cmath>
 #include <thread>
 
 using namespace std::chrono_literals;
@@ -106,6 +113,14 @@ public:
         pub_busy_ = create_publisher<std_msgs::msg::Bool>("/robot/motion_busy", 10);
 
         pub_heartbeat_ = create_publisher<std_msgs::msg::Header>("/robot/motion_heartbeat", 10);
+        pub_input_zone_clear_ = create_publisher<std_msgs::msg::Bool>(
+            "/robot/input_zone_clear", rclcpp::QoS(1).reliable().transient_local());
+        pub_output_zone_clear_ = create_publisher<std_msgs::msg::Bool>(
+            "/robot/output_zone_clear", rclcpp::QoS(1).reliable().transient_local());
+        pub_cam1_view_clear_ = create_publisher<std_msgs::msg::Bool>(
+            "/robot/cam1_view_clear", rclcpp::QoS(1).reliable().transient_local());
+        pub_cam0_view_clear_ = create_publisher<std_msgs::msg::Bool>(
+            "/robot/cam0_view_clear", rclcpp::QoS(1).reliable().transient_local());
         pub_gripper_ = create_publisher<std_msgs::msg::Bool>("/robot/gripper_cmd", 10);
         pub_picker_ = create_publisher<std_msgs::msg::Bool>("/robot/picker_cmd", 10);
         pub_cyl_loadcell_ = create_publisher<std_msgs::msg::Bool>("/robot/cyl_loadcell_cmd", 10);
@@ -122,6 +137,55 @@ public:
             "/robot/picker_status", 10,
             [this](const std_msgs::msg::Bool::SharedPtr msg) {
                 last_picker_status_ = msg->data;
+            });
+
+        // Second-line admission guard. Robot Logic and Cartridge are separate
+        // processes and can both pass their first check in the same DDS window;
+        // Motion Executor rechecks the latched locks before the first Dobot
+        // service call for a workspace-entering action.
+        sub_cartridge_busy_ = create_subscription<std_msgs::msg::Bool>(
+            "/cartridge/busy", rclcpp::QoS(1).reliable().transient_local(),
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                cartridge_busy_.store(msg->data);
+                cartridge_busy_seen_.store(true);
+            });
+        sub_cartridge_pos2_busy_ = create_subscription<std_msgs::msg::Bool>(
+            "/cartridge/pos2_busy", rclcpp::QoS(1).reliable().transient_local(),
+            [this](const std_msgs::msg::Bool::SharedPtr msg) {
+                cartridge_pos2_busy_.store(msg->data);
+                cartridge_pos2_busy_seen_.store(true);
+            });
+        sub_cartridge_heartbeat_ = create_subscription<std_msgs::msg::Header>(
+            "/cartridge/heartbeat", 10,
+            [this](const std_msgs::msg::Header::SharedPtr) {
+                cartridge_heartbeat_last_ns_.store(steadyNowNs());
+            });
+
+        // Safety permission is derived from live hardware feedback, not merely
+        // from an action result. This also handles a robot driver that starts
+        // after the ROS state-machine nodes: the zone unlocks automatically
+        // once fresh feedback confirms the physical HOME/index-0 pose.
+        sub_joint_state_ = create_subscription<sensor_msgs::msg::JointState>(
+            "/nova5/joint_states_robot", rclcpp::SensorDataQoS().keep_last(1),
+            [this](const sensor_msgs::msg::JointState::SharedPtr msg) {
+                if (msg->position.size() < 6) {
+                    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                        "[SAFETY][INPUT_ZONE] Invalid joint feedback: expected 6 joints, got %zu",
+                        msg->position.size());
+                    return;
+                }
+                {
+                    std::lock_guard<std::mutex> lock(joint_feedback_mutex_);
+                    constexpr double RAD_TO_DEG = 57.29577951308232;
+                    for (size_t i = 0; i < actual_joint_deg_.size(); ++i)
+                        actual_joint_deg_[i] = msg->position[i] * RAD_TO_DEG;
+                    last_joint_feedback_ = std::chrono::steady_clock::now();
+                    have_joint_feedback_ = true;
+                }
+                // Publish from the live feedback edge as well as the 500ms
+                // heartbeat so external/manual robot movement closes the zone
+                // within one feedback cycle.
+                publishInputZoneClear();
             });
 
         sub_cyl_loadcell_status_ = create_subscription<std_msgs::msg::Bool>(
@@ -167,6 +231,10 @@ public:
             h.stamp = this->now();
             h.frame_id = "motion_executor";
             pub_heartbeat_->publish(h);
+            // Republish the current state as a heartbeat. Cartridge must not
+            // infer aliveness from a Bool that only changes at motion edges.
+            publishBusy(motion_in_progress_.load());
+            publishInputZoneClear();
         });
 
         // Action Server
@@ -185,6 +253,12 @@ public:
 private:
     static constexpr int TOTAL_OUTPUT_SLOTS = 10;
 
+    static int64_t steadyNowNs()
+    {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+
     // ========================================================================
     // MOTION DATA
     // ========================================================================
@@ -198,7 +272,32 @@ private:
     // Abort flag — set bởi handle_cancel (STOP), check trong tất cả motion helpers
     // để thoát NGAY khi STOP thay vì chạy hết sequence.
     std::atomic<bool> abort_motion_{false};
+    std::mutex action_lifecycle_mutex_;
     std::atomic<bool> operator_paused_{false};
+    std::atomic<bool> cartridge_busy_{true};
+    std::atomic<bool> cartridge_pos2_busy_{true};
+    std::atomic<bool> cartridge_busy_seen_{false};
+    std::atomic<bool> cartridge_pos2_busy_seen_{false};
+    std::atomic<int64_t> cartridge_heartbeat_last_ns_{0};
+    static constexpr int64_t CARTRIDGE_HEARTBEAT_MAX_AGE_NS = 2000000000LL;
+
+    std::mutex joint_feedback_mutex_;
+    std::array<double, 6> actual_joint_deg_{};
+    std::chrono::steady_clock::time_point last_joint_feedback_{};
+    bool have_joint_feedback_{false};
+    std::chrono::steady_clock::time_point home_candidate_since_{};
+    bool home_candidate_active_{false};
+    std::atomic<bool> input_zone_clear_{false};
+    std::atomic<bool> input_zone_state_initialized_{false};
+    std::atomic<bool> camera_view_clear_{false};
+    std::atomic<bool> camera_view_state_initialized_{false};
+    std::chrono::steady_clock::time_point camera_pose_candidate_since_{};
+    bool camera_pose_candidate_active_{false};
+    double input_zone_home_tolerance_deg_{2.0};
+    double camera_scan_pose_tolerance_deg_{2.0};
+    int camera_scan_pose_index_{28};
+    static constexpr auto JOINT_FEEDBACK_MAX_AGE = 1000ms;
+    static constexpr auto HOME_CLEAR_DWELL = 500ms;
 
     int current_fail_slot_{1};
 
@@ -211,6 +310,10 @@ private:
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_busy_;
 
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr pub_heartbeat_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_input_zone_clear_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_output_zone_clear_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_cam0_view_clear_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_cam1_view_clear_;
 
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_gripper_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_picker_;
@@ -219,6 +322,10 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_gripper_status_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_picker_status_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_cyl_loadcell_status_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_cartridge_busy_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_cartridge_pos2_busy_;
+    rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr sub_cartridge_heartbeat_;
+    rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr sub_joint_state_;
     std::atomic<bool> last_gripper_status_{false};
     std::atomic<bool> last_picker_status_{false};
     std::atomic<bool> last_cyl_loadcell_status_{false};
@@ -303,6 +410,12 @@ private:
         
         this->declare_parameter("safe_pose", std::vector<double>{0.0, 0.0, 0.0, 0.0, 0.0, 0.0});
         this->get_parameter("safe_pose", safe_pose_);
+        input_zone_home_tolerance_deg_ = this->declare_parameter<double>(
+            "input_zone_home_tolerance_deg", 2.0);
+        camera_scan_pose_tolerance_deg_ = this->declare_parameter<double>(
+            "camera_scan_pose_tolerance_deg", 2.0);
+        camera_scan_pose_index_ = this->declare_parameter<int>(
+            "camera_scan_pose_index", 28);
 
 
         joint_sequences_.clear();
@@ -813,6 +926,7 @@ private:
         std::shared_ptr<const ExecuteMotion::Goal> goal)
     {
         (void)uuid;
+        std::lock_guard<std::mutex> lifecycle_lock(action_lifecycle_mutex_);
         // CAS-claim cờ ngay tại handle_goal — chặn TOCTOU giữa 2 goal đến song song.
         // executeAction sẽ KHÔNG set lại motion_in_progress_, chỉ clear khi xong.
         bool expected = false;
@@ -820,6 +934,14 @@ private:
             RCLCPP_WARN(get_logger(), "[ACTION] Rejecting goal: motion in progress");
             return rclcpp_action::GoalResponse::REJECT;
         }
+        // Clear an earlier completed/canceled action only after this goal owns
+        // the executor. Never do this inside the detached worker: a STOP
+        // arriving between acceptance and thread start must remain latched.
+        abort_motion_.store(false);
+        // Close the shared input zone at goal admission, before the detached
+        // execution thread can issue its first Dobot command.
+        publishBusy(true);
+        publishInputZoneClear();
         RCLCPP_INFO(get_logger(), "[ACTION] Received goal: %s (slot: %d)",
             goal->command.c_str(), goal->slot);
         return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
@@ -848,7 +970,10 @@ private:
     }
 
     void requestMotionStop(const std::string& source) {
-        abort_motion_.store(true);
+        {
+            std::lock_guard<std::mutex> lifecycle_lock(action_lifecycle_mutex_);
+            abort_motion_.store(true);
+        }
         RCLCPP_WARN(get_logger(), "[STOP] %s -> abort flag + Dobot stop/reset", source.c_str());
 
         if (stop_script_client_ && stop_script_client_->service_is_ready()) {
@@ -917,8 +1042,71 @@ private:
     // mà không reset motion_in_progress_/publishBusy thì node treo busy vĩnh viễn.
     try {
     RCLCPP_INFO(get_logger(), "[ACTION] Executing motion goal...");
-    // Reset abort flag mỗi lần goal mới — flag chỉ giữ trong scope của 1 goal.
-    abort_motion_.store(false);
+    const auto goal = goal_handle->get_goal();
+    const std::string type = goal->command;
+    const int param = goal->slot;
+
+    if (type == "AI_INPUT_TRAY_BUFFER") {
+        const bool scan_pose_valid = camera_scan_pose_index_ >= 0 &&
+            static_cast<size_t>(camera_scan_pose_index_) < joint_sequences_.size() &&
+            joint_sequences_[static_cast<size_t>(camera_scan_pose_index_)].size() >= 6;
+        if (!scan_pose_valid) {
+            auto preflight_result = std::make_shared<ExecuteMotion::Result>();
+            preflight_result->success = false;
+            preflight_result->message = "INVALID_CAMERA_SCAN_POSE";
+            RCLCPP_ERROR(get_logger(),
+                "[SAFETY][CAMERA_VIEW] Invalid camera_scan_pose_index=%d — "
+                "AI refill rejected before RobotMode or any Dobot primitive",
+                camera_scan_pose_index_);
+            goal_handle->abort(preflight_result);
+            publishBusy(false);
+            motion_in_progress_ = false;
+            return;
+        }
+    }
+
+    // Every known action can cross or revoke one of Cartridge's mechanical
+    // workspaces. Check the live heartbeat and both latched locks before any
+    // RobotMode Continue/ClearError/Enable call, then wait one DDS interval and
+    // check again before the first Dobot primitive. This makes a crashed or
+    // concurrently starting Cartridge fail closed.
+    auto cartridge_admission_clear = [this, &type](const char* phase) {
+        const int64_t now_ns = steadyNowNs();
+        const int64_t hb_ns = cartridge_heartbeat_last_ns_.load();
+        const bool heartbeat_fresh = hb_ns > 0 && now_ns >= hb_ns &&
+            now_ns - hb_ns <= CARTRIDGE_HEARTBEAT_MAX_AGE_NS;
+        const bool status_seen = cartridge_busy_seen_.load() &&
+            cartridge_pos2_busy_seen_.load();
+        const bool blocked = cartridge_busy_.load() || cartridge_pos2_busy_.load();
+        if (!heartbeat_fresh || !status_seen || blocked) {
+            RCLCPP_ERROR(get_logger(),
+                "[SAFETY][ADMISSION] Reject '%s' at %s — heartbeat_fresh=%s "
+                "status_seen=%s busy=%s pos2_busy=%s",
+                type.c_str(), phase,
+                heartbeat_fresh ? "true" : "false",
+                status_seen ? "true" : "false",
+                cartridge_busy_.load() ? "true" : "false",
+                cartridge_pos2_busy_.load() ? "true" : "false");
+            return false;
+        }
+        return true;
+    };
+    auto reject_for_cartridge_interlock = [&]() {
+        auto admission_result = std::make_shared<ExecuteMotion::Result>();
+        admission_result->success = false;
+        admission_result->message = "CARTRIDGE_INTERLOCK_BUSY_OR_STALE";
+        goal_handle->abort(admission_result);
+        publishBusy(false);
+        motion_in_progress_ = false;
+    };
+    // Give the separate Cartridge process one full control/DDS interval after
+    // our zone-close edge. Only then may this worker mutate RobotMode (including
+    // Continue) or issue any Dobot primitive.
+    std::this_thread::sleep_for(100ms);
+    if (shouldAbort() || !cartridge_admission_clear("pre-controller-check")) {
+        reject_for_cartridge_interlock();
+        return;
+    }
 
     // ✅ Chỉ clear error khi robot đang ở mode lỗi (mode 9)
     {
@@ -943,11 +1131,22 @@ private:
                     std::this_thread::sleep_for(300ms);
                     
                     RCLCPP_INFO(get_logger(), "[ACTION] Robot re-enabled after error clear");
-                } else if (mode == 10 && !operator_paused_.load()) {
-                    continueIfPaused("ACTION");
                 } else if (mode == 10) {
-                    RCLCPP_WARN(get_logger(),
-                        "[ACTION] Goal accepted while operator PAUSED — hold before first step");
+                    // Never resume an old controller trajectory implicitly. In
+                    // particular, after this node restarts operator_paused_ has
+                    // no memory of why Dobot is still in mode 10. Only the
+                    // explicit RESUME path may call Continue after rechecking
+                    // the live Cartridge interlocks.
+                    auto paused_result = std::make_shared<ExecuteMotion::Result>();
+                    paused_result->success = false;
+                    paused_result->message = "ROBOT_PAUSED_REQUIRES_EXPLICIT_RESUME";
+                    RCLCPP_ERROR(get_logger(),
+                        "[SAFETY][ACTION] Reject '%s' — Dobot is PAUSED; use explicit RESUME",
+                        type.c_str());
+                    goal_handle->abort(paused_result);
+                    publishBusy(false);
+                    motion_in_progress_ = false;
+                    return;
                 }
                 // mode 5 = standby, mode 7 = running — không cần làm gì
             } catch (...) {
@@ -960,8 +1159,6 @@ private:
 
     auto feedback = std::make_shared<ExecuteMotion::Feedback>();
     auto result = std::make_shared<ExecuteMotion::Result>();
-    const auto goal = goal_handle->get_goal();
-
     // motion_in_progress_ đã được claim atomic ở handle_goal — không set lại.
     publishBusy(true);
 
@@ -970,23 +1167,34 @@ private:
     goal_handle->publish_feedback(feedback);
 
     bool success = false;
-    std::string type = goal->command;
-    int param = goal->slot;
+    // Give Cartridge one control/DDS interval to observe zone=false/motion_busy,
+    // assert its lock if it was starting concurrently, and veto this action.
+    if (shouldAbort() || !cartridge_admission_clear("before-first-Dobot-command")) {
+        reject_for_cartridge_interlock();
+        return;
+    }
 
     if (type == "INPUT_TRAY_CHAMBER")  success = executeInputTrayChamber(param);
     else if (type == "INPUT_TRAY_BUFFER") success = executeInputTrayBuffer(param);
     else if (type == "INIT_INPUT_TRAY_BUFFER") success = executeInitInputTrayBuffer(param);
-    // AI variants include the deterministic camera-safe checkpoint.  The
-    // action only succeeds after index 0 is reached, so vision cannot reopen
-    // merely because the pick portion ended or was aborted above the tray.
+    // AI chamber pick returns HOME for the input-camera checkpoint. The normal
+    // buffer refill ends at the fixed camera scan pose (index 28 by default),
+    // which is much closer than HOME and is verified from live joint feedback.
     else if (type == "AI_INPUT_TRAY_CHAMBER")
         success = executeInputTrayChamber(param) && moveToIndex(0);
     else if (type == "AI_INPUT_TRAY_BUFFER")
-        success = executeInputTrayBuffer(param) && moveToIndex(0);
+        success = executeInputTrayBuffer(param) &&
+            moveToIndex(static_cast<size_t>(camera_scan_pose_index_));
     else if (type == "AI_INIT_INPUT_TRAY_BUFFER")
         success = executeInitInputTrayBuffer(param);  // already ends at index 0
     else if (type == "CHAMBER_SCALE")  success = executeChamberScale();
     else if (type == "SCALE_OUTPUT")   success = executeScaleOutput(param);
+    // Dedicated camera checkpoint.  Keep this distinct from the startup HOME
+    // command so Robot Logic can unambiguously wait for a clean cam1 snapshot
+    // before it consumes an output slot decision.
+    else if (type == "OUTPUT_SCAN_HOME") success = moveToIndex(0);
+    else if (type == "OUTPUT_TRAY_CHANGE_HOME") success = moveToIndex(0);
+    else if (type == "STARTUP_HOME") success = moveToIndex(0);
     else if (type == "SCALE_FAIL")     success = executeScaleFail();
     else if (type == "BUFFER_CHAMBER") success = executeBufferChamber();
     else if (type == "HOME")           success = moveToIndex(0);
@@ -1077,6 +1285,141 @@ private:
         auto msg = std_msgs::msg::Bool();
         msg.data = busy;
         pub_busy_->publish(msg);
+    }
+
+    static double angularDistanceDeg(double actual, double target)
+    {
+        return std::abs(std::remainder(actual - target, 360.0));
+    }
+
+    void publishInputZoneClear()
+    {
+        const auto now = std::chrono::steady_clock::now();
+        std::array<double, 6> actual{};
+        std::chrono::steady_clock::time_point feedback_time{};
+        bool have_feedback = false;
+        {
+            std::lock_guard<std::mutex> lock(joint_feedback_mutex_);
+            actual = actual_joint_deg_;
+            feedback_time = last_joint_feedback_;
+            have_feedback = have_joint_feedback_;
+        }
+
+        const bool feedback_fresh =
+            have_feedback && (now - feedback_time <= JOINT_FEEDBACK_MAX_AGE);
+        double max_error_deg = 999.0;
+        bool at_home = false;
+        if (feedback_fresh && !joint_sequences_.empty() &&
+            joint_sequences_[0].size() >= actual.size()) {
+            max_error_deg = 0.0;
+            at_home = true;
+            for (size_t i = 0; i < actual.size(); ++i) {
+                const double error = angularDistanceDeg(actual[i], joint_sequences_[0][i]);
+                max_error_deg = std::max(max_error_deg, error);
+                if (!std::isfinite(error) || error > input_zone_home_tolerance_deg_)
+                    at_home = false;
+            }
+        }
+
+        const bool candidate_clear =
+            feedback_fresh && at_home && !motion_in_progress_.load();
+        bool clear = false;
+        {
+            std::lock_guard<std::mutex> lock(joint_feedback_mutex_);
+            if (candidate_clear) {
+                if (!home_candidate_active_) {
+                    home_candidate_active_ = true;
+                    home_candidate_since_ = now;
+                }
+                clear = now - home_candidate_since_ >= HOME_CLEAR_DWELL;
+            } else {
+                home_candidate_active_ = false;
+            }
+        }
+        const bool was_clear = input_zone_clear_.exchange(clear);
+        const bool was_initialized = input_zone_state_initialized_.exchange(true);
+
+        if (clear && (!was_initialized || !was_clear)) {
+            RCLCPP_INFO(get_logger(),
+                "[SAFETY][ROBOT_ZONES] CLEAR — fresh joint feedback confirms "
+                "stable HOME/index 0 for 0.5s "
+                "(max error %.2f deg)", max_error_deg);
+        } else if (!clear && (!was_initialized || was_clear)) {
+            if (!feedback_fresh) {
+                RCLCPP_WARN(get_logger(),
+                    "[SAFETY][ROBOT_ZONES] BLOCKED — robot joint feedback missing/stale");
+            } else if (motion_in_progress_.load()) {
+                RCLCPP_WARN(get_logger(),
+                    "[SAFETY][ROBOT_ZONES] BLOCKED — robot motion is active");
+            } else {
+                RCLCPP_WARN(get_logger(),
+                    "[SAFETY][ROBOT_ZONES] BLOCKED — robot is not stably at HOME/index 0 "
+                    "(max error %.2f deg, tolerance %.2f deg)",
+                    max_error_deg, input_zone_home_tolerance_deg_);
+            }
+        } else if (!clear && !feedback_fresh) {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+                "[SAFETY][ROBOT_ZONES] Still BLOCKED — no fresh robot joint feedback");
+        }
+
+        auto msg = std_msgs::msg::Bool();
+        msg.data = clear;
+        pub_input_zone_clear_->publish(msg);
+        // Both cartridge workspaces are clear only at the verified HOME pose.
+        // Keep separate topics so their safe-pose definitions can diverge later
+        // without changing either consumer's safety contract.
+        pub_output_zone_clear_->publish(msg);
+
+        double camera_pose_error_deg = 999.0;
+        bool at_camera_scan_pose = false;
+        const bool camera_index_valid = camera_scan_pose_index_ >= 0 &&
+            static_cast<size_t>(camera_scan_pose_index_) < joint_sequences_.size() &&
+            joint_sequences_[static_cast<size_t>(camera_scan_pose_index_)].size() >= actual.size();
+        if (feedback_fresh && camera_index_valid) {
+            camera_pose_error_deg = 0.0;
+            at_camera_scan_pose = true;
+            const auto& scan_pose = joint_sequences_[static_cast<size_t>(camera_scan_pose_index_)];
+            for (size_t i = 0; i < actual.size(); ++i) {
+                const double error = angularDistanceDeg(actual[i], scan_pose[i]);
+                camera_pose_error_deg = std::max(camera_pose_error_deg, error);
+                if (!std::isfinite(error) || error > camera_scan_pose_tolerance_deg_)
+                    at_camera_scan_pose = false;
+            }
+        }
+
+        bool camera_view_clear = false;
+        {
+            std::lock_guard<std::mutex> lock(joint_feedback_mutex_);
+            const bool camera_candidate = feedback_fresh &&
+                (at_home || at_camera_scan_pose) && !motion_in_progress_.load();
+            if (camera_candidate) {
+                if (!camera_pose_candidate_active_) {
+                    camera_pose_candidate_active_ = true;
+                    camera_pose_candidate_since_ = now;
+                }
+                camera_view_clear =
+                    now - camera_pose_candidate_since_ >= HOME_CLEAR_DWELL;
+            } else {
+                camera_pose_candidate_active_ = false;
+            }
+        }
+
+        const bool camera_was_clear = camera_view_clear_.exchange(camera_view_clear);
+        const bool camera_was_initialized = camera_view_state_initialized_.exchange(true);
+        if (camera_view_clear && (!camera_was_initialized || !camera_was_clear)) {
+            RCLCPP_INFO(get_logger(),
+                "[SAFETY][CAMERA_VIEW] CLEAR — %s stable for 0.5s (error %.2f deg)",
+                at_home ? "HOME" : "SCAN_POSE",
+                at_home ? max_error_deg : camera_pose_error_deg);
+        } else if (!camera_view_clear && (!camera_was_initialized || camera_was_clear)) {
+            RCLCPP_WARN(get_logger(),
+                "[SAFETY][CAMERA_VIEW] BLOCKED — robot moving, feedback stale, or "
+                "outside HOME/fixed scan pose index %d", camera_scan_pose_index_);
+        }
+        auto camera_msg = std_msgs::msg::Bool();
+        camera_msg.data = camera_view_clear;
+        pub_cam0_view_clear_->publish(camera_msg);
+        pub_cam1_view_clear_->publish(camera_msg);
     }
 
 

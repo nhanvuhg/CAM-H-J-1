@@ -379,12 +379,23 @@ def _make_node():
     node._pos_cache         = {}
     node._s10_off_time      = 0.0
     node._s10_prev          = False
-    node._robot_connected   = False
-    node._robot_last_seen   = 0.0
+    node._robot_connected   = True
+    node._robot_last_seen   = time.monotonic()
+    node._input_zone_clear  = True
+    node._input_zone_last_seen = time.monotonic()
+    node._output_zone_clear = True
+    node._output_zone_last_seen = time.monotonic()
+    node._last_auto_interlock_reason = ""
+    node._last_auto_output_interlock_reason = ""
+    node._input_safety_fault_latched = False
+    node._output_safety_fault_latched = False
+    node._last_cartridge_busy_published = None
+    node._last_cartridge_pos2_busy_published = None
 
     # Publishers (mocked)
     node.pub_busy_cartridge   = MagicMock()
     node.pub_busy_cartridge_pos2 = MagicMock()
+    node.pub_cartridge_heartbeat = MagicMock()
     node.pub_robot_mode        = MagicMock()
     node.pub_homing_done      = MagicMock()
     node.pub_state            = MagicMock()
@@ -402,6 +413,8 @@ def _make_node():
     # Logger (mock)
     node._logger = MagicMock()
     node.get_logger = MagicMock(return_value=node._logger)
+    node.get_clock = MagicMock()
+    node.get_clock.return_value.now.return_value.to_msg.return_value = MagicMock()
 
     # Notify / log helpers
     node._notify_throttle = {}
@@ -487,6 +500,29 @@ class TestCanStartConditions:
         _set_sensors(node, S7_TRAY_AT_ROBOT=True)
         assert node._can_start_s2a() is False
 
+    def test_can_start_s2a_blocked_when_robot_not_home(self):
+        """done+S7 is not permission unless live feedback confirms HOME."""
+        node = _make_node()
+        node._input_tray_done = True
+        node._input_zone_clear = False
+        _set_sensors(node, S7_TRAY_AT_ROBOT=True)
+
+        assert node._can_start_s2a() is False
+
+    def test_can_start_s1_blocked_when_heartbeat_stale(self):
+        """Communication loss must fail closed for automatic STATE 1."""
+        node = _make_node()
+        node._robot_last_seen = time.monotonic() - 10.0
+        _set_sensors(
+            node,
+            S1_BELT_START=True,
+            S7_TRAY_AT_ROBOT=False,
+            S9_CYL1_RETRACTED=True,
+            S10_CYL1_EXTENDED=False,
+        )
+
+        assert node._can_start_s1() is False
+
     def test_can_start_s4(self):
         """S4 trigger: có _s4_trigger + S18 ON + không busy."""
         node = _make_node()
@@ -502,6 +538,105 @@ class TestCanStartConditions:
         node._s4_trigger = False
         _set_sensors(node, S18_FEED_OK=True)
         assert node._can_start_s4() is False
+
+    def test_can_start_s3_blocked_when_output_zone_not_clear(self):
+        node = _make_node()
+        node._output_zone_clear = False
+        _set_sensors(node, S17_PLATFORM=True, S18_FEED_OK=False)
+
+        assert node._can_start_s3() is False
+
+    def test_can_start_s4_blocked_when_output_zone_stale(self):
+        node = _make_node()
+        node._s4_trigger = True
+        node._output_zone_last_seen = time.monotonic() - 10.0
+        _set_sensors(node, S18_FEED_OK=True)
+
+        assert node._can_start_s4() is False
+
+    def test_can_start_s4_blocked_when_motion_busy(self):
+        node = _make_node()
+        node._s4_trigger = True
+        node._motion_busy = True
+        _set_sensors(node, S18_FEED_OK=True)
+
+        assert node._can_start_s4() is False
+
+
+class TestManualSharedZoneOverride:
+    """Manual STATE buttons remain available while AUTO interlock is locked."""
+
+    @staticmethod
+    def _prepare_manual_node():
+        node = _make_node()
+        node.operation_mode = 'manual'
+        node._robot_connected = False
+        node._robot_last_seen = 0.0
+        node._input_zone_clear = False
+        node._drop_duplicate_manual_state_cmd = MagicMock(return_value=False)
+        node._sync_mode_jog = MagicMock()
+        node._notify = MagicMock()
+        return node
+
+    def test_manual_state1_runs_with_logged_override(self):
+        node = self._prepare_manual_node()
+        _set_sensors(
+            node,
+            S1_BELT_START=True,
+            S7_TRAY_AT_ROBOT=False,
+            S9_CYL1_RETRACTED=True,
+            S10_CYL1_EXTENDED=False,
+        )
+        msg = MagicMock(data='STATE1')
+
+        node._cb_goto_state(msg)
+
+        assert node.state_in == SystemState.S1_CONFIRM_SAFE
+        assert any(
+            '[SAFETY][MANUAL OVERRIDE]' in str(call_args)
+            for call_args in node._logger.warn.call_args_list
+        )
+
+    def test_manual_state2_runs_with_logged_override(self):
+        node = self._prepare_manual_node()
+        _set_sensors(node, S7_TRAY_AT_ROBOT=True)
+        msg = MagicMock(data='STATE2')
+
+        node._cb_goto_state(msg)
+
+        assert node.state_in == SystemState.S2A_CHECK_INTERLOCK
+        assert any(
+            '[SAFETY][MANUAL OVERRIDE]' in str(call_args)
+            for call_args in node._logger.warn.call_args_list
+        )
+
+    def test_manual_state3_runs_with_output_override_and_asserts_pos2_busy(self):
+        node = self._prepare_manual_node()
+        node._output_zone_clear = False
+        _set_sensors(node, S18_FEED_OK=False)
+
+        node._cb_goto_state(MagicMock(data='STATE3'))
+
+        assert node.state_s3 == SystemState.S3_CHECK_OUTXY_SAFE
+        assert any(
+            '[SAFETY][MANUAL OVERRIDE][OUTPUT]' in str(call_args)
+            for call_args in node._logger.warn.call_args_list
+        )
+        assert node.pub_busy_cartridge_pos2.publish.called
+
+    def test_manual_state4_runs_with_output_override_and_asserts_pos2_busy(self):
+        node = self._prepare_manual_node()
+        node._output_zone_clear = False
+        _set_sensors(node, S18_FEED_OK=True)
+
+        node._cb_goto_state(MagicMock(data='STATE4'))
+
+        assert node.state_s4 == SystemState.S4_CYL2_RETRACT_READY
+        assert any(
+            '[SAFETY][MANUAL OVERRIDE][OUTPUT]' in str(call_args)
+            for call_args in node._logger.warn.call_args_list
+        )
+        assert node.pub_busy_cartridge_pos2.publish.called
 
 
 class TestStateTransitions:
@@ -906,14 +1041,108 @@ class TestCallbackLogic:
         assert node._s4_trigger is True
 
     def test_cb_motion_busy(self):
-        """Nhận /robot/motion_busy → cập nhật _motion_busy."""
+        """motion_busy updates state but cannot impersonate a heartbeat."""
         node = _make_node()
+        node._robot_connected = False
         msg = MagicMock()
         msg.data = True
         node._cb_motion_busy(msg)
 
         assert node._motion_busy is True
+        assert node._robot_connected is False
+
+    def test_cb_motion_heartbeat_marks_connection_fresh(self):
+        node = _make_node()
+        node._robot_connected = False
+        node._robot_last_seen = 0.0
+
+        node._cb_motion_heartbeat(MagicMock())
+
         assert node._robot_connected is True
+        assert node._robot_last_seen > 0.0
+
+    def test_heartbeat_timeout_keeps_busy_and_locks_zone(self):
+        """Fail-closed watchdog must never clear a stale busy=True."""
+        node = _make_node()
+        node._motion_busy = True
+        node._input_zone_clear = True
+        node._output_zone_clear = True
+        node._robot_last_seen = time.monotonic() - 10.0
+        node._notify = MagicMock()
+
+        node._update_robot_safety_watchdog()
+
+        assert node._robot_connected is False
+        assert node._input_zone_clear is False
+        assert node._output_zone_clear is False
+        assert node._motion_busy is True
+        node._logger.error.assert_called_once()
+
+    def test_active_output_chain_loss_stops_axes_and_latches_busy(self):
+        """AUTO/AI loss during State3/4 must stop once and remain fail-closed."""
+        node = _make_node()
+        node.operation_mode = 'ai'
+        node.state_s3 = SystemState.S3_CHECK_OUTXY_SAFE
+        node.state_s4 = SystemState.IDLE
+        node._robot_connected = False
+        node._output_safety_fault_latched = False
+        node._stop_immediate = MagicMock()
+        node._pub_cartridge_busy = MagicMock()
+        node._pub_cartridge_pos2_busy = MagicMock()
+        node._notify = MagicMock()
+
+        node._update_robot_safety_watchdog()
+        node._update_robot_safety_watchdog()  # latch must be one-shot
+
+        assert node._stop_immediate.call_args_list == [call(3), call(4), call(5)]
+        assert node._system_paused is True
+        node._pub_cartridge_busy.assert_called_once_with(True)
+        node._pub_cartridge_pos2_busy.assert_called_once_with(True)
+        node._logger.error.assert_called_once()
+
+    def test_manual_active_output_chain_does_not_auto_stop(self):
+        """Manual State3/4 is an explicit logged override, not an auto-stop path."""
+        node = _make_node()
+        node.operation_mode = 'manual'
+        node.state_s3 = SystemState.S3_CHECK_OUTXY_SAFE
+        node.state_s4 = SystemState.IDLE
+        node._robot_connected = False
+        node._stop_immediate = MagicMock()
+
+        node._update_robot_safety_watchdog()
+
+        node._stop_immediate.assert_not_called()
+        assert node._system_paused is False
+
+    def test_active_input_chain_loss_stops_axes_and_latches_busy(self):
+        """AUTO/AI loss during State1/2 must stop once and keep BUSY asserted."""
+        node = _make_node()
+        node.operation_mode = 'ai'
+        node.state_in = SystemState.S1_INX_MOVE_POS_PICK
+        node._robot_connected = False
+        node._stop_immediate = MagicMock()
+        node._pub_cartridge_busy = MagicMock()
+        node._notify = MagicMock()
+
+        node._update_robot_safety_watchdog()
+        node._update_robot_safety_watchdog()
+
+        assert node._stop_immediate.call_args_list == [call(1), call(2)]
+        assert node._system_paused is True
+        node._pub_cartridge_busy.assert_called_once_with(True)
+        node._logger.error.assert_called_once()
+
+    def test_manual_active_input_chain_does_not_auto_stop(self):
+        node = _make_node()
+        node.operation_mode = 'manual'
+        node.state_in = SystemState.S1_INX_MOVE_POS_PICK
+        node._robot_connected = False
+        node._stop_immediate = MagicMock()
+
+        node._update_robot_safety_watchdog()
+
+        node._stop_immediate.assert_not_called()
+        assert node._system_paused is False
 
 
 # ══════════════════════════════════════════════════════════════════

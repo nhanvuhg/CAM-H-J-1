@@ -9,6 +9,11 @@
   ros__parameters:
     robot_namespace: "nova5_HP"
     safe_pose: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Standard safe Cartesian position
+    # Camera checkpoint after AI buffer refill. Index 28 avoids the long HOME
+    # trip; commissioning must confirm both cam0 and cam1 have an unobstructed
+    # view with the production tool/gripper envelope at this exact pose.
+    camera_scan_pose_index: 28
+    camera_scan_pose_tolerance_deg: 2.0
     motion_sequence:
 
       # INDEX 0: HOME & SAFE POSITIONS
