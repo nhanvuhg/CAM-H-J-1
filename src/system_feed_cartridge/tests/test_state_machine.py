@@ -90,6 +90,7 @@ from cartridge_providesystem_py_node import (
     S17_PLATFORM, S18_FEED_OK, S19_CHECK_TRAY_P2, S20_SCAN_STACK_P2,
     S25_CYL4_RETRACTED, S26_CYL4_EXTENDED,
     S27_CYL5_RETRACTED, S28_CYL5_EXTENDED,
+    ROBOT_ACTIVE_COMMS_FAULT_DEBOUNCE_S,
 )
 
 
@@ -389,6 +390,8 @@ def _make_node():
     node._last_auto_output_interlock_reason = ""
     node._input_safety_fault_latched = False
     node._output_safety_fault_latched = False
+    node._input_safety_comm_fault_since = 0.0
+    node._output_safety_comm_fault_since = 0.0
     node._last_cartridge_busy_published = None
     node._last_cartridge_pos2_busy_published = None
 
@@ -1076,7 +1079,10 @@ class TestCallbackLogic:
         assert node._input_zone_clear is False
         assert node._output_zone_clear is False
         assert node._motion_busy is True
-        node._logger.error.assert_called_once()
+        node._logger.warn.assert_called()
+        node._logger.error.assert_not_called()
+        node._notify.assert_called_once()
+        assert node._notify.call_args.args[0] == 'warn'
 
     def test_active_output_chain_loss_stops_axes_and_latches_busy(self):
         """AUTO/AI loss during State3/4 must stop once and remain fail-closed."""
@@ -1090,6 +1096,9 @@ class TestCallbackLogic:
         node._pub_cartridge_busy = MagicMock()
         node._pub_cartridge_pos2_busy = MagicMock()
         node._notify = MagicMock()
+        node._output_safety_comm_fault_since = (
+            time.monotonic() - ROBOT_ACTIVE_COMMS_FAULT_DEBOUNCE_S - 0.1
+        )
 
         node._update_robot_safety_watchdog()
         node._update_robot_safety_watchdog()  # latch must be one-shot
@@ -1123,6 +1132,9 @@ class TestCallbackLogic:
         node._stop_immediate = MagicMock()
         node._pub_cartridge_busy = MagicMock()
         node._notify = MagicMock()
+        node._input_safety_comm_fault_since = (
+            time.monotonic() - ROBOT_ACTIVE_COMMS_FAULT_DEBOUNCE_S - 0.1
+        )
 
         node._update_robot_safety_watchdog()
         node._update_robot_safety_watchdog()
@@ -1131,6 +1143,50 @@ class TestCallbackLogic:
         assert node._system_paused is True
         node._pub_cartridge_busy.assert_called_once_with(True)
         node._logger.error.assert_called_once()
+
+    def test_brief_input_heartbeat_delay_at_home_does_not_stop(self):
+        """A queued heartbeat callback at HOME must not become a false ERROR."""
+        node = _make_node()
+        node.operation_mode = 'ai'
+        node.state_in = SystemState.S1_INX_MOVE_POS_PICK
+        node._robot_connected = False
+        node._input_zone_clear = True
+        node._stop_immediate = MagicMock()
+        node._pub_cartridge_busy = MagicMock()
+        node._notify = MagicMock()
+
+        node._update_robot_safety_watchdog()
+
+        node._stop_immediate.assert_not_called()
+        node._pub_cartridge_busy.assert_not_called()
+        node._notify.assert_not_called()
+        assert node._system_paused is False
+        assert node._input_safety_comm_fault_since > 0.0
+
+        node._cb_motion_heartbeat(MagicMock())
+        node._input_zone_clear = True
+        node._input_zone_last_seen = time.monotonic()
+        node._update_robot_safety_watchdog()
+
+        node._stop_immediate.assert_not_called()
+        assert node._input_safety_comm_fault_since == 0.0
+
+    def test_explicit_robot_leaves_home_still_stops_immediately(self):
+        """Debounce is only for communication jitter, never a live BLOCKED edge."""
+        node = _make_node()
+        node.operation_mode = 'ai'
+        node.state_in = SystemState.S1_INX_MOVE_POS_PICK
+        node._input_zone_clear = False
+        node._input_zone_last_seen = time.monotonic()
+        node._stop_immediate = MagicMock()
+        node._pub_cartridge_busy = MagicMock()
+        node._notify = MagicMock()
+
+        node._update_robot_safety_watchdog()
+
+        assert node._stop_immediate.call_args_list == [call(1), call(2)]
+        node._pub_cartridge_busy.assert_called_once_with(True)
+        assert node._system_paused is True
 
     def test_manual_active_input_chain_does_not_auto_stop(self):
         node = _make_node()

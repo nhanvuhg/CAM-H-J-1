@@ -87,6 +87,12 @@ POSITION_TOLERANCE_HOME = 5.0   # mm — tolerance kiểm tra vị trí gần ho
 HOME_SPEED              = 30    # mm/s cho position_task về 0
 ROBOT_HEARTBEAT_TIMEOUT_S = 2.0  # motion_executor publishes every 0.5s
 ROBOT_ZONE_STATUS_TIMEOUT_S = 2.0
+# DDS callbacks can be queued briefly while the single-threaded cartridge node
+# is completing a blocking FAS transaction.  Keep admission fail-closed at the
+# 2 s thresholds above, but do not turn one delayed callback into an emergency
+# stop while the robot was last confirmed at HOME.  Explicit zone BLOCKED or
+# motion_busy remains an immediate active-motion fault.
+ROBOT_ACTIVE_COMMS_FAULT_DEBOUNCE_S = 1.0
 
 # ─── Sensor IDs — matching sensors.yaml ─────────────────────────
 S1_BELT_START      = 1
@@ -395,10 +401,12 @@ class CartridgeSystem(Node):
         self._input_zone_last_seen = 0.0
         self._last_auto_interlock_reason = ""
         self._input_safety_fault_latched = False
+        self._input_safety_comm_fault_since = 0.0
         self._output_zone_clear = False # live joint feedback confirms output workspace clear
         self._output_zone_last_seen = 0.0
         self._last_auto_output_interlock_reason = ""
         self._output_safety_fault_latched = False
+        self._output_safety_comm_fault_since = 0.0
         self._s10_off_time       = 0.0
         self._s10_prev           = False
 
@@ -2421,6 +2429,33 @@ class CartridgeSystem(Node):
         self.get_logger().error(f'[SAFETY][INPUT_ACTIVE] {detail}')
         self._notify('error', 'Input safety stop', detail)
 
+    def _active_safety_fault_ready(self, area: str, reason: str, now: float) -> bool:
+        """Debounce communication-only faults; physical unsafe edges stay immediate."""
+        timer_attr = (
+            '_input_safety_comm_fault_since'
+            if area == 'input'
+            else '_output_safety_comm_fault_since'
+        )
+        communication_only = (
+            'heartbeat' in reason or
+            'status stale' in reason or
+            'chưa nhận' in reason
+        )
+        if not communication_only:
+            setattr(self, timer_attr, 0.0)
+            return True
+
+        since = getattr(self, timer_attr, 0.0)
+        if since <= 0.0:
+            setattr(self, timer_attr, now)
+            self.get_logger().warn(
+                f'[SAFETY][{area.upper()}_ACTIVE] Communication delayed — '
+                f'holding new-state admission for {ROBOT_ACTIVE_COMMS_FAULT_DEBOUNCE_S:.1f}s '
+                'before emergency stop'
+            )
+            return False
+        return now - since >= ROBOT_ACTIVE_COMMS_FAULT_DEBOUNCE_S
+
     def _cb_done_tray_output(self, msg: Bool):
         """Nhận tín hiệu từ robot báo khay output đã đầy → set cờ _s4_trigger để
         kích hoạt STATE 4 thay khay output trong vòng lặp tiếp theo."""
@@ -2875,6 +2910,8 @@ class CartridgeSystem(Node):
         self._s4_trigger = False
         self._output_safety_fault_latched = False
         self._input_safety_fault_latched = False
+        self._input_safety_comm_fault_since = 0.0
+        self._output_safety_comm_fault_since = 0.0
         # Re-arm drive warm-up gate — phòng khi STOP xảy ra trong tình huống bất thường
         # (drive vẫn có thể ở state lạ); state1 sau START sẽ tự flush.
         self._drive_warm_t = -1.0
@@ -4241,13 +4278,13 @@ class CartridgeSystem(Node):
             self._robot_connected = False
             self._input_zone_clear = False
             self._output_zone_clear = False
-            self.get_logger().error(
-                '[SAFETY][ROBOT] Heartbeat timeout — AUTO/AI STATE 1-4 LOCKED '
+            self.get_logger().warn(
+                '[SAFETY][ROBOT] Heartbeat delayed — AUTO/AI STATE 1-4 LOCKED '
                 '(fail-closed); motion_busy was NOT cleared'
             )
             self._notify(
-                'error', 'Robot safety heartbeat lost',
-                'STATE 1-4 AUTO/AI đã khóa. Chờ heartbeat và robot HOME/index 0; '
+                'warn', 'Robot heartbeat delayed',
+                'STATE 1-4 AUTO/AI tạm khóa. Chờ heartbeat và robot HOME/index 0; '
                 'motion_busy không bị tự xóa.'
             )
 
@@ -4281,14 +4318,22 @@ class CartridgeSystem(Node):
                 self.state_s3 != SystemState.IDLE or
                 self.state_s4 != SystemState.IDLE):
             allowed, reason = self._auto_output_robot_interlock_status()
-            if not allowed:
+            if allowed:
+                self._output_safety_comm_fault_since = 0.0
+            elif self._active_safety_fault_ready('output', reason, now):
                 self._latch_active_output_safety_fault(reason)
+        else:
+            self._output_safety_comm_fault_since = 0.0
 
         if (self.operation_mode in ('auto', 'ai') and
                 self.state_in != SystemState.IDLE):
             allowed, reason = self._auto_robot_interlock_status()
-            if not allowed:
+            if allowed:
+                self._input_safety_comm_fault_since = 0.0
+            elif self._active_safety_fault_ready('input', reason, now):
                 self._latch_active_input_safety_fault(reason)
+        else:
+            self._input_safety_comm_fault_since = 0.0
 
     def _control_loop(self):
         """
