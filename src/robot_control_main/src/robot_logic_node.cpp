@@ -170,6 +170,7 @@ private:
     std::atomic<bool> cam0_view_clear_{false};
     std::atomic<int64_t> cam0_view_last_steady_ns_{0};
     std::atomic<int64_t> input_decision_accept_after_steady_ns_{0};
+    std::atomic<int64_t> input_decision_last_rx_steady_ns_{0};
     std::atomic<bool> cam1_view_clear_{false};
     std::atomic<int64_t> cam1_view_last_steady_ns_{0};
     std::atomic<bool> mechanical_output_zone_clear_{false};
@@ -347,8 +348,9 @@ private:
     std::atomic<bool> output_tray_change_home_motion_done_{false};
     std::atomic<int64_t> output_tray_change_home_wait_since_ns_{0};
     // SCALE_OUTPUT already returns to index 0. Before leaving PLACE_TO_OUTPUT
-    // for WAIT_FILLING, use that dwell as a second cam1 checkpoint and confirm
-    // whether the just-updated tray is full. No additional HOME action.
+    // for WAIT_FILLING, use that dwell as the second cam0+cam1 checkpoint:
+    // refresh input rows and confirm whether the updated output tray is full.
+    // No additional HOME action.
     std::atomic<bool> post_place_output_check_pending_{false};
     std::atomic<bool> post_place_output_scan_started_{false};
 
@@ -502,6 +504,7 @@ private:
     bool claimFreshFullOutputSnapshot();
     void requestOutputSnapshotNow();
     bool cam0DecisionWindowReady() const;
+    bool cam0CheckpointFrameReceived() const;
     bool cam1ViewClearFresh() const;
     bool mechanicalOutputZoneClearFresh() const;
     bool visionHeartbeatFresh();
@@ -724,12 +727,15 @@ void RobotLogicNode::initSubscriptions()
                 row_full_[i] =
                     (i < msg->data.size() && msg->data[i] == 1);
             }
+            input_decision_last_rx_steady_ns_ = steadyNowNs();
         });
 
     vision_empty_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/vision/input_tray/empty", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
             if (use_ai_for_control_.load() && !cam0DecisionWindowReady()) return;
+            if (use_ai_for_control_.load())
+                input_decision_last_rx_steady_ns_ = steadyNowNs();
             // Detection bi che trong luc robot dang gap khong phai bang chung
             // khay het. Vision cung freeze luc motion; guard nay la lop an toan
             // cuoi de khong bao done_tray_input do message den tre.
@@ -1089,6 +1095,7 @@ void RobotLogicNode::initSubscriptions()
             const bool was_clear = cam0_view_clear_.exchange(msg->data);
             if (!msg->data) {
                 input_decision_accept_after_steady_ns_ = 0;
+                input_decision_last_rx_steady_ns_ = 0;
                 vision_empty_armed_ = false;
                 std::lock_guard<std::mutex> lock(row_selection_mutex_);
                 selected_input_row_ = ROW_UNSET;
@@ -1099,6 +1106,7 @@ void RobotLogicNode::initSubscriptions()
                 // image-pipeline delay used by Vision before accepting READY/
                 // EMPTY messages in Robot Logic.
                 input_decision_accept_after_steady_ns_ = now_ns + 1500000000LL;
+                input_decision_last_rx_steady_ns_ = 0;
                 std::lock_guard<std::mutex> lock(row_selection_mutex_);
                 selected_input_row_ = ROW_UNSET;
                 std::fill(row_full_.begin(), row_full_.end(), false);
@@ -1855,6 +1863,10 @@ void RobotLogicNode::startButtonCallback(const std_msgs::msg::Bool::SharedPtr ms
 void RobotLogicNode::selectedRowCallback(const std_msgs::msg::Int32::SharedPtr msg)
 {
     std::lock_guard<std::mutex> lock(row_selection_mutex_);
+    if (use_ai_for_control_.load() && !cam0DecisionWindowReady()) {
+        selected_input_row_ = ROW_UNSET;
+        return;
+    }
     int row = msg->data;
     selected_input_row_ =
         (row >= 1 && row <= TOTAL_ROWS) ? row : ROW_UNSET;
@@ -2802,6 +2814,15 @@ bool RobotLogicNode::cam0DecisionWindowReady() const
         now_ns - seen_ns <= 2000000000LL && now_ns >= accept_ns;
 }
 
+bool RobotLogicNode::cam0CheckpointFrameReceived() const
+{
+    if (!cam0DecisionWindowReady())
+        return false;
+    const int64_t accept_ns = input_decision_accept_after_steady_ns_.load();
+    const int64_t rx_ns = input_decision_last_rx_steady_ns_.load();
+    return rx_ns > 0 && accept_ns > 0 && rx_ns >= accept_ns;
+}
+
 bool RobotLogicNode::cam1ViewClearFresh() const
 {
     const int64_t seen_ns = cam1_view_last_steady_ns_.load();
@@ -3050,6 +3071,7 @@ void RobotLogicNode::setInputScanAllowed(bool allowed)
     input_decision_accept_after_steady_ns_ = allowed
         ? steadyNowNs() + 1500000000LL
         : 0;
+    input_decision_last_rx_steady_ns_ = 0;
     vision_empty_armed_ = false;
     {
         std::lock_guard<std::mutex> lock(row_selection_mutex_);
@@ -3531,9 +3553,9 @@ void RobotLogicNode::stateAiCheckInputTray()
         return;
     }
 
-    if (input_scan_recovery_required_.load() || !input_scan_allowed_.load()) {
+    if (input_scan_recovery_required_.load() || !cam0DecisionWindowReady()) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[AI_CHECK_TRAY] Camera locked — waiting for verified camera checkpoint/recovery");
+            "[AI_CHECK_TRAY] Waiting for HOME/index 0 + 1.5s clean cam0 checkpoint");
         return;
     }
 
@@ -4200,16 +4222,18 @@ void RobotLogicNode::statePlaceToOutput()
 
         if (use_ai_for_control_.load()) {
             // executeScaleOutput() already ends at index 0. Keep this state
-            // active and use that natural HOME dwell as a second cam1
+            // active and use that natural HOME dwell as the second cam0+cam1
             // checkpoint after the newly placed cartridge.
             output_prescan_home_done_ = true;
             output_prescan_zone_verified_ = false;
             post_place_output_scan_started_ = false;
             post_place_output_check_pending_ = true;
+            if (!waiting_for_new_input_.load() && new_tray_loaded_.load())
+                setInputScanAllowed(true);
             setOutputScanAllowed(false);
             RCLCPP_INFO(get_logger(),
-                "[POST_PLACE][CAM1] SCALE_OUTPUT returned HOME — verify tray "
-                "FULL/non-FULL before WAIT_FILLING (no extra HOME)");
+                "[POST_PLACE][CAM0_CAM1] SCALE_OUTPUT returned HOME — check input "
+                "rows and verify output FULL/non-FULL (no extra motion)");
             return;
         }
 
@@ -4236,14 +4260,22 @@ void RobotLogicNode::statePlaceToOutput()
         }
         if (!mechanicalOutputZoneClearFresh() || !cam1ViewClearFresh()) {
             RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
-                "[POST_PLACE][CAM1] Waiting for stable HOME/cam1-view confirmation");
+                "[POST_PLACE][CAM0_CAM1] Waiting for stable HOME and clean camera window");
             return;
         }
         if (!post_place_output_scan_started_.exchange(true)) {
             setOutputScanAllowed(false);
             setOutputScanAllowed(true);
             RCLCPP_INFO(get_logger(),
-                "[POST_PLACE][CAM1] HOME verified — opened fresh scan epoch to confirm tray");
+                "[POST_PLACE][CAM0_CAM1] HOME verified — fresh camera checkpoint active");
+            return;
+        }
+
+        const bool cam0_required = input_scan_allowed_.load() &&
+            !waiting_for_new_input_.load() && new_tray_loaded_.load();
+        if (cam0_required && !cam0CheckpointFrameReceived()) {
+            RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+                "[POST_PLACE][CAM0] Waiting for first clean input-tray frame at HOME");
             return;
         }
 
