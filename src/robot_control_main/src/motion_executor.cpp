@@ -1576,7 +1576,12 @@ private:
         if (!moveR(-10, 21, 0,8)) return false;
         if (!wait(1.5)) return false;
         if (!moveR(0, -90, 0)) return false;
-        if (!moveToIndex(37)) return false;  //37 Đệm sau khi đặt vào chamber
+        // Index 37 is the chamber-exit waypoint. REFILL_BUFFER immediately
+        // needs a new cam0 row decision, and camera decisions are trusted only
+        // at HOME/index 0. Keep the safe waypoint, then finish at HOME so the
+        // 0.5 s pose dwell + 1.5 s clean-frame gate can reopen automatically.
+        if (!moveToIndex(37)) return false;
+        if (!moveToIndex(0)) return false;
         return true;
     }
 

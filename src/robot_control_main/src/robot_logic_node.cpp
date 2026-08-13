@@ -3749,8 +3749,11 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
         feed_chamber_signal_ = false;  // consumed — require new signal on next cycle
 
         if (!waiting_for_new_input_.load()) {
-            // Tray available → refill buffer while chamber fills
-            RCLCPP_INFO(get_logger(), "[PIPELINE] Tray available → REFILL_BUFFER");
+            // BUFFER_CHAMBER now finishes at HOME/index 0. REFILL_BUFFER may
+            // enter immediately and will naturally wait through the cam0 pose
+            // dwell/cooldown until a fresh row decision arrives.
+            RCLCPP_INFO(get_logger(),
+                "[PIPELINE] Tray available at HOME checkpoint → REFILL_BUFFER");
             transitionTo(SystemState::REFILL_BUFFER);
         } else if (scale_has_cartridge_) {
             // Drain mode + scale còn cartridge cũ → đợi scale result
