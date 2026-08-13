@@ -17,8 +17,8 @@
  * - /robot/motion_heartbeat (Header) - Node aliveness with timestamp
  * - /robot/input_zone_clear (Bool) - Fresh joint feedback confirms HOME/index 0
  * - /robot/output_zone_clear (Bool) - Fresh joint feedback confirms HOME/index 0
- * - /robot/cam0_view_clear (Bool) - HOME or stable fixed camera scan pose
- * - /robot/cam1_view_clear (Bool) - HOME or stable fixed camera scan pose
+ * - /robot/cam0_view_clear (Bool) - Fresh joint feedback confirms HOME/index 0
+ * - /robot/cam1_view_clear (Bool) - Fresh joint feedback confirms HOME/index 0
 
  * - /robot/gripper_cmd (Bool) - Gripper state feedback
  * - /robot/picker_cmd (Bool) - Picker state feedback
@@ -291,11 +291,7 @@ private:
     std::atomic<bool> input_zone_state_initialized_{false};
     std::atomic<bool> camera_view_clear_{false};
     std::atomic<bool> camera_view_state_initialized_{false};
-    std::chrono::steady_clock::time_point camera_pose_candidate_since_{};
-    bool camera_pose_candidate_active_{false};
     double input_zone_home_tolerance_deg_{2.0};
-    double camera_scan_pose_tolerance_deg_{2.0};
-    int camera_scan_pose_index_{28};
     static constexpr auto JOINT_FEEDBACK_MAX_AGE = 1000ms;
     static constexpr auto HOME_CLEAR_DWELL = 500ms;
 
@@ -412,10 +408,6 @@ private:
         this->get_parameter("safe_pose", safe_pose_);
         input_zone_home_tolerance_deg_ = this->declare_parameter<double>(
             "input_zone_home_tolerance_deg", 2.0);
-        camera_scan_pose_tolerance_deg_ = this->declare_parameter<double>(
-            "camera_scan_pose_tolerance_deg", 2.0);
-        camera_scan_pose_index_ = this->declare_parameter<int>(
-            "camera_scan_pose_index", 28);
 
 
         joint_sequences_.clear();
@@ -1046,25 +1038,6 @@ private:
     const std::string type = goal->command;
     const int param = goal->slot;
 
-    if (type == "AI_INPUT_TRAY_BUFFER") {
-        const bool scan_pose_valid = camera_scan_pose_index_ >= 0 &&
-            static_cast<size_t>(camera_scan_pose_index_) < joint_sequences_.size() &&
-            joint_sequences_[static_cast<size_t>(camera_scan_pose_index_)].size() >= 6;
-        if (!scan_pose_valid) {
-            auto preflight_result = std::make_shared<ExecuteMotion::Result>();
-            preflight_result->success = false;
-            preflight_result->message = "INVALID_CAMERA_SCAN_POSE";
-            RCLCPP_ERROR(get_logger(),
-                "[SAFETY][CAMERA_VIEW] Invalid camera_scan_pose_index=%d — "
-                "AI refill rejected before RobotMode or any Dobot primitive",
-                camera_scan_pose_index_);
-            goal_handle->abort(preflight_result);
-            publishBusy(false);
-            motion_in_progress_ = false;
-            return;
-        }
-    }
-
     // Every known action can cross or revoke one of Cartridge's mechanical
     // workspaces. Check the live heartbeat and both latched locks before any
     // RobotMode Continue/ClearError/Enable call, then wait one DDS interval and
@@ -1177,14 +1150,12 @@ private:
     if (type == "INPUT_TRAY_CHAMBER")  success = executeInputTrayChamber(param);
     else if (type == "INPUT_TRAY_BUFFER") success = executeInputTrayBuffer(param);
     else if (type == "INIT_INPUT_TRAY_BUFFER") success = executeInitInputTrayBuffer(param);
-    // AI chamber pick returns HOME for the input-camera checkpoint. The normal
-    // buffer refill ends at the fixed camera scan pose (index 28 by default),
-    // which is much closer than HOME and is verified from live joint feedback.
+    // Both AI input paths end at HOME/index 0. Robot Logic then opens cam0 and
+    // cam1 only after Motion Executor has confirmed 0.5 s stable joint feedback.
     else if (type == "AI_INPUT_TRAY_CHAMBER")
         success = executeInputTrayChamber(param) && moveToIndex(0);
     else if (type == "AI_INPUT_TRAY_BUFFER")
-        success = executeInputTrayBuffer(param) &&
-            moveToIndex(static_cast<size_t>(camera_scan_pose_index_));
+        success = executeInputTrayBuffer(param) && moveToIndex(0);
     else if (type == "AI_INIT_INPUT_TRAY_BUFFER")
         success = executeInitInputTrayBuffer(param);  // already ends at index 0
     else if (type == "CHAMBER_SCALE")  success = executeChamberScale();
@@ -1198,9 +1169,9 @@ private:
     else if (type == "SCALE_FAIL")     success = executeScaleFail();
     else if (type == "BUFFER_CHAMBER") success = executeBufferChamber();
     else if (type == "HOME")           success = moveToIndex(0);
-    // MOVE_SCAN_POSE: đưa tay về Index 28 — waypoint sau khi nhấc khỏi input row,
-    // KHÔNG che camera khay input. Dùng để re-scan input tray sau REFILL_BUFFER
-    // (AI mode) trước khi quyết định pick tiếp hay thay khay.
+    // MOVE_SCAN_POSE remains a compatibility waypoint only. Camera decisions
+    // are now blocked there; REFILL_BUFFER and PLACE_TO_OUTPUT must finish at
+    // HOME/index 0 before cam0/cam1 are trusted.
     else if (type == "MOVE_SCAN_POSE") success = moveToIndex(28);
     else RCLCPP_ERROR(get_logger(), "[ACTION] Unknown command: %s", type.c_str());
 
@@ -1370,51 +1341,21 @@ private:
         // without changing either consumer's safety contract.
         pub_output_zone_clear_->publish(msg);
 
-        double camera_pose_error_deg = 999.0;
-        bool at_camera_scan_pose = false;
-        const bool camera_index_valid = camera_scan_pose_index_ >= 0 &&
-            static_cast<size_t>(camera_scan_pose_index_) < joint_sequences_.size() &&
-            joint_sequences_[static_cast<size_t>(camera_scan_pose_index_)].size() >= actual.size();
-        if (feedback_fresh && camera_index_valid) {
-            camera_pose_error_deg = 0.0;
-            at_camera_scan_pose = true;
-            const auto& scan_pose = joint_sequences_[static_cast<size_t>(camera_scan_pose_index_)];
-            for (size_t i = 0; i < actual.size(); ++i) {
-                const double error = angularDistanceDeg(actual[i], scan_pose[i]);
-                camera_pose_error_deg = std::max(camera_pose_error_deg, error);
-                if (!std::isfinite(error) || error > camera_scan_pose_tolerance_deg_)
-                    at_camera_scan_pose = false;
-            }
-        }
-
-        bool camera_view_clear = false;
-        {
-            std::lock_guard<std::mutex> lock(joint_feedback_mutex_);
-            const bool camera_candidate = feedback_fresh &&
-                (at_home || at_camera_scan_pose) && !motion_in_progress_.load();
-            if (camera_candidate) {
-                if (!camera_pose_candidate_active_) {
-                    camera_pose_candidate_active_ = true;
-                    camera_pose_candidate_since_ = now;
-                }
-                camera_view_clear =
-                    now - camera_pose_candidate_since_ >= HOME_CLEAR_DWELL;
-            } else {
-                camera_pose_candidate_active_ = false;
-            }
-        }
+        // Both cameras are trusted only at the exact same verified HOME level
+        // as the mechanical input/output zones. Index 28 remains a motion
+        // waypoint only; it no longer grants optical permission.
+        const bool camera_view_clear = clear;
 
         const bool camera_was_clear = camera_view_clear_.exchange(camera_view_clear);
         const bool camera_was_initialized = camera_view_state_initialized_.exchange(true);
         if (camera_view_clear && (!camera_was_initialized || !camera_was_clear)) {
             RCLCPP_INFO(get_logger(),
-                "[SAFETY][CAMERA_VIEW] CLEAR — %s stable for 0.5s (error %.2f deg)",
-                at_home ? "HOME" : "SCAN_POSE",
-                at_home ? max_error_deg : camera_pose_error_deg);
+                "[SAFETY][CAMERA_VIEW] CLEAR — HOME/index 0 stable for 0.5s "
+                "(error %.2f deg)", max_error_deg);
         } else if (!camera_view_clear && (!camera_was_initialized || camera_was_clear)) {
             RCLCPP_WARN(get_logger(),
                 "[SAFETY][CAMERA_VIEW] BLOCKED — robot moving, feedback stale, or "
-                "outside HOME/fixed scan pose index %d", camera_scan_pose_index_);
+                "outside HOME/index 0");
         }
         auto camera_msg = std_msgs::msg::Bool();
         camera_msg.data = camera_view_clear;

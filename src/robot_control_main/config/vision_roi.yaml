@@ -50,15 +50,18 @@ output_tray:
   # voi luc do.
   # anchor = bbox class-0 do data_output_hp_final_fp16.engine tra ve tren DUNG
   # khung hinh do.
+  # 12/08 sua tiep: slot1<->slot2 va slot3<->slot4 bi cham nguoc hang.
+  # Quy uoc (giu tu file 15/7, khop pose 14-23): LE = hang DUOI,
+  # CHAN = hang TREN. Slot 5-10 cham dung tu dau, khong dung toi.
   anchor: [113, 9, 579, 278]
   # Class-0 "tray" chi duoc phep bat tray-present khi tam bbox nam trong
   # vung nay; cartridge ngoai vung cung bi loai. Lay dung khung khay.
   outer: [[113, 278], [113, 9], [579, 9], [579, 278]]
   slots:
-    - [[458, 129], [510, 129], [492, 33], [442, 34]]   # slot1
-    - [[475, 254], [530, 254], [509, 138], [457, 137]]   # slot2
-    - [[384, 130], [442, 130], [429, 35], [378, 37]]   # slot3
-    - [[393, 255], [456, 254], [441, 137], [385, 139]]   # slot4
+    - [[475, 254], [530, 254], [509, 138], [457, 137]]   # slot1
+    - [[458, 129], [510, 129], [492, 33], [442, 34]]   # slot2
+    - [[393, 255], [456, 254], [441, 137], [385, 139]]   # slot3
+    - [[384, 130], [442, 130], [429, 35], [378, 37]]   # slot4
     - [[317, 254], [381, 253], [373, 142], [311, 141]]   # slot5
     - [[311, 133], [372, 134], [366, 37], [309, 35]]   # slot6
     - [[237, 254], [305, 254], [302, 144], [241, 142]]   # slot7
