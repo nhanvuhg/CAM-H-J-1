@@ -309,7 +309,10 @@ private:
     int motion_fail_count_{0};
 
     std::vector<bool> row_full_;
-    bool input_tray_empty_{false};
+    // Written by the ROS vision callback and read by the state-machine thread.
+    // Atomic also makes the confirmed EMPTY decision an explicit cross-thread
+    // event instead of inferring it from a temporarily all-false row cache.
+    std::atomic<bool> input_tray_empty_{false};
     // Sau new_tray_loaded phai thay empty=false cua CHINH khay moi truoc khi
     // chap nhan canh true. Ngan true con sot tu khay cu kich done sau 0.1s.
     std::atomic<bool> vision_empty_armed_{false};
@@ -748,8 +751,7 @@ void RobotLogicNode::initSubscriptions()
                 return;
             }
 
-            bool was_empty = input_tray_empty_;
-            input_tray_empty_ = msg->data;
+            const bool was_empty = input_tray_empty_.exchange(msg->data);
 
             // AI mode: rising edge of "all rows empty" → publish done_tray_input
             // This mirrors advanceAutoRow() last-row logic, gated by vision instead of row counter.
@@ -3937,6 +3939,26 @@ void RobotLogicNode::stateRefillBuffer()
 
     // ── Check if we still have rows ──
     if (waiting_for_new_input_.load() || !new_tray_loaded_.load()) {
+        if (use_ai_for_control_.load() && input_tray_empty_.load()) {
+            // This is a positive Vision result, not an all-false cache:
+            // Vision only confirms EMPTY after 15 clean HOME frames with the
+            // physical tray present and no row containing exactly 8 parts.
+            // The tray-change handshake can continue in parallel while the
+            // already-loaded scale/chamber pipeline keeps moving.
+            buffer_is_empty_ = true;
+            if (scale_has_cartridge_) {
+                RCLCPP_WARN(get_logger(),
+                    "[REFILL] Fresh cam0 EMPTY confirmed — no valid row; "
+                    "skip buffer refill → PROCESSING_SCALE");
+                transitionTo(SystemState::PROCESSING_SCALE);
+            } else {
+                RCLCPP_WARN(get_logger(),
+                    "[REFILL] Fresh cam0 EMPTY confirmed — no valid row and "
+                    "scale empty; skip buffer refill → WAIT_FILLING");
+                transitionTo(SystemState::WAIT_FILLING);
+            }
+            return;
+        }
         if (cartridge_drain_confirmed_.load()) {
             // Cartridge confirmed no S1/S2/S3 tray after S2 -> S1 handoff — skip refill -> drain.
             RCLCPP_WARN(get_logger(),
