@@ -286,6 +286,10 @@ private:
     std::atomic<bool> skipped_buffer_load_{false};  // set on timeout, consumed in WAIT_RESUME_CHOICE
     std::atomic<bool> s7_at_robot_{false};   // Cartridge S7 — khay đang ở vị trí Robot (parse từ /providesystem/sensors_state)
     std::atomic<bool> fill_done_{false};
+    // Buffer needs another valid input row.  Chamber work always has priority:
+    // fill_done -> CHAMBER_SCALE, feed_chamber -> BUFFER_CHAMBER; refill runs
+    // only after those commands have been handled or when neither is pending.
+    std::atomic<bool> refill_pending_{false};
     std::atomic<bool> scale_result_received_{false};
     std::atomic<bool> scale_result_pass_{false};
     std::atomic<bool> system_enabled_{true};
@@ -1598,6 +1602,7 @@ void RobotLogicNode::newTrayCallback(const std_msgs::msg::Bool::SharedPtr msg)
     // (kể cả trong manual mode) để operator chuyển sang AUTO/AI rồi PICK_INPUT
     // vẫn pick được. Manual mode chỉ chặn AUTO-START pipeline, không chặn data tracking.
     new_tray_loaded_ = true;
+    refill_pending_ = true;
     bool was_waiting = waiting_for_new_input_.load();
     waiting_for_new_input_ = false;
     setInputScanAllowed(true);
@@ -2377,6 +2382,7 @@ void RobotLogicNode::resetStateCallback(
     feed_chamber_wait_active_ = false;
     skipped_buffer_load_     = false;
     fill_done_               = false;
+    refill_pending_          = false;
     cartridge_drain_confirmed_ = false;
     emergency_stop_          = false;
     system_paused_           = false;
@@ -3460,6 +3466,7 @@ void RobotLogicNode::stateInitRefillBuffer()
         if (use_ai_for_control_) setInputScanAllowed(true);
 
         buffer_is_empty_ = false;
+        refill_pending_ = false;
         is_first_batch_ = false;
 
         advanceAutoRow();
@@ -3633,22 +3640,51 @@ void RobotLogicNode::stateWaitFilling()
         }
     }
 
+    // Chamber commands outrank buffer refill.  If the chamber is empty and a
+    // prepared buffer is waiting, honor feed_chamber before any pending refill.
+    if (!chamber_has_cartridge_ && !buffer_is_empty_ && feed_chamber_signal_.load()) {
+        RCLCPP_INFO(get_logger(),
+            "[PRIORITY] feed_chamber before refill_pending -> LOAD_CHAMBER_FROM_BUFFER");
+        transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
+        return;
+    }
+
     if (!chamber_has_cartridge_) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 3000,
             "[WAIT_FILLING] Chamber empty — nothing to fill");
         return;
     }
 
-    if (!fill_done_) {
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
-            "[WAIT_FILLING] ⏳ Waiting for fill_done...");
+    if (fill_done_.load()) {
+        const bool scale_result_pending = hasPendingScaleResults();
+        if (scale_has_cartridge_ || scale_result_pending) {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                "[PRIORITY] fill_done latched but scale not ready "
+                "(occupied=%d result_pending=%d) — chamber transfer blocked",
+                scale_has_cartridge_, scale_result_pending);
+            return;
+        }
+        RCLCPP_INFO(get_logger(),
+            "[PRIORITY] fill_done before refill_pending -> TAKE_CHAMBER_TO_SCALE");
+        fill_done_ = false;
+        transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
         return;
     }
 
-    // fill_done received
-    RCLCPP_INFO(get_logger(), "[WAIT_FILLING] ✅ fill_done → TAKE_CHAMBER_TO_SCALE");
-    fill_done_ = false;
-    transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
+    // No chamber command is pending: refill the empty buffer opportunistically.
+    if (buffer_is_empty_ && refill_pending_.load() &&
+        !waiting_for_new_input_.load() && new_tray_loaded_.load())
+    {
+        cartridge_drain_confirmed_ = false;
+        RCLCPP_INFO(get_logger(),
+            "[PRIORITY] No chamber command -> consume refill_pending");
+        transitionTo(SystemState::REFILL_BUFFER);
+        return;
+    }
+
+    RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
+        "[WAIT_FILLING] Waiting (fill_done=0 refill_pending=%d)",
+        refill_pending_.load());
 }
 
 // ============================================================================
@@ -3704,6 +3740,14 @@ void RobotLogicNode::stateTakeChamberToScale()
 
     // Internal transfer: does not enter the shared input/output tray zones, so
     // it remains allowed while the cartridge state machine is active.
+    const bool scale_result_pending = hasPendingScaleResults();
+    if (scale_has_cartridge_ || scale_result_pending) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+            "[SCALE] CHAMBER_SCALE blocked — scale must be empty and have no "
+            "pending result (occupied=%d result_pending=%d)",
+            scale_has_cartridge_, scale_result_pending);
+        return;
+    }
     RCLCPP_INFO(get_logger(), "[SCALE] 🤖 CHAMBER → SCALE [ASYNC]");
     sendMotionActionAsync("CHAMBER_SCALE");
 }
@@ -3739,6 +3783,7 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
         buffer_is_empty_       = true;
         chamber_has_cartridge_ = true;
         chamber_is_empty_      = false;
+        refill_pending_        = true;
 
         RCLCPP_INFO(get_logger(),
             "[LOAD_BUFFER] ✅ Buffer → Chamber done. Chamber filling started.");
@@ -3750,7 +3795,7 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
 
         feed_chamber_signal_ = false;  // consumed — require new signal on next cycle
 
-        if (!waiting_for_new_input_.load()) {
+        if (refill_pending_.load() && !waiting_for_new_input_.load()) {
             // BUFFER_CHAMBER now finishes at HOME/index 0. REFILL_BUFFER may
             // enter immediately and will naturally wait through the cam0 pose
             // dwell/cooldown until a fresh row decision arrives.
@@ -3896,6 +3941,7 @@ void RobotLogicNode::stateRefillBuffer()
                     "checking input rows and collecting output snapshot in parallel");
             }
             buffer_is_empty_ = false;
+            refill_pending_ = false;
             RCLCPP_INFO(get_logger(), "[BUFFER] ✅ Buffer refilled");
 
             advanceAutoRow();
@@ -4105,6 +4151,31 @@ void RobotLogicNode::routeAfterOutputPlacement()
         return;
     }
 
+    // Commands originating from the chamber always win over a pending refill.
+    // The refill flag remains latched and will be consumed after chamber work.
+    if (chamber_has_cartridge_ && fill_done_.load()) {
+        const bool scale_result_pending = hasPendingScaleResults();
+        if (scale_has_cartridge_ || scale_result_pending) {
+            RCLCPP_WARN(get_logger(),
+                "[PRIORITY][PLACE_OUT] fill_done held — scale not ready "
+                "(occupied=%d result_pending=%d)",
+                scale_has_cartridge_, scale_result_pending);
+            transitionTo(SystemState::WAIT_FILLING);
+            return;
+        }
+        RCLCPP_INFO(get_logger(),
+            "[PRIORITY][PLACE_OUT] fill_done before refill_pending -> TAKE_CHAMBER_TO_SCALE");
+        fill_done_ = false;
+        transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
+        return;
+    }
+    if (!chamber_has_cartridge_ && !buffer_is_empty_ && feed_chamber_signal_.load()) {
+        RCLCPP_INFO(get_logger(),
+            "[PRIORITY][PLACE_OUT] feed_chamber before refill_pending -> LOAD_CHAMBER_FROM_BUFFER");
+        transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
+        return;
+    }
+
     const bool pipeline_empty = !chamber_has_cartridge_ && buffer_is_empty_;
     if (pipeline_empty) {
         if (waiting_for_new_input_.load()) {
@@ -4128,11 +4199,11 @@ void RobotLogicNode::routeAfterOutputPlacement()
         return;
     }
 
-    if (chamber_has_cartridge_ && buffer_is_empty_ &&
+    if (refill_pending_.load() && chamber_has_cartridge_ && buffer_is_empty_ &&
         !waiting_for_new_input_.load() && new_tray_loaded_.load()) {
         cartridge_drain_confirmed_ = false;
         RCLCPP_INFO(get_logger(),
-            "[PIPELINE] New tray arrived during drain scale processing → REFILL_BUFFER");
+            "[PRIORITY][PLACE_OUT] Chamber commands idle -> consume refill_pending");
         transitionTo(SystemState::REFILL_BUFFER);
         return;
     }
@@ -4525,6 +4596,33 @@ void RobotLogicNode::statePlaceToFail()
             return;
         }
 
+        // Same priority as the PASS route: finish chamber work first and keep
+        // refill_pending latched until a row is physically placed in buffer.
+        if (!manual_mode_ && chamber_has_cartridge_ && fill_done_.load()) {
+            const bool scale_result_pending = hasPendingScaleResults();
+            if (scale_has_cartridge_ || scale_result_pending) {
+                RCLCPP_WARN(get_logger(),
+                    "[PRIORITY][PLACE_FAIL] fill_done held — scale not ready "
+                    "(occupied=%d result_pending=%d)",
+                    scale_has_cartridge_, scale_result_pending);
+                transitionTo(SystemState::WAIT_FILLING);
+                return;
+            }
+            RCLCPP_INFO(get_logger(),
+                "[PRIORITY][PLACE_FAIL] fill_done before refill_pending -> TAKE_CHAMBER_TO_SCALE");
+            fill_done_ = false;
+            transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
+            return;
+        }
+        if (!manual_mode_ && !chamber_has_cartridge_ && !buffer_is_empty_ &&
+            feed_chamber_signal_.load())
+        {
+            RCLCPP_INFO(get_logger(),
+                "[PRIORITY][PLACE_FAIL] feed_chamber before refill_pending -> LOAD_CHAMBER_FROM_BUFFER");
+            transitionTo(SystemState::LOAD_CHAMBER_FROM_BUFFER);
+            return;
+        }
+
         bool pipeline_empty = !chamber_has_cartridge_ && buffer_is_empty_;
         if (manual_mode_) {
             transitionTo(SystemState::IDLE);
@@ -4547,12 +4645,12 @@ void RobotLogicNode::statePlaceToFail()
                     "[PIPELINE] 📦 Pipeline drained (fail) + NEW tray available → Restarting pipeline cycle (INIT_LOAD_CHAMBER_DIRECT)");
                 transitionTo(SystemState::INIT_LOAD_CHAMBER_DIRECT);
             }
-        } else if (chamber_has_cartridge_ && buffer_is_empty_
+        } else if (refill_pending_.load() && chamber_has_cartridge_ && buffer_is_empty_
                    && !waiting_for_new_input_.load() && new_tray_loaded_.load())
         {
             cartridge_drain_confirmed_ = false;
             RCLCPP_INFO(get_logger(),
-                "[PIPELINE] New tray arrived during drain fail processing → REFILL_BUFFER");
+                "[PRIORITY][PLACE_FAIL] Chamber commands idle -> consume refill_pending");
             transitionTo(SystemState::REFILL_BUFFER);
         } else {
             transitionTo(SystemState::WAIT_FILLING);
@@ -4572,6 +4670,14 @@ void RobotLogicNode::stateLastBatchWait()
 {
     publishSystemStatus("LAST_BATCH_WAIT");
     if (chamber_has_cartridge_ && fill_done_) {
+        const bool scale_result_pending = hasPendingScaleResults();
+        if (scale_has_cartridge_ || scale_result_pending) {
+            RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+                "[LAST_BATCH] fill_done held — scale not ready "
+                "(occupied=%d result_pending=%d)",
+                scale_has_cartridge_, scale_result_pending);
+            return;
+        }
         fill_done_ = false;
         transitionTo(SystemState::TAKE_CHAMBER_TO_SCALE);
     }
