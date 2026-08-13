@@ -143,8 +143,9 @@ private:
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr  set_mode_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_homing_done_sub_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sensors_state_sub_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_pos1_busy_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_pos2_busy_sub_;
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_busy_sub_;     // /cartridge/busy — interlock Pos1
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cartridge_busy_sub_;     // aggregate status for startup/resume coordination
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   output_tray_full_sub_;   // /vision/output_tray/full — AI mode
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cam0_view_clear_sub_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr   cam1_view_clear_sub_;
@@ -166,7 +167,8 @@ private:
     std::atomic<int64_t> last_output_present_rx_ns_{0};
     std::atomic<bool> motion_busy_{false};
     std::atomic<bool> cartridge_busy_{false};
-    std::atomic<bool> cartridge_pos2_busy_{false};  // STATE 3/4 OutX/OutY đang chạy — block PLACE_TO_OUTPUT
+    std::atomic<bool> cartridge_pos1_busy_{true};
+    std::atomic<bool> cartridge_pos2_busy_{true};  // STATE 3/4 OutX/OutY đang chạy — block PLACE_TO_OUTPUT
     std::atomic<bool> cam0_view_clear_{false};
     std::atomic<int64_t> cam0_view_last_steady_ns_{0};
     std::atomic<int64_t> input_decision_accept_after_steady_ns_{0};
@@ -1189,6 +1191,14 @@ void RobotLogicNode::initSubscriptions()
                 RCLCPP_WARN(get_logger(), "[INTERLOCK] 🔒 Cartridge BUSY");
             else
                 RCLCPP_INFO(get_logger(), "[INTERLOCK] 🔓 Cartridge FREE");
+        });
+
+    cartridge_pos1_busy_sub_ = create_subscription<std_msgs::msg::Bool>(
+        "/cartridge/pos1_busy", rclcpp::QoS(1).reliable().transient_local(),
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            cartridge_pos1_busy_ = msg->data;
+            RCLCPP_INFO(get_logger(), "[MUTEX][POS1] Cartridge State1/2 %s",
+                msg->data ? "BUSY" : "FREE");
         });
 
     // Pos2 busy: STATE 3 (cấp khay thành phẩm) hoặc STATE 4 (thay khay output)
@@ -3341,9 +3351,9 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         return;
     }
 
-    if (cartridge_busy_) {
+    if (cartridge_pos1_busy_) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[INTERLOCK] Cartridge BUSY — INIT_LOAD blocked");
+            "[MUTEX][POS1] State1/2 BUSY — INIT_LOAD blocked");
         return;
     }
 
@@ -3395,10 +3405,9 @@ void RobotLogicNode::stateInitLoadChamberDirect()
         }
     }
 
-    // Final edge interlock: cartridge may enter STATE 1/2/3/4 after the
-    // earlier state check but before this action send.  Do not consume the row
-    // or close the camera gate until the shared tray area is actually free.
-    if (cartridge_busy_.load() || cartridge_pos2_busy_.load()) {
+    // Final edge mutex: State1/2 may start after the earlier check but before
+    // this action send. Do not consume the row until Pos1 is actually free.
+    if (cartridge_pos1_busy_.load()) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
             "[INTERLOCK] Cartridge became BUSY — INPUT_TRAY_CHAMBER not sent");
         return;
@@ -3471,9 +3480,9 @@ void RobotLogicNode::stateInitRefillBuffer()
         return;
     }
 
-    if (cartridge_busy_) {
+    if (cartridge_pos1_busy_) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[INTERLOCK] Cartridge BUSY — INIT_REFILL blocked");
+            "[MUTEX][POS1] State1/2 BUSY — INIT_REFILL blocked");
         return;
     }
 
@@ -3515,7 +3524,7 @@ void RobotLogicNode::stateInitRefillBuffer()
         }
     }
 
-    if (cartridge_busy_.load() || cartridge_pos2_busy_.load()) {
+    if (cartridge_pos1_busy_.load()) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
             "[INTERLOCK] Cartridge became BUSY — INIT_INPUT_TRAY_BUFFER not sent");
         return;
@@ -3917,9 +3926,9 @@ void RobotLogicNode::stateRefillBuffer()
         return;
     }
 
-    if (cartridge_busy_) {
+    if (cartridge_pos1_busy_) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[INTERLOCK] Cartridge BUSY — REFILL_BUFFER blocked");
+            "[MUTEX][POS1] State1/2 BUSY — REFILL_BUFFER blocked");
         return;
     }
 
@@ -3959,7 +3968,7 @@ void RobotLogicNode::stateRefillBuffer()
         }
     }
 
-    if (cartridge_busy_.load() || cartridge_pos2_busy_.load()) {
+    if (cartridge_pos1_busy_.load()) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
             "[INTERLOCK] Cartridge became BUSY — INPUT_TRAY_BUFFER not sent");
         return;
@@ -4297,9 +4306,9 @@ void RobotLogicNode::statePlaceToOutput()
         return;
     }
 
-    if (cartridge_busy_.load() || cartridge_pos2_busy_.load()) {
+    if (cartridge_pos2_busy_.load()) {
         RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[INTERLOCK] Cartridge state BUSY — PLACE_TO_OUTPUT pending");
+            "[MUTEX][POS2] State3/4 BUSY — PLACE_TO_OUTPUT pending");
         return;
     }
 
@@ -4435,7 +4444,7 @@ void RobotLogicNode::statePlaceToOutput()
     // ── Send motion ──
     // Final edge guard: scale result/slot selection can arrive while a
     // cartridge state starts in parallel.  Re-check immediately before goal.
-    if (cartridge_busy_.load() || cartridge_pos2_busy_.load() ||
+    if (cartridge_pos2_busy_.load() ||
         waiting_for_new_output_.load() || !new_trayoutput_loaded_.load() ||
         (use_ai_for_control_.load() &&
          (!cam1ViewClearFresh() || output_scan_recovery_required_.load() ||
@@ -4526,11 +4535,6 @@ void RobotLogicNode::statePlaceToFail()
         return;
     }
 
-    if (cartridge_busy_.load() || cartridge_pos2_busy_.load()) {
-        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-            "[INTERLOCK] Cartridge state BUSY — SCALE_FAIL pending");
-        return;
-    }
     RCLCPP_INFO(get_logger(), "[FAIL] 🤖 SCALE → FAIL [ASYNC]");
     sendMotionActionAsync("SCALE_FAIL");
 }

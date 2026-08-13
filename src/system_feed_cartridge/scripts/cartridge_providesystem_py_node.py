@@ -85,15 +85,6 @@ TRAY_ROBOT_CHECK_TIMEOUT_S = 3.0
 JOG_OUTPUT_TIMEOUT_S = 120.0
 POSITION_TOLERANCE_HOME = 5.0   # mm — tolerance kiểm tra vị trí gần home
 HOME_SPEED              = 30    # mm/s cho position_task về 0
-ROBOT_HEARTBEAT_TIMEOUT_S = 2.0  # motion_executor publishes every 0.5s
-ROBOT_ZONE_STATUS_TIMEOUT_S = 2.0
-# DDS callbacks can be queued briefly while the single-threaded cartridge node
-# is completing a blocking FAS transaction.  Keep admission fail-closed at the
-# 2 s thresholds above, but do not turn one delayed callback into an emergency
-# stop while the robot was last confirmed at HOME.  Explicit zone BLOCKED or
-# motion_busy remains an immediate active-motion fault.
-ROBOT_ACTIVE_COMMS_FAULT_DEBOUNCE_S = 1.0
-
 # ─── Sensor IDs — matching sensors.yaml ─────────────────────────
 S1_BELT_START      = 1
 S2_BELT_MID        = 2
@@ -393,20 +384,15 @@ class CartridgeSystem(Node):
 
         # ── Shared / Other ───────────────────────────────────────────
         self._motion_busy       = False
+        # Exact cross-node mutexes. Default BUSY until the transient-local
+        # Motion Executor publishers provide their authoritative snapshot.
+        self._robot_input_pick_busy = True
+        self._robot_place_output_busy = True
         self._last_cartridge_busy_published = None
+        self._last_cartridge_pos1_busy_published = None
         self._last_cartridge_pos2_busy_published = None
-        self._robot_last_seen   = 0.0   # timestamp of last /robot/motion_heartbeat
-        self._robot_connected   = False # True only while heartbeat is fresh
-        self._input_zone_clear  = False # live joint feedback confirms HOME/index 0
-        self._input_zone_last_seen = 0.0
         self._last_auto_interlock_reason = ""
-        self._input_safety_fault_latched = False
-        self._input_safety_comm_fault_since = 0.0
-        self._output_zone_clear = False # live joint feedback confirms output workspace clear
-        self._output_zone_last_seen = 0.0
         self._last_auto_output_interlock_reason = ""
-        self._output_safety_fault_latched = False
-        self._output_safety_comm_fault_since = 0.0
         self._s10_off_time       = 0.0
         self._s10_prev           = False
 
@@ -500,6 +486,8 @@ class CartridgeSystem(Node):
         # receives the current lock instead of defaulting to FREE.
         self.pub_busy_cartridge = self.create_publisher(
             Bool, '/cartridge/busy', qos_latching)
+        self.pub_busy_cartridge_pos1 = self.create_publisher(
+            Bool, '/cartridge/pos1_busy', qos_latching)
         self.pub_busy_cartridge_pos2 = self.create_publisher(
             Bool, '/cartridge/pos2_busy', qos_latching)
         self.pub_cartridge_heartbeat = self.create_publisher(
@@ -520,9 +508,8 @@ class CartridgeSystem(Node):
         self.create_subscription(Bool,   '/system/pause_button',             self._cb_pause,              qos)
         self.create_subscription(Bool,   '/system/resume_button',            self._cb_resume,             qos)
         self.create_subscription(Bool,   '/robot/motion_busy',               self._cb_motion_busy,          qos)
-        self.create_subscription(Header, '/robot/motion_heartbeat',          self._cb_motion_heartbeat,     qos)
-        self.create_subscription(Bool,   '/robot/input_zone_clear',          self._cb_input_zone_clear,     qos_latching)
-        self.create_subscription(Bool,   '/robot/output_zone_clear',         self._cb_output_zone_clear,    qos_latching)
+        self.create_subscription(Bool,   '/robot/input_pick_busy',           self._cb_input_pick_busy,      qos_latching)
+        self.create_subscription(Bool,   '/robot/place_output_busy',         self._cb_place_output_busy,    qos_latching)
         self.create_subscription(Bool,   '/robot/done_tray_output',          self._cb_done_tray_output,     qos)
         self.create_subscription(Bool,   '/robot/done_tray_input',           self._cb_done_tray_input,      qos)
 
@@ -560,10 +547,9 @@ class CartridgeSystem(Node):
 
         self.create_timer(5.0,  self._watchdog)
 
-        # This heartbeat and the periodic BUSY snapshots form one fail-closed
-        # admission contract for every Dobot action.  A transient-local FALSE
-        # alone is not enough: if this node crashes, subscribers would otherwise
-        # keep that old permission indefinitely.
+        # Keep aggregate liveness/status available for Robot Logic monitoring
+        # and pipeline-drain evidence. Motion admission itself uses only the
+        # dedicated Pos1/Pos2 mutex snapshots published below.
         self.create_timer(0.5, self._publish_cartridge_safety_status)
 
         # Periodically publish the authoritative mode for the node lifetime.
@@ -572,10 +558,21 @@ class CartridgeSystem(Node):
         self._initial_mode_publish_count = 0
         self._initial_mode_timer = self.create_timer(1.0, self._publish_initial_mode_safe)
 
+        # Older releases emitted heartbeat/HOME watchdog errors without a
+        # machine-readable code.  The GUI therefore stored them under its
+        # legacy generic feeder-alert id and could not know when to remove
+        # them.  Clear only that retired alert; current feeder errors keep
+        # their own ids and are not affected.
+        self._notify(
+            'silent_ok', 'Workspace mutex ready',
+            'Legacy robot heartbeat safety-stop alerts are retired.',
+            code='legacy_safety_stop_clear'
+        )
+
         self.get_logger().info("CartridgeSystem node started")
 
     def _combined_cartridge_busy(self) -> bool:
-        """Authoritative global mechanical lock for Robot motion admission."""
+        """Aggregate cartridge activity for monitoring/startup coordination."""
         return bool(
             self.state in (
                 SystemState.ERROR,
@@ -594,6 +591,7 @@ class CartridgeSystem(Node):
         heartbeat.frame_id = 'cartridge_providesystem'
         self.pub_cartridge_heartbeat.publish(heartbeat)
         self._pub_cartridge_busy(self._combined_cartridge_busy())
+        self._pub_cartridge_pos1_busy(self.state_in != SystemState.IDLE)
         self._pub_cartridge_pos2_busy(
             self.state_s3 != SystemState.IDLE or
             self.state_s4 != SystemState.IDLE
@@ -1851,7 +1849,13 @@ class CartridgeSystem(Node):
         Dùng cho toàn bộ luồng STATE 1 và STATE 2.
         """
         self.get_logger().info(f"[IN] -> {next_state.name}")
+        was_active = self.state_in != SystemState.IDLE
         self.state_in        = next_state
+        is_active = self.state_in != SystemState.IDLE
+        if is_active != was_active:
+            # Publish before the next hardware step. Motion Executor rechecks
+            # this latched mutex before an input-pick primitive.
+            self._pub_cartridge_pos1_busy(is_active)
         self._cmd_sent_in    = False
         self._step_start_in  = 0.0
         self._step_timeout_in = 0.0
@@ -2075,7 +2079,7 @@ class CartridgeSystem(Node):
         """
         Điều kiện để auto-trigger STATE 1 (chỉ AUTO/AI mode):
           - Đã homing (zero_offset có giá trị)
-          - Robot heartbeat còn mới, không bận và feedback xác nhận HOME/index 0
+          - Robot không chạy input-pick (mutex /robot/input_pick_busy=FALSE)
           - Có khay trên băng tải (S1 OR S2 OR S3 ON)
           - Vị trí cấp khay trống (S7_TRAY_AT_ROBOT=OFF) — xem INVARIANT trên
           - Cylinder 1 đã thu về (S9 ON, S10 OFF)
@@ -2098,7 +2102,7 @@ class CartridgeSystem(Node):
           - Đã homing
           - Robot đã báo xong khay input (_input_tray_done=True, set bởi _cb_done_tray_input)
           - Khay đang ở vị trí robot (S7_TRAY_AT_ROBOT=ON)
-          - Robot heartbeat còn mới, không bận và feedback xác nhận HOME/index 0
+          - Robot không chạy input-pick (mutex /robot/input_pick_busy=FALSE)
         """
         if self.operation_mode not in ['auto', 'ai']:
             return False
@@ -2109,30 +2113,10 @@ class CartridgeSystem(Node):
                 and self.sensor(S7_TRAY_AT_ROBOT))
 
     def _auto_robot_interlock_status(self):
-        """Return (allowed, reason) for automatic STATE 1/2 shared-zone entry.
-
-        Missing communication is never interpreted as permission.  MANUAL
-        STATE buttons intentionally use a separate operator-override path.
-        """
-        now = time.monotonic()
-        heartbeat_at = getattr(self, '_robot_last_seen', 0.0)
-        if heartbeat_at <= 0.0:
-            return False, 'chưa nhận /robot/motion_heartbeat'
-        heartbeat_age = now - heartbeat_at
-        if not getattr(self, '_robot_connected', False) or heartbeat_age > ROBOT_HEARTBEAT_TIMEOUT_S:
-            return False, f'robot heartbeat stale (>{ROBOT_HEARTBEAT_TIMEOUT_S:.1f}s)'
-
-        zone_at = getattr(self, '_input_zone_last_seen', 0.0)
-        if zone_at <= 0.0:
-            return False, 'chưa nhận /robot/input_zone_clear'
-        zone_age = now - zone_at
-        if zone_age > ROBOT_ZONE_STATUS_TIMEOUT_S:
-            return False, f'input-zone status stale (>{ROBOT_ZONE_STATUS_TIMEOUT_S:.1f}s)'
-        if not getattr(self, '_input_zone_clear', False):
-            return False, 'robot chưa ở HOME/index 0'
-        if getattr(self, '_motion_busy', False):
-            return False, 'robot đang motion_busy'
-        return True, 'robot heartbeat fresh + HOME/index 0'
+        """State1/2 mutex: only robot input-pick actions block Pos1."""
+        if getattr(self, '_robot_input_pick_busy', True):
+            return False, 'robot đang pick cartridge từ khay input'
+        return True, 'robot input-pick mutex FREE'
 
     def _report_auto_robot_interlock(self):
         """Log/notify only when the automatic shared-zone lock reason changes."""
@@ -2142,7 +2126,7 @@ class CartridgeSystem(Node):
             if previous:
                 self.get_logger().info(
                     '[SAFETY][AUTO-UNLOCK] STATE 1/2 enabled — '
-                    'robot heartbeat fresh and input zone CLEAR'
+                    'robot input-pick mutex FREE'
                 )
             self._last_auto_interlock_reason = ''
             return True
@@ -2153,42 +2137,15 @@ class CartridgeSystem(Node):
             )
             self._notify(
                 'warn', 'STATE 1/2 safety lock',
-                f'{reason}. AUTO/AI đang chờ robot về HOME và feedback phục hồi.'
+                f'{reason}. AUTO/AI chờ robot hoàn thành load direct/refill.'
             )
         return False
 
-    def _warn_manual_robot_override(self, state_name: str):
-        """MANUAL button is the explicit override; preserve it with loud logs."""
-        allowed, reason = self._auto_robot_interlock_status()
-        if allowed:
-            return
-        detail = (
-            f'{state_name} MANUAL vẫn chạy theo lệnh operator dù AUTO interlock đang khóa: '
-            f'{reason}. Phải xác nhận robot đã dừng/park ngoài vùng InX.'
-        )
-        self.get_logger().warn(f'[SAFETY][MANUAL OVERRIDE] {detail}')
-        self._notify('warn', f'{state_name} manual override', detail)
-
     def _auto_output_robot_interlock_status(self):
-        """Return (allowed, reason) before automatic STATE 3/4 enters Pos2."""
-        now = time.monotonic()
-        heartbeat_at = getattr(self, '_robot_last_seen', 0.0)
-        if heartbeat_at <= 0.0:
-            return False, 'chưa nhận /robot/motion_heartbeat'
-        heartbeat_age = now - heartbeat_at
-        if not getattr(self, '_robot_connected', False) or heartbeat_age > ROBOT_HEARTBEAT_TIMEOUT_S:
-            return False, f'robot heartbeat stale (>{ROBOT_HEARTBEAT_TIMEOUT_S:.1f}s)'
-
-        zone_at = getattr(self, '_output_zone_last_seen', 0.0)
-        if zone_at <= 0.0:
-            return False, 'chưa nhận /robot/output_zone_clear'
-        if now - zone_at > ROBOT_ZONE_STATUS_TIMEOUT_S:
-            return False, f'output-zone status stale (>{ROBOT_ZONE_STATUS_TIMEOUT_S:.1f}s)'
-        if not getattr(self, '_output_zone_clear', False):
-            return False, 'robot chưa rời vùng output / chưa ở HOME index 0'
-        if getattr(self, '_motion_busy', False):
-            return False, 'robot đang motion_busy'
-        return True, 'robot heartbeat fresh + output zone CLEAR'
+        """State3/4 mutex: only robot place-output actions block Pos2."""
+        if getattr(self, '_robot_place_output_busy', True):
+            return False, 'robot đang place_output'
+        return True, 'robot place-output mutex FREE'
 
     def _report_auto_output_robot_interlock(self):
         """Log/notify only when the automatic Pos2 lock reason changes."""
@@ -2198,7 +2155,7 @@ class CartridgeSystem(Node):
             if previous:
                 self.get_logger().info(
                     '[SAFETY][AUTO-UNLOCK][OUTPUT] STATE 3/4 enabled — '
-                    'robot heartbeat fresh and output zone CLEAR'
+                    'robot place-output mutex FREE'
                 )
             self._last_auto_output_interlock_reason = ''
             return True
@@ -2209,27 +2166,15 @@ class CartridgeSystem(Node):
             )
             self._notify(
                 'warn', 'STATE 3/4 output safety lock',
-                f'{reason}. AUTO/AI đang chờ robot về HOME và feedback phục hồi.'
+                f'{reason}. AUTO/AI chờ robot hoàn thành place_output.'
             )
         return False
-
-    def _warn_manual_output_robot_override(self, state_name: str):
-        """Keep manual State 3/4 available, with an explicit Pos2 warning."""
-        allowed, reason = self._auto_output_robot_interlock_status()
-        if allowed:
-            return
-        detail = (
-            f'{state_name} MANUAL vẫn chạy theo lệnh operator dù output interlock đang khóa: '
-            f'{reason}. Phải xác nhận robot đã dừng/park ngoài vùng OutX/OutY.'
-        )
-        self.get_logger().warn(f'[SAFETY][MANUAL OVERRIDE][OUTPUT] {detail}')
-        self._notify('warn', f'{state_name} manual output override', detail)
 
     def _can_start_s3(self) -> bool:
         """
         Điều kiện để auto-trigger STATE 3 (chỉ AUTO/AI mode):
           - output_stack_present=True (hardware Servo3 + CPX 254 đã lắp)
-          - Đã homing và robot không bận
+          - Đã homing và robot không chạy place_output
           - S18_FEED_OK=OFF (vị trí feed đang trống)
           - S18 đã OFF liên tục ít nhất 5 giây (debounce — tránh trigger ngay sau khi
             robot lấy khay, đợi hệ thống ổn định trước khi cấp khay mới)
@@ -2266,7 +2211,7 @@ class CartridgeSystem(Node):
           - Đã homing
           - _s4_trigger=True (set bởi robot qua /robot/done_tray_output)
           - S18_FEED_OK=ON (có khay ở vị trí feed — đảm bảo output tray đang được dùng)
-          - Robot không báo bận
+          - Robot không chạy place_output (mutex /robot/place_output_busy=FALSE)
         """
         if not self._conf('output_stack_present', True):
             return False
@@ -2290,12 +2235,16 @@ class CartridgeSystem(Node):
 
         Input, STATE 3 and STATE 4 may run concurrently.  A per-chain COMPLETE
         callback can therefore publish False while another chain is still
-        moving.  Recompute the aggregate after every state-machine tick and
-        correct that race before the robot may start a new motion.
+        moving. Recompute the aggregate after every state-machine tick so the
+        GUI and non-workspace coordination always see the combined activity.
         """
         combined = self._combined_cartridge_busy()
         if combined != self._last_cartridge_busy_published:
             self._pub_cartridge_busy(combined)
+
+        pos1_busy = self.state_in != SystemState.IDLE
+        if pos1_busy != self._last_cartridge_pos1_busy_published:
+            self._pub_cartridge_pos1_busy(pos1_busy)
 
         pos2_busy = (self.state_s3 != SystemState.IDLE
                      or self.state_s4 != SystemState.IDLE)
@@ -2316,6 +2265,14 @@ class CartridgeSystem(Node):
                     or self.state_s4 != SystemState.IDLE)
         self.pub_busy_cartridge_pos2.publish(Bool(data=busy))
         self._last_cartridge_pos2_busy_published = busy
+
+    def _pub_cartridge_pos1_busy(self, busy: bool):
+        """Publish the dedicated State1/2 mutex for robot input-pick actions."""
+        busy = bool(busy)
+        if not busy:
+            busy = self.state_in != SystemState.IDLE
+        self.pub_busy_cartridge_pos1.publish(Bool(data=busy))
+        self._last_cartridge_pos1_busy_published = busy
 
     def _input_belt_empty(self) -> bool:
         """True khi cả S1/S2/S3 đều OFF."""
@@ -2338,123 +2295,27 @@ class CartridgeSystem(Node):
     def _cb_motion_busy(self, msg: Bool):
         """
         Nhận trạng thái bận của robot từ /robot/motion_busy.
-        Topic này chỉ là trạng thái; aliveness dùng /robot/motion_heartbeat.
+        Topic này chỉ dùng cho trạng thái/monitoring; State1-4 dùng hai mutex
+        workspace riêng, không dùng motion_busy để khóa.
         """
         busy = bool(msg.data)
         if busy != getattr(self, '_motion_busy', False):
             self.get_logger().info(f'[ROBOT] motion_busy={busy}')
         self._motion_busy = busy
 
-    def _cb_motion_heartbeat(self, _msg: Header):
-        """Track Motion Executor liveness independently from motion state."""
-        self._robot_last_seen = time.monotonic()
-        if not getattr(self, '_robot_connected', False):
-            self._robot_connected = True
-            self.get_logger().info(
-                '[SAFETY][ROBOT] motion heartbeat connected — '
-                'STATE 1-4 remain locked until their robot zone is CLEAR'
-            )
+    def _cb_input_pick_busy(self, msg: Bool):
+        """Robot is picking from the input tray; mutually exclusive with State1/2."""
+        busy = bool(msg.data)
+        if busy != getattr(self, '_robot_input_pick_busy', True):
+            self.get_logger().info(f'[MUTEX][POS1] robot input_pick_busy={busy}')
+        self._robot_input_pick_busy = busy
 
-    def _cb_input_zone_clear(self, msg: Bool):
-        """Receive physical HOME/index-0 confirmation from live joint feedback."""
-        clear = bool(msg.data)
-        previous = getattr(self, '_input_zone_clear', False)
-        self._input_zone_clear = clear
-        self._input_zone_last_seen = time.monotonic()
-        if clear != previous:
-            if clear:
-                self.get_logger().info(
-                    '[SAFETY][INPUT_ZONE] CLEAR — robot confirmed at HOME/index 0'
-                )
-            else:
-                self.get_logger().warn(
-                    '[SAFETY][INPUT_ZONE] BLOCKED — robot left HOME or feedback is unsafe'
-                )
-
-    def _cb_output_zone_clear(self, msg: Bool):
-        """Receive positive clearance for the OutX/OutY shared workspace."""
-        clear = bool(msg.data)
-        previous = getattr(self, '_output_zone_clear', False)
-        self._output_zone_clear = clear
-        self._output_zone_last_seen = time.monotonic()
-        if clear != previous:
-            if clear:
-                self.get_logger().info(
-                    '[SAFETY][OUTPUT_ZONE] CLEAR — robot confirmed stable HOME/index 0'
-                )
-            else:
-                self.get_logger().warn(
-                    '[SAFETY][OUTPUT_ZONE] BLOCKED — robot left HOME or feedback is unsafe'
-                )
-
-    def _latch_active_output_safety_fault(self, reason: str):
-        """Stop Pos2 axes if robot permission is lost during AUTO/AI motion."""
-        if self.operation_mode not in ('auto', 'ai'):
-            return
-        if (self.state_s3 == SystemState.IDLE and
-                self.state_s4 == SystemState.IDLE):
-            return
-        if getattr(self, '_output_safety_fault_latched', False):
-            return
-        self._output_safety_fault_latched = True
-        for sid in (3, 4, 5):
-            self._stop_immediate(sid)
-        self._system_paused = True
-        self._pub_cartridge_busy(True)
-        self._pub_cartridge_pos2_busy(True)
-        detail = (
-            f'{reason}. Đã STOP Servo3/OutX/OutY và giữ interlock BUSY. '
-            'Nhấn STOP, kiểm tra robot/vùng output rồi HOMING lại.'
-        )
-        self.get_logger().error(f'[SAFETY][OUTPUT_ACTIVE] {detail}')
-        self._notify('error', 'Output safety stop', detail)
-
-    def _latch_active_input_safety_fault(self, reason: str):
-        """Stop InX/InY if robot permission is lost during AUTO/AI State1/2."""
-        if self.operation_mode not in ('auto', 'ai'):
-            return
-        if self.state_in == SystemState.IDLE:
-            return
-        if getattr(self, '_input_safety_fault_latched', False):
-            return
-        self._input_safety_fault_latched = True
-        for sid in (1, 2):
-            self._stop_immediate(sid)
-        self._system_paused = True
-        self._pub_cartridge_busy(True)
-        detail = (
-            f'{reason}. Đã STOP InX/InY và giữ interlock BUSY. '
-            'Nhấn STOP, kiểm tra robot/vùng input rồi HOMING lại.'
-        )
-        self.get_logger().error(f'[SAFETY][INPUT_ACTIVE] {detail}')
-        self._notify('error', 'Input safety stop', detail)
-
-    def _active_safety_fault_ready(self, area: str, reason: str, now: float) -> bool:
-        """Debounce communication-only faults; physical unsafe edges stay immediate."""
-        timer_attr = (
-            '_input_safety_comm_fault_since'
-            if area == 'input'
-            else '_output_safety_comm_fault_since'
-        )
-        communication_only = (
-            'heartbeat' in reason or
-            'status stale' in reason or
-            'chưa nhận' in reason
-        )
-        if not communication_only:
-            setattr(self, timer_attr, 0.0)
-            return True
-
-        since = getattr(self, timer_attr, 0.0)
-        if since <= 0.0:
-            setattr(self, timer_attr, now)
-            self.get_logger().warn(
-                f'[SAFETY][{area.upper()}_ACTIVE] Communication delayed — '
-                f'holding new-state admission for {ROBOT_ACTIVE_COMMS_FAULT_DEBOUNCE_S:.1f}s '
-                'before emergency stop'
-            )
-            return False
-        return now - since >= ROBOT_ACTIVE_COMMS_FAULT_DEBOUNCE_S
+    def _cb_place_output_busy(self, msg: Bool):
+        """Robot is placing to output; mutually exclusive with State3/4."""
+        busy = bool(msg.data)
+        if busy != getattr(self, '_robot_place_output_busy', True):
+            self.get_logger().info(f'[MUTEX][POS2] robot place_output_busy={busy}')
+        self._robot_place_output_busy = busy
 
     def _cb_done_tray_output(self, msg: Bool):
         """Nhận tín hiệu từ robot báo khay output đã đầy → set cờ _s4_trigger để
@@ -2908,10 +2769,6 @@ class CartridgeSystem(Node):
         self._drain_armed_after_s2 = False
         self._publish_drain(False)
         self._s4_trigger = False
-        self._output_safety_fault_latched = False
-        self._input_safety_fault_latched = False
-        self._input_safety_comm_fault_since = 0.0
-        self._output_safety_comm_fault_since = 0.0
         # Re-arm drive warm-up gate — phòng khi STOP xảy ra trong tình huống bất thường
         # (drive vẫn có thể ở state lạ); state1 sau START sẽ tự flush.
         self._drive_warm_t = -1.0
@@ -3077,14 +2934,6 @@ class CartridgeSystem(Node):
         self._pause_started_at = 0.0
         restart_homing = self._pause_restart_homing
         self._pause_restart_homing = False
-        # RESUME is not proof that the robot link is alive. Force both shared
-        # zones closed until real heartbeat + zone callbacks arrive again.
-        if self._robot_last_seen > 0:
-            # Do not synthesize a heartbeat on RESUME. A real callback must
-            # refresh liveness; otherwise communication loss would fail open.
-            self._robot_connected = False
-            self._input_zone_clear = False
-            self._output_zone_clear = False
         detail = ('Khởi động lại HOMING an toàn'
                   if restart_homing
                   else f'Tiếp tục step hiện tại; servo {restarted_axes or "(không có motion)"}')
@@ -3733,7 +3582,10 @@ class CartridgeSystem(Node):
                     action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 1'],
                     hint='press_homing')
                 return
-            self._warn_manual_robot_override('STATE 1')
+            mutex_ok, mutex_reason = self._auto_robot_interlock_status()
+            if not mutex_ok:
+                self._notify('warn', 'STATE 1 blocked', mutex_reason)
+                return
             # Kiểm tra điều kiện cảm biến THẬT (IO module)
             has_tray    = self.sensor(S1_BELT_START) or self.sensor(S2_BELT_MID) or self.sensor(S3_BELT_END)
             place_ok    = not self.sensor(S7_TRAY_AT_ROBOT)
@@ -3799,7 +3651,10 @@ class CartridgeSystem(Node):
                     check=[f'khay đã được robot đưa về Pos1 chưa', f'{self._sensor_label(7)} có nhiễu / lệch không'],
                     action=['Đợi robot đưa khay về', 'Hoặc đặt khay manual vào vị trí Pos1', 'Sau đó STATE 2 lại'])
                 return
-            self._warn_manual_robot_override('STATE 2')
+            mutex_ok, mutex_reason = self._auto_robot_interlock_status()
+            if not mutex_ok:
+                self._notify('warn', 'STATE 2 blocked', mutex_reason)
+                return
             self._input_tray_done = False
             self._jog_mode = False
             self._drive_warm_t = -1.0  # ép drive warm-up flush trước motion đầu tiên (FAS quirk)
@@ -3835,7 +3690,10 @@ class CartridgeSystem(Node):
                     action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 3'],
                     hint='press_homing')
                 return
-            self._warn_manual_output_robot_override('STATE 3')
+            mutex_ok, mutex_reason = self._auto_output_robot_interlock_status()
+            if not mutex_ok:
+                self._notify('warn', 'STATE 3 blocked', mutex_reason)
+                return
             # Check sensor THẬT — STATE3 chỉ chạy khi vị trí cấp output đang trống
             if self.sensor(S18_FEED_OK):
                 self._notify_step('warn', 'STATE 3', 'pre-flight',
@@ -3879,7 +3737,10 @@ class CartridgeSystem(Node):
                     action=['Nhấn HOMING trên GUI', 'Đợi homing xong rồi STATE 4'],
                     hint='press_homing')
                 return
-            self._warn_manual_output_robot_override('STATE 4')
+            mutex_ok, mutex_reason = self._auto_output_robot_interlock_status()
+            if not mutex_ok:
+                self._notify('warn', 'STATE 4 blocked', mutex_reason)
+                return
             # Pre-flight sensor check (mirror AUTO trigger):
             #   S18 ON — phải có khay ở vị trí feed cần thay.
             # Cyl2 không reject ở đây: STATE 4 sẽ tự retract và chờ S21 ON/S22 OFF
@@ -4263,93 +4124,19 @@ class CartridgeSystem(Node):
             if self._reload_config_from_disk("file changed"):
                 self._publish_config_snapshot()
 
-    def _update_robot_safety_watchdog(self):
-        """Fail closed when heartbeat or zone status stops updating.
-
-        Deliberately leaves ``_motion_busy`` untouched. The periodic busy
-        publication refreshes it after reconnection; communication loss can
-        never turn a stale TRUE into permission for STATE 1-4.
-        """
-        now = time.monotonic()
-        heartbeat_at = getattr(self, '_robot_last_seen', 0.0)
-        if (getattr(self, '_robot_connected', False)
-                and heartbeat_at > 0.0
-                and now - heartbeat_at > ROBOT_HEARTBEAT_TIMEOUT_S):
-            self._robot_connected = False
-            self._input_zone_clear = False
-            self._output_zone_clear = False
-            self.get_logger().warn(
-                '[SAFETY][ROBOT] Heartbeat delayed — AUTO/AI STATE 1-4 LOCKED '
-                '(fail-closed); motion_busy was NOT cleared'
-            )
-            self._notify(
-                'warn', 'Robot heartbeat delayed',
-                'STATE 1-4 AUTO/AI tạm khóa. Chờ heartbeat và robot HOME/index 0; '
-                'motion_busy không bị tự xóa.'
-            )
-
-        zone_at = getattr(self, '_input_zone_last_seen', 0.0)
-        if (getattr(self, '_input_zone_clear', False)
-                and zone_at > 0.0
-                and now - zone_at > ROBOT_ZONE_STATUS_TIMEOUT_S):
-            self._input_zone_clear = False
-            self.get_logger().warn(
-                '[SAFETY][INPUT_ZONE] Status timeout — AUTO/AI STATE 1/2 LOCKED'
-            )
-            self._notify(
-                'warn', 'Robot input zone stale',
-                'Không còn feedback vùng an toàn; STATE 1/2 AUTO/AI đã khóa.'
-            )
-
-        output_zone_at = getattr(self, '_output_zone_last_seen', 0.0)
-        if (getattr(self, '_output_zone_clear', False)
-                and output_zone_at > 0.0
-                and now - output_zone_at > ROBOT_ZONE_STATUS_TIMEOUT_S):
-            self._output_zone_clear = False
-            self.get_logger().warn(
-                '[SAFETY][OUTPUT_ZONE] Status timeout — AUTO/AI STATE 3/4 LOCKED'
-            )
-            self._notify(
-                'warn', 'Robot output zone stale',
-                'Không còn feedback vùng output an toàn; STATE 3/4 AUTO/AI đã khóa.'
-            )
-
-        if self.operation_mode in ('auto', 'ai') and (
-                self.state_s3 != SystemState.IDLE or
-                self.state_s4 != SystemState.IDLE):
-            allowed, reason = self._auto_output_robot_interlock_status()
-            if allowed:
-                self._output_safety_comm_fault_since = 0.0
-            elif self._active_safety_fault_ready('output', reason, now):
-                self._latch_active_output_safety_fault(reason)
-        else:
-            self._output_safety_comm_fault_since = 0.0
-
-        if (self.operation_mode in ('auto', 'ai') and
-                self.state_in != SystemState.IDLE):
-            allowed, reason = self._auto_robot_interlock_status()
-            if allowed:
-                self._input_safety_comm_fault_since = 0.0
-            elif self._active_safety_fault_ready('input', reason, now):
-                self._latch_active_input_safety_fault(reason)
-        else:
-            self._input_safety_comm_fault_since = 0.0
-
     def _control_loop(self):
         """
         Vòng lặp điều khiển chính, chạy mỗi 50ms (20Hz) qua ROS timer.
         Thực hiện theo thứ tự:
           1. Cập nhật watchdog tick
-          2. Kiểm tra robot heartbeat/zone (timeout 2s → khóa fail-closed STATE 1-4)
-          3. Tracking S18 → ghi timestamp khi S18 OFF (dùng cho auto-trigger S3)
-          4. Gọi _process_state() → dispatcher toàn bộ state machine
-          5. Publish system state, sensor states
-          6. Debounce và publish input_trays_empty (sau 20 tick liên tiếp = 1s)
+          2. Tracking S18 → ghi timestamp khi S18 OFF (dùng cho auto-trigger S3)
+          3. Gọi _process_state() → dispatcher toàn bộ state machine
+          4. Publish system state, sensor states
+          5. Debounce và publish input_trays_empty (sau 20 tick liên tiếp = 1s)
         Bắt exception trong try/except riêng, chuyển sang ERROR state nếu có lỗi.
         """
         try:
             self._watchdog_last_tick = time.time()
-            self._update_robot_safety_watchdog()
             if self._system_paused:
                 return
             # Cyl3 safety watchdog: S13 và S14 cùng OFF -> ép Cyl3 RETRACT và LATCH.
@@ -4803,8 +4590,6 @@ class CartridgeSystem(Node):
             self._log_once("IDLE_IN_NO_TRAY", "[IN-IDLE] S1/S2/S3 OFF — hết khay input")
         elif self.sensor(S7_TRAY_AT_ROBOT):
             self._log_once("IDLE_IN_NO_PLACE", "[IN-IDLE] S7 ON — vị trí cấp đang có khay (chờ xử lý xong để chạy State 2)")
-        elif self._motion_busy:
-            self._log_once("IDLE_IN_BUSY", f"[IN-IDLE] Robot đang báo BẬN (/robot/motion_busy={self._motion_busy}) — chờ")
 
     def _do_idle_s3(self):
         """Chờ điều kiện để auto-trigger STATE 3: S18 OFF liên tục 5s (vị trí feed trống)."""
@@ -4831,7 +4616,6 @@ class CartridgeSystem(Node):
 
         if (self._conf('output_stack_present', True)
                 and self.operation_mode in ['auto', 'ai']
-                and not self._motion_busy
                 and not self.sensor(S18_FEED_OK)):
             s18_off_duration = 0.0
             if getattr(self, '_s10_off_time', 0) > 0:
@@ -7670,10 +7454,7 @@ class CartridgeSystem(Node):
         )
         output_interlock_ok, output_interlock_reason = \
             self._auto_output_robot_interlock_status()
-        if cleanup_last_stack and (
-                output_interlock_ok or self.operation_mode == 'manual'):
-            if self.operation_mode == 'manual':
-                self._warn_manual_output_robot_override('STATE 3 cleanup after STATE 4')
+        if cleanup_last_stack and output_interlock_ok:
             self.get_logger().info("[S4→S3] S18 OFF + S17 OFF sau khi lấy khay cuối -> Servo3 về home check S17")
             self._s3_output_loaded = False
             self._s3_finish_after_home_check = True

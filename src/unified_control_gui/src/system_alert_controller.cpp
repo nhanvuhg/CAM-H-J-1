@@ -520,6 +520,13 @@ void SystemAlertController::observeFeederNotification(const QString &value)
         return;
 
     if (rawLevel == "ok" || rawLevel == "silent_ok" || rawLevel == "info") {
+        // Heartbeat/HOME watchdog errors from older feeder releases did not
+        // carry a code, so they occupied the generic feeder_gui_alert slot and
+        // could never receive a matching recovery event.  New feeder nodes
+        // emit this one targeted migration event at startup.  Do not clear
+        // any coded/current feeder alert here.
+        if (code == "legacy_safety_stop_clear")
+            clearAlert("feeder_gui_alert");
         if (!servoId.isEmpty() && (normalized(title).contains("KET NOI")
                 || normalized(title).contains("CONNECTED")
                 || normalized(detail).endsWith(" OK")))

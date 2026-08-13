@@ -111,6 +111,10 @@ public:
         
         // Publishers
         pub_busy_ = create_publisher<std_msgs::msg::Bool>("/robot/motion_busy", 10);
+        pub_input_pick_busy_ = create_publisher<std_msgs::msg::Bool>(
+            "/robot/input_pick_busy", rclcpp::QoS(1).reliable().transient_local());
+        pub_place_output_busy_ = create_publisher<std_msgs::msg::Bool>(
+            "/robot/place_output_busy", rclcpp::QoS(1).reliable().transient_local());
 
         pub_heartbeat_ = create_publisher<std_msgs::msg::Header>("/robot/motion_heartbeat", 10);
         pub_input_zone_clear_ = create_publisher<std_msgs::msg::Bool>(
@@ -139,26 +143,19 @@ public:
                 last_picker_status_ = msg->data;
             });
 
-        // Second-line admission guard. Robot Logic and Cartridge are separate
-        // processes and can both pass their first check in the same DDS window;
-        // Motion Executor rechecks the latched locks before the first Dobot
-        // service call for a workspace-entering action.
-        sub_cartridge_busy_ = create_subscription<std_msgs::msg::Bool>(
-            "/cartridge/busy", rclcpp::QoS(1).reliable().transient_local(),
+        // Exact two-way mutexes requested by the cell contract:
+        // input pick <-> State1/2, and place output <-> State3/4.
+        sub_cartridge_pos1_busy_ = create_subscription<std_msgs::msg::Bool>(
+            "/cartridge/pos1_busy", rclcpp::QoS(1).reliable().transient_local(),
             [this](const std_msgs::msg::Bool::SharedPtr msg) {
-                cartridge_busy_.store(msg->data);
-                cartridge_busy_seen_.store(true);
+                cartridge_pos1_busy_.store(msg->data);
+                cartridge_pos1_busy_seen_.store(true);
             });
         sub_cartridge_pos2_busy_ = create_subscription<std_msgs::msg::Bool>(
             "/cartridge/pos2_busy", rclcpp::QoS(1).reliable().transient_local(),
             [this](const std_msgs::msg::Bool::SharedPtr msg) {
                 cartridge_pos2_busy_.store(msg->data);
                 cartridge_pos2_busy_seen_.store(true);
-            });
-        sub_cartridge_heartbeat_ = create_subscription<std_msgs::msg::Header>(
-            "/cartridge/heartbeat", 10,
-            [this](const std_msgs::msg::Header::SharedPtr) {
-                cartridge_heartbeat_last_ns_.store(steadyNowNs());
             });
 
         // Safety permission is derived from live hardware feedback, not merely
@@ -234,6 +231,7 @@ public:
             // Republish the current state as a heartbeat. Cartridge must not
             // infer aliveness from a Bool that only changes at motion edges.
             publishBusy(motion_in_progress_.load());
+            publishWorkspaceBusy();
             publishInputZoneClear();
         });
 
@@ -246,6 +244,12 @@ public:
             std::bind(&MotionExecutorNode::handle_accepted, this, std::placeholders::_1)
         );
 
+        // Seed both transient-local mutexes immediately. Consumers default to
+        // BUSY until this authoritative FREE snapshot arrives.
+        publishBusy(false);
+        publishWorkspaceBusy();
+        publishInputZoneClear();
+
         RCLCPP_INFO(get_logger(), "[MOTION] === Motion Executor Node Ready (Action Server Enabled) ===");
     }
 
@@ -253,10 +257,20 @@ public:
 private:
     static constexpr int TOTAL_OUTPUT_SLOTS = 10;
 
-    static int64_t steadyNowNs()
+    enum class CartridgeMutexClass : int { NONE = 0, POS1 = 1, POS2 = 2 };
+
+    static CartridgeMutexClass cartridgeMutexForCommand(const std::string& command)
     {
-        return std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now().time_since_epoch()).count();
+        if (command == "INPUT_TRAY_CHAMBER" ||
+            command == "AI_INPUT_TRAY_CHAMBER" ||
+            command == "INPUT_TRAY_BUFFER" ||
+            command == "AI_INPUT_TRAY_BUFFER" ||
+            command == "INIT_INPUT_TRAY_BUFFER" ||
+            command == "AI_INIT_INPUT_TRAY_BUFFER")
+            return CartridgeMutexClass::POS1;
+        if (command == "SCALE_OUTPUT")
+            return CartridgeMutexClass::POS2;
+        return CartridgeMutexClass::NONE;
     }
 
     // ========================================================================
@@ -269,17 +283,16 @@ private:
     std::vector<double> safe_pose_ = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
     
     std::atomic<bool> motion_in_progress_{false};
+    std::atomic<int> active_cartridge_mutex_{static_cast<int>(CartridgeMutexClass::NONE)};
     // Abort flag — set bởi handle_cancel (STOP), check trong tất cả motion helpers
     // để thoát NGAY khi STOP thay vì chạy hết sequence.
     std::atomic<bool> abort_motion_{false};
     std::mutex action_lifecycle_mutex_;
     std::atomic<bool> operator_paused_{false};
-    std::atomic<bool> cartridge_busy_{true};
+    std::atomic<bool> cartridge_pos1_busy_{true};
     std::atomic<bool> cartridge_pos2_busy_{true};
-    std::atomic<bool> cartridge_busy_seen_{false};
+    std::atomic<bool> cartridge_pos1_busy_seen_{false};
     std::atomic<bool> cartridge_pos2_busy_seen_{false};
-    std::atomic<int64_t> cartridge_heartbeat_last_ns_{0};
-    static constexpr int64_t CARTRIDGE_HEARTBEAT_MAX_AGE_NS = 2000000000LL;
 
     std::mutex joint_feedback_mutex_;
     std::array<double, 6> actual_joint_deg_{};
@@ -304,6 +317,8 @@ private:
     // ROS INTERFACES
     // ========================================================================    // ROS INTERFACES
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_busy_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_input_pick_busy_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_place_output_busy_;
 
     rclcpp::Publisher<std_msgs::msg::Header>::SharedPtr pub_heartbeat_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_input_zone_clear_;
@@ -318,9 +333,8 @@ private:
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_gripper_status_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_picker_status_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_cyl_loadcell_status_;
-    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_cartridge_busy_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_cartridge_pos1_busy_;
     rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_cartridge_pos2_busy_;
-    rclcpp::Subscription<std_msgs::msg::Header>::SharedPtr sub_cartridge_heartbeat_;
     rclcpp::Subscription<sensor_msgs::msg::JointState>::SharedPtr sub_joint_state_;
     std::atomic<bool> last_gripper_status_{false};
     std::atomic<bool> last_picker_status_{false};
@@ -930,9 +944,10 @@ private:
         // the executor. Never do this inside the detached worker: a STOP
         // arriving between acceptance and thread start must remain latched.
         abort_motion_.store(false);
-        // Close the shared input zone at goal admission, before the detached
-        // execution thread can issue its first Dobot command.
+        active_cartridge_mutex_.store(static_cast<int>(
+            cartridgeMutexForCommand(goal->command)));
         publishBusy(true);
+        publishWorkspaceBusy();
         publishInputZoneClear();
         RCLCPP_INFO(get_logger(), "[ACTION] Received goal: %s (slot: %d)",
             goal->command.c_str(), goal->slot);
@@ -959,6 +974,17 @@ private:
     // True = ROS shutdown HOẶC handle_cancel đã set abort_motion_ (STOP).
     bool shouldAbort() const {
         return abort_motion_.load() || !rclcpp::ok();
+    }
+
+    void finishMotionState()
+    {
+        std::lock_guard<std::mutex> lifecycle_lock(action_lifecycle_mutex_);
+        active_cartridge_mutex_.store(static_cast<int>(CartridgeMutexClass::NONE));
+        motion_in_progress_.store(false);
+        publishBusy(false);
+        publishWorkspaceBusy();
+        // Publish immediately instead of waiting for the next 500 ms heartbeat.
+        publishInputZoneClear();
     }
 
     void requestMotionStop(const std::string& source) {
@@ -1037,29 +1063,28 @@ private:
     const auto goal = goal_handle->get_goal();
     const std::string type = goal->command;
     const int param = goal->slot;
+    const auto cartridge_mutex = cartridgeMutexForCommand(type);
 
-    // Every known action can cross or revoke one of Cartridge's mechanical
-    // workspaces. Check the live heartbeat and both latched locks before any
-    // RobotMode Continue/ClearError/Enable call, then wait one DDS interval and
-    // check again before the first Dobot primitive. This makes a crashed or
-    // concurrently starting Cartridge fail closed.
+    // Only the two explicitly paired workspaces participate in admission.
+    // Heartbeats/global busy are intentionally not part of this contract.
     auto cartridge_admission_clear = [this, &type](const char* phase) {
-        const int64_t now_ns = steadyNowNs();
-        const int64_t hb_ns = cartridge_heartbeat_last_ns_.load();
-        const bool heartbeat_fresh = hb_ns > 0 && now_ns >= hb_ns &&
-            now_ns - hb_ns <= CARTRIDGE_HEARTBEAT_MAX_AGE_NS;
-        const bool status_seen = cartridge_busy_seen_.load() &&
-            cartridge_pos2_busy_seen_.load();
-        const bool blocked = cartridge_busy_.load() || cartridge_pos2_busy_.load();
-        if (!heartbeat_fresh || !status_seen || blocked) {
+        const auto mutex_class = cartridgeMutexForCommand(type);
+        if (mutex_class == CartridgeMutexClass::NONE)
+            return true;
+        const bool status_seen = mutex_class == CartridgeMutexClass::POS1
+            ? cartridge_pos1_busy_seen_.load()
+            : cartridge_pos2_busy_seen_.load();
+        const bool blocked = mutex_class == CartridgeMutexClass::POS1
+            ? cartridge_pos1_busy_.load()
+            : cartridge_pos2_busy_.load();
+        if (!status_seen || blocked) {
             RCLCPP_ERROR(get_logger(),
-                "[SAFETY][ADMISSION] Reject '%s' at %s — heartbeat_fresh=%s "
-                "status_seen=%s busy=%s pos2_busy=%s",
+                "[MUTEX][ADMISSION] Reject '%s' at %s — class=%s "
+                "status_seen=%s blocked=%s",
                 type.c_str(), phase,
-                heartbeat_fresh ? "true" : "false",
+                mutex_class == CartridgeMutexClass::POS1 ? "STATE1/2" : "STATE3/4",
                 status_seen ? "true" : "false",
-                cartridge_busy_.load() ? "true" : "false",
-                cartridge_pos2_busy_.load() ? "true" : "false");
+                blocked ? "true" : "false");
             return false;
         }
         return true;
@@ -1069,14 +1094,15 @@ private:
         admission_result->success = false;
         admission_result->message = "CARTRIDGE_INTERLOCK_BUSY_OR_STALE";
         goal_handle->abort(admission_result);
-        publishBusy(false);
-        motion_in_progress_ = false;
+        finishMotionState();
     };
     // Give the separate Cartridge process one full control/DDS interval after
     // our zone-close edge. Only then may this worker mutate RobotMode (including
     // Continue) or issue any Dobot primitive.
-    std::this_thread::sleep_for(100ms);
-    if (shouldAbort() || !cartridge_admission_clear("pre-controller-check")) {
+    if (cartridge_mutex != CartridgeMutexClass::NONE)
+        std::this_thread::sleep_for(100ms);
+    if (shouldAbort() || (cartridge_mutex != CartridgeMutexClass::NONE &&
+            !cartridge_admission_clear("pre-controller-check"))) {
         reject_for_cartridge_interlock();
         return;
     }
@@ -1117,8 +1143,7 @@ private:
                         "[SAFETY][ACTION] Reject '%s' — Dobot is PAUSED; use explicit RESUME",
                         type.c_str());
                     goal_handle->abort(paused_result);
-                    publishBusy(false);
-                    motion_in_progress_ = false;
+                    finishMotionState();
                     return;
                 }
                 // mode 5 = standby, mode 7 = running — không cần làm gì
@@ -1142,7 +1167,8 @@ private:
     bool success = false;
     // Give Cartridge one control/DDS interval to observe zone=false/motion_busy,
     // assert its lock if it was starting concurrently, and veto this action.
-    if (shouldAbort() || !cartridge_admission_clear("before-first-Dobot-command")) {
+    if (shouldAbort() || (cartridge_mutex != CartridgeMutexClass::NONE &&
+            !cartridge_admission_clear("before-first-Dobot-command"))) {
         reject_for_cartridge_interlock();
         return;
     }
@@ -1179,8 +1205,7 @@ private:
         result->success = false;
         result->message = "CANCELLED";
         goal_handle->canceled(result);
-        publishBusy(false);
-        motion_in_progress_ = false;
+        finishMotionState();
         return;
     }
 
@@ -1202,8 +1227,7 @@ private:
         RCLCPP_ERROR(get_logger(), "[ACTION] Goal aborted/failed");
     }
 
-    publishBusy(false);
-    motion_in_progress_ = false;
+    finishMotionState();
     }
     catch (const std::exception & e) {
         RCLCPP_ERROR(get_logger(), "[ACTION] Exception in executeAction: %s", e.what());
@@ -1213,8 +1237,7 @@ private:
             r->message = std::string("EXCEPTION: ") + e.what();
             if (goal_handle && goal_handle->is_active()) goal_handle->abort(r);
         } catch (...) {}
-        publishBusy(false);
-        motion_in_progress_ = false;
+        finishMotionState();
     }
     catch (...) {
         RCLCPP_ERROR(get_logger(), "[ACTION] Unknown exception in executeAction");
@@ -1224,8 +1247,7 @@ private:
             r->message = "UNKNOWN_EXCEPTION";
             if (goal_handle && goal_handle->is_active()) goal_handle->abort(r);
         } catch (...) {}
-        publishBusy(false);
-        motion_in_progress_ = false;
+        finishMotionState();
     }
     }
 
@@ -1256,6 +1278,19 @@ private:
         auto msg = std_msgs::msg::Bool();
         msg.data = busy;
         pub_busy_->publish(msg);
+    }
+
+    void publishWorkspaceBusy()
+    {
+        const auto active = static_cast<CartridgeMutexClass>(
+            active_cartridge_mutex_.load());
+        auto input_msg = std_msgs::msg::Bool();
+        input_msg.data = active == CartridgeMutexClass::POS1;
+        pub_input_pick_busy_->publish(input_msg);
+
+        auto output_msg = std_msgs::msg::Bool();
+        output_msg.data = active == CartridgeMutexClass::POS2;
+        pub_place_output_busy_->publish(output_msg);
     }
 
     static double angularDistanceDeg(double actual, double target)
@@ -1336,14 +1371,10 @@ private:
         auto msg = std_msgs::msg::Bool();
         msg.data = clear;
         pub_input_zone_clear_->publish(msg);
-        // Both cartridge workspaces are clear only at the verified HOME pose.
-        // Keep separate topics so their safe-pose definitions can diverge later
-        // without changing either consumer's safety contract.
+        // HOME topics are retained for camera/tray-change coordination, not for
+        // the State1-4 mutex contract.
         pub_output_zone_clear_->publish(msg);
 
-        // Both cameras are trusted only at the exact same verified HOME level
-        // as the mechanical input/output zones. Index 28 remains a motion
-        // waypoint only; it no longer grants optical permission.
         const bool camera_view_clear = clear;
 
         const bool camera_was_clear = camera_view_clear_.exchange(camera_view_clear);
