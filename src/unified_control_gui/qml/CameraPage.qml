@@ -245,7 +245,12 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: 0
+        // Khe giua cac card, lay dung root.gap = 8 cua CartridgePage. Truoc day
+        // dat 0 nen card header dinh lien khoi noi dung ben duoi, trong khi
+        // CartridgePage co khe o moi canh giap nhau.
+        // scaleWarnBanner ben duoi thuong visible: false — Qt Quick Layouts bo
+        // qua item an va khong chua khe cho no, nen khong sinh khe thua.
+        spacing: 8
 
         // ── Title Bar ──────────────────────────────────────────
         Item {
@@ -599,7 +604,9 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 10
+            // 8 cho khop root.gap cua CartridgePage (truoc day 10). Cac spacing
+            // khac trong file nam BEN TRONG card nen giu nguyen.
+            spacing: 8
 
             // Camera Area — 2 rows stacked, 16:9
             ColumnLayout {
