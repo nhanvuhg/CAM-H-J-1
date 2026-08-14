@@ -77,6 +77,10 @@ except ImportError:
 
 # ─── Constants ───────────────────────────────────────────────────
 COUNTS_PER_MM        = 1000
+
+# Tên trục đúng như nhãn operator thấy trên card SERVO CONTROL của GUI, để câu
+# log đọc lên khớp với thứ đang nhìn trên màn hình.
+SERVO_NAMES = {1: 'InX', 2: 'InY', 3: 'PutTray', 4: 'OutX', 5: 'OutY'}
 CYLINDER_TIMEOUT_S   = 15.0
 OUTPUT_DETECT_WAIT_S = 25.0
 INY_JOG_VEL          = 40
@@ -251,6 +255,12 @@ class CartridgeSystem(Node):
         # Cache vị trí (mm) lần đọc gần nhất — dùng cho _publish_positions khi lock
         # bận để fallback giá trị thay vì miss frame và GUI nhấp nháy "--".
         self._pos_cache: dict   = {}     # sid -> mm
+        # Bit fault của drive (ZSW1.fault_present), sid -> bool | None.
+        # None = chưa đọc được lần nào (mới khởi động hoặc drive offline).
+        # Đọc MIỄN PHÍ ngay sau current_position(): edcon đã update_inputs()
+        # bên trong hàm đó nên telegram vừa tươi, không tốn thêm lượt Modbus
+        # nào. Chỉ dùng để phát hiện sườn lên/xuống rồi báo một lần.
+        self._servo_fault: dict = {}     # sid -> bool | None
         self.io_module          = None
         self.io_module_2        = None
         self._io_sensor_cache: list = []
@@ -4249,6 +4259,65 @@ class CartridgeSystem(Node):
                 self.get_logger().warn(f"[pos_bg] {e}")
             time.sleep(0.05)
 
+    def _note_servo_fault(self, sid: int, fault_now: bool) -> None:
+        """Báo khi bit fault của drive ĐỔI trạng thái.
+
+        Gọi từ vòng publish vị trí (20Hz) nên bắt buộc chỉ hành động ở sườn
+        lên/xuống — báo mỗi lần thấy fault sẽ thành 20 dòng log mỗi giây.
+
+        Trước 14/08/2026 node có acknowledge_faults() (nút CLEAR, giống ACK
+        trong FAS) nhưng KHÔNG chỗ nào đọc bit fault, nên trục chạm công tắc
+        hành trình và fault trên FAS mà hệ thống im hoàn toàn: GUI vẫn hiện
+        LIVE, ACTIVITY LOG trống, không có cảnh báo nào.
+
+        _notify_step đẩy lên /providesystem/gui_notify, và topic đó có hai nơi
+        nghe: cartridge_controller (ACTIVITY LOG) và system_alert_controller
+        (cảnh báo vùng FEEDER). Nên một lần gọi vào được cả log lẫn cảnh báo.
+        """
+        prev = self._servo_fault.get(sid)
+        if prev == fault_now:
+            return
+        self._servo_fault[sid] = fault_now
+
+        name = SERVO_NAMES.get(sid, f'S{sid}')
+        label = f'S{sid} ({name})'
+        ip = self.config.servo_ips.get(sid, 'IP không xác định')
+
+        if not fault_now:
+            # prev None = lần đọc đầu sau khi khởi động/nối lại mà drive đang
+            # sạch. Đó là trạng thái bình thường, không có gì để báo.
+            if prev:
+                self.get_logger().info(f'{label} fault đã được xoá')
+                self._notify_step('info', 'SERVO', label,
+                                  'Fault đã được xoá — trục sẵn sàng nhận lệnh')
+            return
+
+        # Fault code đọc riêng vì current_fault_code() tốn thêm một lượt Modbus.
+        # Chỉ chạy ở sườn lên nên không ảnh hưởng đường JOG. try-acquire để
+        # không bao giờ chặn state machine; thiếu code vẫn báo được lỗi.
+        code = None
+        if self._servo_lock.acquire(timeout=0.2):
+            try:
+                mot = self.servos.get(sid)
+                if mot is not None:
+                    code = mot.current_fault_code()
+            except Exception:
+                code = None
+            finally:
+                self._servo_lock.release()
+
+        code_txt = f'fault code {code}' if code else 'không đọc được fault code'
+        self.get_logger().error(f'{label} FAULT — {code_txt} ({ip})')
+        self._notify_step(
+            'error', 'SERVO', label,
+            f'Drive báo fault ({code_txt}) — trục dừng, mọi lệnh sẽ bị từ chối',
+            check=['trục có đang chạm công tắc hành trình không',
+                   f'FAS Diagnostic trên {ip} để xem chi tiết mã lỗi',
+                   'có vật cản cơ khí trên đường chạy không'],
+            action=['gỡ vật cản / đẩy trục ra khỏi limit',
+                    f'bấm CLEAR trên card {label} để acknowledge fault',
+                    'HOMING lại trục đó'])
+
     def _publish_positions(self):
         """Đọc vị trí tất cả servo và publish JSON lên /providesystem/servo_positions.
         JSON giữ các key vị trí cũ và bổ sung
@@ -4302,13 +4371,26 @@ class CartridgeSystem(Node):
                     if cached is not None:
                         pos[str(sid)] = cached
                     continue
+                fault_now = None
                 try:
                     counts = mot.current_position()
                     p = (counts - self.zero_offset.get(sid, 0)) / COUNTS_PER_MM
+                    # current_position() vừa gọi update_inputs() nên ZSW1 đang
+                    # tươi — đọc bit fault ở đây không tốn thêm lượt Modbus.
+                    # Bọc riêng vì đây là nội bộ edcon, hỏng thì chỉ mất tính
+                    # năng báo lỗi chứ không được làm hỏng việc đọc vị trí.
+                    try:
+                        fault_now = bool(mot.telegram.zsw1.fault_present)
+                    except Exception:
+                        fault_now = None
                 except Exception:
                     p = cached
                 finally:
                     self._servo_lock.release()
+                # Gọi NGOÀI lock: đường sườn lên cần đọc thêm fault code nên tự
+                # lấy lock riêng, giữ lock ở đây sẽ tự khoá chính mình.
+                if fault_now is not None:
+                    self._note_servo_fault(sid, fault_now)
                 if p is not None:
                     val = round(p, 2)
                     pos[str(sid)] = val
@@ -4326,9 +4408,18 @@ class CartridgeSystem(Node):
                 servo_status[str(sid)] = 'LIVE' if is_live else 'OFFLINE'
                 if not is_live:
                     pos.pop(str(sid), None)
+                    # Drive rớt kết nối thì bit fault cũ không còn nghĩa. Xoá để
+                    # lần nối lại đánh giá từ đầu, nếu không thì fault đã được
+                    # ACK lúc offline sẽ không bao giờ báo "đã xoá", và fault
+                    # mới xuất hiện sau khi nối lại sẽ bị nuốt vì tưởng không đổi.
+                    self._servo_fault.pop(sid, None)
 
             data = pos.copy()
             data['_servo_status'] = servo_status
+            data['_servo_fault'] = {
+                str(sid): bool(self._servo_fault.get(sid))
+                for sid in servo_snapshot
+            }
             output_enabled = bool(self._conf('output_stack_present', True))
             data['_servo_required'] = [
                 str(sid) for sid in servo_snapshot
