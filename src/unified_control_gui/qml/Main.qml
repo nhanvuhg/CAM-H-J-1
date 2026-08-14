@@ -936,14 +936,21 @@ ApplicationWindow {
             radius: 22
 
             // Không dùng viền: mẫu tham chiếu không có vành cứng, độ nổi đến từ
-            // lớp trong suốt cộng dải sheen ở mép trên. Màu nền có alpha (~91%)
-            // nên lớp dim của Popup modal ánh qua, cho cảm giác kính. Lớp dim đó
-            // cũng là thứ tách khung khỏi nền, nên bỏ viền không làm mất ranh giới.
+            // lớp kính mờ bên dưới cộng dải sheen ở mép trên. Màu nền để alpha
+            // ~85% để lớp mờ ánh qua; đặc hơn nữa thì mất hiệu ứng kính, loãng
+            // hơn nữa thì chữ khó đọc khi phía sau là ảnh camera sáng.
             gradient: Gradient {
                 orientation: Gradient.Vertical
-                GradientStop { position: 0.0; color: "#e80f2236" }
-                GradientStop { position: 0.55; color: "#e8081627" }
-                GradientStop { position: 1.0; color: "#e8050d18" }
+                GradientStop { position: 0.0; color: "#d90f2236" }
+                GradientStop { position: 0.55; color: "#d9081627" }
+                GradientStop { position: 1.0; color: "#d9050d18" }
+            }
+
+            FrostedBackdrop {
+                contentSource: stackView
+                captureRect: Qt.rect(loginPopup.x, loginPopup.y,
+                                     loginPopup.width, loginPopup.height)
+                cornerRadius: 22
             }
 
             GlassHighlight {}
@@ -1299,15 +1306,18 @@ ApplicationWindow {
         background: Rectangle {
             radius: 22
 
-            // Không dùng viền: mẫu tham chiếu không có vành cứng, độ nổi đến từ
-            // lớp trong suốt cộng dải sheen ở mép trên. Màu nền có alpha (~91%)
-            // nên lớp dim của Popup modal ánh qua, cho cảm giác kính. Lớp dim đó
-            // cũng là thứ tách khung khỏi nền, nên bỏ viền không làm mất ranh giới.
             gradient: Gradient {
                 orientation: Gradient.Vertical
-                GradientStop { position: 0.0; color: "#e80f2236" }
-                GradientStop { position: 0.55; color: "#e8081627" }
-                GradientStop { position: 1.0; color: "#e8050d18" }
+                GradientStop { position: 0.0; color: "#d90f2236" }
+                GradientStop { position: 0.55; color: "#d9081627" }
+                GradientStop { position: 1.0; color: "#d9050d18" }
+            }
+
+            FrostedBackdrop {
+                contentSource: stackView
+                captureRect: Qt.rect(accountPopup.x, accountPopup.y,
+                                     accountPopup.width, accountPopup.height)
+                cornerRadius: 22
             }
 
             GlassHighlight {}

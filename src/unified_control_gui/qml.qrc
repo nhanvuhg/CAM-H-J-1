@@ -20,6 +20,7 @@
     <file alias="HoverHint.qml">qml/HoverHint.qml</file>
     <file alias="SystemAlertButton.qml">qml/SystemAlertButton.qml</file>
     <file alias="AuthButton.qml">qml/AuthButton.qml</file>
+    <file alias="FrostedBackdrop.qml">qml/FrostedBackdrop.qml</file>
     <file alias="LanguageSelector.qml">qml/LanguageSelector.qml</file>
     <file alias="icons/camera.svg">qml/icons/camera.svg</file>
     <file alias="icons/switch_camera.svg">qml/icons/switch_camera.svg</file>
