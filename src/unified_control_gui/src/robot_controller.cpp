@@ -1222,10 +1222,18 @@ void RobotController::sendCartesianStep()
     // Chon 60: con trong vung bam tuyen tinh, vot duoi 1mm. Muon nhanh hon nua
     // thi 80 da do la an toan, doi lai vot ~1.5mm.
     constexpr double kJogTopLinear  = 60.0;   // mm/s
-    // Chua do rieng truc xoay (can khoang trong de quay tool). Nang gap 2 —
-    // de dan hon ti le 2.5 cua truc thang. Do bang:
-    //     ./dobot_servop_sweep.sh RZ 10 12,24,36
-    constexpr double kJogTopAngular = 24.0;   // deg/s
+    // Truc xoay do rieng cung ngay, tren RZ, 10deg/muc:
+    //     muon  dat   so voi muon   vot
+    //       12  13.6      114%      0.02deg
+    //       24  27.8      116%      0.05deg
+    //       36  35.9      100%      0.08deg
+    //       48  49.5      103%      0.08deg  <- chon muc nay
+    // Xoay bam tot hon han truc thang: chua thay bao hoa trong dai da thu, vot
+    // chi 0.08deg (thap hon nguong 0.5 toi 6 lan). Chon 48 la muc cao nhat da
+    // do; con du du dia neu sau nay can nhanh hon, quet tiep bang:
+    //     ./dobot_servop_sweep.sh RZ 20 48,72,96
+    // (can travel lon hon 10deg, vi o toc do cao 10deg chi con ~3 tick).
+    constexpr double kJogTopAngular = 48.0;   // deg/s
 
     // QTimer 33ms tre hon dang ke khi QML va view camera dang render. Tinh buoc
     // theo chu ky DO DUOC thay vi 33ms danh nghia, neu khong jog chay cham hon
