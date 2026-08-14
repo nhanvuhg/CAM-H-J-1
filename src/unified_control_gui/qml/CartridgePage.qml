@@ -1327,13 +1327,18 @@ import QtGraphicalEffects 1.15
                 // Pages that scroll (FillHpTab, ProductionTab) wrap their body
                 // in a Flickable, and a Flickable grabs the press as an item —
                 // without CanTakeOverFromItems the swipe never activated over
-                // those tabs at all. Stealing is still safe for the jog and
-                // slider controls: yAxis is disabled, so this only activates
-                // once the finger has travelled horizontally past the drag
-                // threshold, which a vertical scroll or a button press never
-                // does. CanTakeOverFromAnything is still avoided — it would
-                // also override handlers that legitimately hold an exclusive
-                // grab.
+                // those tabs at all. CanTakeOverFromAnything is still avoided —
+                // it would also override handlers that legitimately hold an
+                // exclusive grab.
+                //
+                // 14/08/2026: cho nay tung ghi "an toan voi nut jog vi press
+                // khong bao gio di ngang qua nguong drag". SAI tren man cam
+                // ung: ngon tay luon truot vai pixel khi nhan, vuot nguong la
+                // handler cuop grab cua MouseArea -> nut jog nhan onCanceled
+                // roi im, phai nha ra nhan lai. Nut jog (ca continuous lan
+                // step, ca Joint lan XYZ) gio dat preventStealing: true —
+                // keepMouseGrab chan ca Flickable lan DragHandler nay. Nut nao
+                // moi ma nhan-giu de sinh chuyen dong deu phai dat co do.
                 grabPermissions: PointerHandler.CanTakeOverFromItems
                                  | PointerHandler.CanTakeOverFromHandlersOfDifferentType
                 xAxis.enabled: true
@@ -2754,8 +2759,8 @@ import QtGraphicalEffects 1.15
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: modelData.axis + "-"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
-                                                    MotionMouseArea { id: negContinuousMA; anchors.fill: parent; enabled: robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.neg); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
-                                                    MotionMouseArea { id: negStepMA; anchors.fill: parent; enabled: !robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep(modelData.neg, page3Root.stepValue) }
+                                                    MotionMouseArea { id: negContinuousMA; anchors.fill: parent; preventStealing: true; enabled: robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.neg); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: negStepMA; anchors.fill: parent; preventStealing: true; enabled: !robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep(modelData.neg, page3Root.stepValue) }
                                                 }
                                                 Rectangle {
                                                     width: parent.width - 120; height: 48; radius: 5; color: "transparent"; border.width: 1; border.color: root.cFunctionFieldBorder
@@ -2779,8 +2784,8 @@ import QtGraphicalEffects 1.15
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: modelData.axis + "+"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
-                                                    MotionMouseArea { id: posContinuousMA; anchors.fill: parent; enabled: robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.pos); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
-                                                    MotionMouseArea { id: posStepMA; anchors.fill: parent; enabled: !robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep(modelData.pos, page3Root.stepValue) }
+                                                    MotionMouseArea { id: posContinuousMA; anchors.fill: parent; preventStealing: true; enabled: robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart(modelData.pos); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: posStepMA; anchors.fill: parent; preventStealing: true; enabled: !robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep(modelData.pos, page3Root.stepValue) }
                                                 }
                                             }
                                         }
@@ -2911,8 +2916,8 @@ import QtGraphicalEffects 1.15
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: "J" + jn + "-"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
-                                                    MotionMouseArea { id: jnContinuousMA; anchors.fill: parent; enabled: robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "-"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
-                                                    MotionMouseArea { id: jnStepMA; anchors.fill: parent; enabled: !robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep("j" + jn + "-", page3Root.stepValue) }
+                                                    MotionMouseArea { id: jnContinuousMA; anchors.fill: parent; preventStealing: true; enabled: robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "-"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: jnStepMA; anchors.fill: parent; preventStealing: true; enabled: !robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep("j" + jn + "-", page3Root.stepValue) }
                                                 }
                                                 Rectangle {
                                                     width: parent.width - 120; height: 48; radius: 5; color: "transparent"; border.width: 1; border.color: root.cFunctionFieldBorder
@@ -2936,8 +2941,8 @@ import QtGraphicalEffects 1.15
                                                     Behavior on color { ColorAnimation { duration: 80 } }
                                                     Behavior on border.color { ColorAnimation { duration: 80 } }
                                                     Text { anchors.centerIn: parent; text: "J" + jn + "+"; color: root.cWhiteText; font.pixelSize: page3Root.buttonFont; font.bold: true }
-                                                    MotionMouseArea { id: jpContinuousMA; anchors.fill: parent; enabled: robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "+"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
-                                                    MotionMouseArea { id: jpStepMA; anchors.fill: parent; enabled: !robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep("j" + jn + "+", page3Root.stepValue) }
+                                                    MotionMouseArea { id: jpContinuousMA; anchors.fill: parent; preventStealing: true; enabled: robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onPressed: robotController.jogStart("j" + jn + "+"); onReleased: robotController.jogStop(); onCanceled: robotController.jogStop() }
+                                                    MotionMouseArea { id: jpStepMA; anchors.fill: parent; preventStealing: true; enabled: !robotController.jogContinuous; hoverScale: 1.02; pressScale: 0.976; shadowEnabled: false; shimmerEnabled: false; onClicked: robotController.jogStep("j" + jn + "+", page3Root.stepValue) }
                                                 }
                                             }
                                         }
