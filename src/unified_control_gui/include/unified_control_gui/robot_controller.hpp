@@ -303,6 +303,9 @@ private:
     int jog_cart_idx_{-1};
     bool jog_cart_positive_{true};
     double jog_cart_target_[6]{0};
+    // Do chu ky thuc te cua jog_timer_: QTimer 33ms se tre hon khi QML/view
+    // camera dang render, buoc tinh theo 33ms danh nghia se cham hon toc do dat.
+    QElapsedTimer jog_step_clock_;
 
     // Queue-free ServoP/ServoJ stream used by the press-and-hold SEND buttons.
     QTimer *send_timer_{nullptr};

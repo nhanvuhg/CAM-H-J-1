@@ -1181,6 +1181,9 @@ void RobotController::jogStart(const QString& axisId)
         jog_timer_ = new QTimer(this);
         connect(jog_timer_, &QTimer::timeout, this, &RobotController::sendCartesianStep);
     }
+    // Tick dau tien phai dung chu ky danh nghia, khong phai khoang cach tu lan
+    // jog truoc (co the hang phut).
+    jog_step_clock_.invalidate();
     jog_timer_->start(33);
     sendCartesianStep();
 }
@@ -1202,12 +1205,28 @@ void RobotController::sendCartesianStep()
     // Khong truyen duoc CoordType => khong co duong nao de SpeedFactor tac dong
     // len jog Cartesian. Vi vay chia toc do o phia GUI.
     //
-    // Dung dung hang so cua duong SEND/MovL (xem sendStep): 0.8mm / 0.4deg moi
-    // tick nhan speedScale. SEND chay tick 25ms nen dinh ~24mm/s; jog tick 33ms
-    // nen dinh ~24mm/s tuong duong — khong vuot muc da chay production.
-    // Truoc day step co dinh 0.5mm/33ms = 15mm/s bat ke speed.
+    // Tran toc do o speed 100%. DOI HAI SO NAY LA DOI TOC DO JOG. Do bang
+    // scripts/dobot_servop_sweep.sh roi lay muc cao nhat con bam >=95%: vuot
+    // nguong bam thi robot tut lai sau setpoint, va luc nha nut GUI ngung
+    // stream nhung robot chay not toi setpoint cuoi => vot qua diem nha tay.
+    constexpr double kJogTopLinear  = 24.0;   // mm/s
+    constexpr double kJogTopAngular = 12.0;   // deg/s
+
+    // QTimer 33ms tre hon dang ke khi QML va view camera dang render. Tinh buoc
+    // theo chu ky DO DUOC thay vi 33ms danh nghia, neu khong jog chay cham hon
+    // toc do dat dung bang ti le tre — day la mot phan ly do speed 100% van
+    // cham. Chan tren de mot khung bi nghen khong sinh ra cu nhay lon.
+    constexpr double kJogNominalSec = 0.033;
+    constexpr double kJogMaxSec     = 0.060;
+    const double tickSec = jog_step_clock_.isValid()
+        ? std::clamp(jog_step_clock_.nsecsElapsed() * 1.0e-9,
+                     kJogNominalSec * 0.5, kJogMaxSec)
+        : kJogNominalSec;
+    jog_step_clock_.restart();
+
     const double speedScale = std::max(0.05, speed_ratio_ / 100.0);
-    double step = ((jog_cart_idx_ < 3) ? 0.8 : 0.4) * speedScale;
+    const double top = (jog_cart_idx_ < 3) ? kJogTopLinear : kJogTopAngular;
+    double step = top * tickSec * speedScale;
     double delta = jog_cart_positive_ ? step : -step;
 
     jog_cart_target_[jog_cart_idx_] += delta;
