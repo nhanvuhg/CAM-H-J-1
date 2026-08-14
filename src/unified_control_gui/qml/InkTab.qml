@@ -357,7 +357,7 @@ Item {
                                     GradientStop { position: 1.0; color: tareBtn.down ? cActionPressEnd : (tareBtn.hovered ? cActionHoverEnd : cActionEnd) }
                                 }
                             }
-                            contentItem: Text {
+                            contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight;
                                 text: tareBtn.text
                                 color: "#ffffff"
                                 font: tareBtn.font
@@ -421,7 +421,7 @@ Item {
                                         GradientStop { position: 1.0; color: setZeroBtn.down ? cActionPressEnd : (setZeroBtn.hovered ? cActionHoverEnd : cActionEnd) }
                                     }
                                 }
-                                contentItem: Text {
+                                contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight;
                                     text: setZeroBtn.text; font: setZeroBtn.font
                                     color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                 }
@@ -535,7 +535,7 @@ Item {
                                             GradientStop { position: 1.0; color: calActive ? (applyStep2Btn.down ? cActionPressEnd : (applyStep2Btn.hovered ? cActionHoverEnd : cActionEnd)) : cDisabled }
                                         }
                                     }
-                                    contentItem: Text {
+                                    contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight;
                                         text: applyStep2Btn.text; font: applyStep2Btn.font
                                         color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                                     }
@@ -616,7 +616,7 @@ Item {
                                     GradientStop { position: 1.0; color: resetBatchBtn.down ? cActionPressEnd : (resetBatchBtn.hovered ? cActionHoverEnd : cActionEnd) }
                                 }
                             }
-                            contentItem: Text {
+                            contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight;
                                 text: parent.text; font: parent.font
                                 color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                             }
@@ -787,7 +787,7 @@ Item {
 	                                            GradientStop { position: 1.0; color: submitInkBtn.down ? cActionPressEnd : (submitInkBtn.hovered ? cActionHoverEnd : cActionEnd) }
 	                                        }
 	                                    }
-	                                    contentItem: Text { text: parent.text; font: parent.font; color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+	                                    contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: parent.text; font: parent.font; color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
 	                                }
 
 	                                MotionButton {
@@ -804,7 +804,7 @@ Item {
 	                                        border.color: cFieldBorder
 	                                        border.width: 1
 	                                    }
-	                                    contentItem: Text { text: parent.text; font: parent.font; color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+	                                    contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: parent.text; font: parent.font; color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
 	                                }
 	                            }
 
@@ -872,7 +872,7 @@ Item {
 	                                                GradientStop { position: 1.0; color: confirmLotCiBtn.down ? cActionPressEnd : (confirmLotCiBtn.hovered ? cActionHoverEnd : cActionEnd) }
 	                                            }
 	                                        }
-	                                        contentItem: Text { text: parent.text; font: parent.font; color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+	                                        contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: parent.text; font: parent.font; color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
 	                                    }
 	                                }
 	                            }
@@ -910,7 +910,7 @@ Item {
                                         mipmap: true
                                         antialiasing: true
                                     }
-                                    contentItem: Text { text: inkSelector.currentIndex >= 0 ? inkSelector.displayText : "-- Select Ink --"; font: inkSelector.font; color: cAccent; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
+                                    contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: inkSelector.currentIndex >= 0 ? inkSelector.displayText : "-- Select Ink --"; font: inkSelector.font; color: cAccent; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
                                     popup: Popup {
                                         y: inkSelector.height; width: inkSelector.width; implicitHeight: contentItem.implicitHeight + 36; padding: 0
                                         background: Rectangle { color: cField; border.color: cFieldBorder; border.width: 1; radius: 4 }
@@ -996,7 +996,7 @@ Item {
                                         mipmap: true
                                         antialiasing: true
                                     }
-                                    contentItem: Text { text: cartSelector.currentIndex >= 0 ? cartSelector.displayText : "-- Select Cartridge --"; font: cartSelector.font; color: cAccent; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
+                                    contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: cartSelector.currentIndex >= 0 ? cartSelector.displayText : "-- Select Cartridge --"; font: cartSelector.font; color: cAccent; verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter }
                                     popup: Popup {
                                         y: cartSelector.height; width: cartSelector.width; implicitHeight: contentItem.implicitHeight + 36; padding: 0
                                         background: Rectangle { color: cField; border.color: cFieldBorder; border.width: 1; radius: 4 }
@@ -1190,7 +1190,7 @@ Item {
                                             GradientStop { position: 1.0; color: applyTargetBtn.down ? cActionPressEnd : (applyTargetBtn.hovered ? cActionHoverEnd : cActionEnd) }
                                         }
                                     }
-	                                    contentItem: Text { text: parent.text; font.pixelSize: buttonFont; font.bold: true; color: "#ffffff"; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
+	                                    contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: parent.text; font.pixelSize: buttonFont; font.bold: true; color: "#ffffff"; horizontalAlignment: Qt.AlignHCenter; verticalAlignment: Qt.AlignVCenter }
 	                                    onClicked: {
 	                                        if (inkSelector.currentIndex >= 0 && cartSelector.currentIndex >= 0) {
 	                                            var selectedInk = inkModel.get(inkSelector.currentIndex);
@@ -1349,7 +1349,7 @@ Item {
                 Layout.preferredWidth: 80; Layout.preferredHeight: 28
 	                font.pixelSize: tableFont; font.bold: true
                 background: Rectangle { color: cField; border.color: cFieldBorder; border.width: 1; radius: 4 }
-                contentItem: Text {
+                contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight;
                     text: parent.text; color: cAccent
                     font: parent.font
                     horizontalAlignment: Text.AlignHCenter
@@ -1389,7 +1389,7 @@ Item {
                         GradientStop { position: 1.0; color: ackOverloadBtn.down ? "#b53527" : (ackOverloadBtn.hovered ? "#d2473a" : "#b53527") }
                     }
                 }
-                contentItem: Text { text: parent.text; color: "#ffffff"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: parent.text; color: "#ffffff"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
             }
         }
     }
@@ -1426,7 +1426,7 @@ Item {
                             GradientStop { position: 1.0; color: zeroDriftTareBtn.down ? cActionPressEnd : (zeroDriftTareBtn.hovered ? cActionHoverEnd : cActionEnd) }
                         }
                     }
-                    contentItem: Text { text: parent.text; color: "#ffffff"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: parent.text; color: "#ffffff"; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
                 MotionButton {
                     opacity: down ? 0.8 : 1.0
@@ -1436,7 +1436,7 @@ Item {
 	                    font.pixelSize: buttonFont; font.bold: true
                     onClicked: { scaleController.dismissZeroDrift(); zeroDriftPopup.close() }
                     background: Rectangle { color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: cDanger; border.width: 1; radius: 6 }
-                    contentItem: Text { text: parent.text; color: cDanger; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: parent.text; color: cDanger; font: parent.font; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
             }
         }
@@ -1527,7 +1527,7 @@ Item {
 	                    font.pixelSize: labelFont; font.bold: true
                     onClicked: numpadPopup.close()
                     background: Rectangle { radius: 6; color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: cDanger }
-                    contentItem: Text { text: parent.text; font: parent.font; color: cDanger; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: parent.text; font: parent.font; color: cDanger; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
                 MotionButton {
                     id: numpadOkBtn
@@ -1548,7 +1548,7 @@ Item {
                             GradientStop { position: 1.0; color: numpadOkBtn.down ? cActionPressEnd : (numpadOkBtn.hovered ? cActionHoverEnd : cActionEnd) }
                         }
                     }
-                    contentItem: Text { text: parent.text; font: parent.font; color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: parent.text; font: parent.font; color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                 }
             }
         }

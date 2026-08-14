@@ -815,8 +815,12 @@ import QtGraphicalEffects 1.15
                 LanguageSelector {
                     Layout.preferredWidth: 50
                     Layout.preferredHeight: 50
-                    panelColor: root.cBg2
-                    panelColorDeep: root.cCard
+                    // Nen dong bo voi CameraPage: ben do dung gradient xanh cua
+                    // nut header (#1C4D8D -> #0c1726), ben nay truoc dung mau
+                    // panel trong suot (cBg2/cCard) nen nut ngon ngu doc ra nhu
+                    // mot o nen chu khong phai mot cai nut.
+                    panelColor: root.cToolBtnStart
+                    panelColorDeep: root.cServoRunEnd
                     borderColor: root.cBtnBaseBorder
                     textColor: root.cBtnBaseText
                     mutedColor: root.cDim
