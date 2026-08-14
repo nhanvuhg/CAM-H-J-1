@@ -36,6 +36,8 @@ RectangularGlow {
     // o min(w, h) / 2 + glowRadius nen gia tri nay dung dung muc toi da.
     cornerRadius: height / 2 + glowRadius
 
-    opacity: glow.active ? 0.5 : 0.0
+    // 0.32: du thay o nhap nao dang go nhung khong choi mat. Day la num chinh
+    // de dieu do sang — glowRadius/spread chi doi hinh dang vet loe.
+    opacity: glow.active ? 0.32 : 0.0
     Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
 }
