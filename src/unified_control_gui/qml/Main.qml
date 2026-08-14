@@ -1105,19 +1105,10 @@ ApplicationWindow {
                             GradientStop { position: 1.0; color: loginUsername.activeFocus ? "#123044" : "#0d1a2a" }
                         }
 
-                        // Thay cho vành focus: hào sáng teal mờ phía sau, lan ra
-                        // 4px mỗi bên. Bỏ viền nhưng vẫn phải thấy rõ ô nào đang
-                        // nhập, nếu không thì mất dấu con trỏ trên màn cảm ứng.
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: parent.width + 8
-                            height: parent.height + 8
-                            radius: height / 2
-                            color: "#553ed0b4"
-                            opacity: loginUsername.activeFocus ? 1.0 : 0.0
-                            z: -1
-                            Behavior on opacity { NumberAnimation { duration: 120 } }
-                        }
+                        // Thay cho vành focus: hào sáng teal MỀM, mờ dần ra
+                        // ngoài. Bỏ viền nhưng vẫn phải thấy rõ ô nào đang nhập,
+                        // nếu không thì mất dấu con trỏ trên màn cảm ứng.
+                        FocusGlow { active: loginUsername.activeFocus }
 
                         GlassHighlight {}
                     }
@@ -1159,16 +1150,7 @@ ApplicationWindow {
                             GradientStop { position: 1.0; color: loginPassword.activeFocus ? "#123044" : "#0d1a2a" }
                         }
 
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: parent.width + 8
-                            height: parent.height + 8
-                            radius: height / 2
-                            color: "#553ed0b4"
-                            opacity: loginPassword.activeFocus ? 1.0 : 0.0
-                            z: -1
-                            Behavior on opacity { NumberAnimation { duration: 120 } }
-                        }
+                        FocusGlow { active: loginPassword.activeFocus }
 
                         GlassHighlight {}
                     }
