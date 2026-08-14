@@ -132,6 +132,16 @@ import QtGraphicalEffects 1.15
         readonly property color cServoJogText:      "#ffffff"
         readonly property color cServoRunStart:     "#1a4a6e"
         readonly property color cServoRunEnd:       "#0c1726"
+
+        // Mau rieng cho nut tren HEADER (thanh cong cu tren cung), dong bo voi
+        // CameraPage. CameraPage dat cServoRunStart = #1C4D8D con trang nay =
+        // #1a4a6e nen hai header lech hue thay ro.
+        //
+        // KHONG sua thang cServoRunStart: cJogNegativeButton va hang loat nut
+        // DIEU KHIEN trong trang (jog, MovJ, velocity...) lay mau tu no, doi mot
+        // cho la nhuom lai het. Mau nay chi dung cho nut header.
+        // cServoRunEnd hai ben von da bang nhau nen vien khong can dong bo.
+        readonly property color cToolBtnStart:      "#1C4D8D"
         readonly property color cServoRunBorder:    cServoRunEnd
         readonly property color cServoRunText:      "#ffffff"
         readonly property color cUnifiedBtn: cBtnBaseStart
@@ -563,7 +573,7 @@ import QtGraphicalEffects 1.15
                 AuthButton {
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
                     borderColor: root.cServoRunEnd
-                    gradientStart: root.cServoRunStart
+                    gradientStart: root.cToolBtnStart
                     gradientEnd: root.cServoRunEnd
                     hintTextColor: root.cBtnBaseText
                     onAccountRequested: mainWindow.openAccountDialog()
@@ -579,7 +589,7 @@ import QtGraphicalEffects 1.15
                         color: "transparent"
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: backBtn.pressed ? Qt.darker(root.cServoRunStart, 1.15) : root.cServoRunStart }
+                            GradientStop { position: 0.0; color: backBtn.pressed ? Qt.darker(root.cToolBtnStart, 1.15) : root.cToolBtnStart }
                             GradientStop { position: 1.0; color: backBtn.pressed ? Qt.darker(root.cServoRunEnd, 1.15) : root.cServoRunEnd }
                         }
                         border.color: root.cServoRunEnd
@@ -623,7 +633,7 @@ import QtGraphicalEffects 1.15
                         color: "transparent"
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: restartNodesBtn.pressed ? Qt.darker(root.cServoRunStart, 1.15) : root.cServoRunStart }
+                            GradientStop { position: 0.0; color: restartNodesBtn.pressed ? Qt.darker(root.cToolBtnStart, 1.15) : root.cToolBtnStart }
                             GradientStop { position: 1.0; color: restartNodesBtn.pressed ? Qt.darker(root.cServoRunEnd, 1.15) : root.cServoRunEnd }
                         }
                         border.color: root.cServoRunEnd
@@ -655,7 +665,7 @@ import QtGraphicalEffects 1.15
                         color: "transparent"
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: restartGuiBtn.pressed ? Qt.darker(root.cServoRunStart, 1.15) : root.cServoRunStart }
+                            GradientStop { position: 0.0; color: restartGuiBtn.pressed ? Qt.darker(root.cToolBtnStart, 1.15) : root.cToolBtnStart }
                             GradientStop { position: 1.0; color: restartGuiBtn.pressed ? Qt.darker(root.cServoRunEnd, 1.15) : root.cServoRunEnd }
                         }
                         border.color: root.cServoRunEnd
