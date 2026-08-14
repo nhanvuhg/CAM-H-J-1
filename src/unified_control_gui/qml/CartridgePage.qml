@@ -682,6 +682,14 @@ import QtGraphicalEffects 1.15
                     errorColor: root.cRed
                     successColor: root.cGreen
                 }
+                AuthButton {
+                    Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                    borderColor: root.cServoRunEnd
+                    gradientStart: root.cServoRunStart
+                    gradientEnd: root.cServoRunEnd
+                    hintTextColor: root.cBtnBaseText
+                    onLoginRequested: mainWindow.openLoginDialog()
+                }
                 Item { width: 6 }
                 Item { Layout.fillWidth: true }
                 Rectangle {

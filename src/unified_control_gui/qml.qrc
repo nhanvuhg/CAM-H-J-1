@@ -19,6 +19,7 @@
     <file alias="GlassHighlight.qml">qml/GlassHighlight.qml</file>
     <file alias="HoverHint.qml">qml/HoverHint.qml</file>
     <file alias="SystemAlertButton.qml">qml/SystemAlertButton.qml</file>
+    <file alias="AuthButton.qml">qml/AuthButton.qml</file>
     <file alias="LanguageSelector.qml">qml/LanguageSelector.qml</file>
     <file alias="icons/camera.svg">qml/icons/camera.svg</file>
     <file alias="icons/switch_camera.svg">qml/icons/switch_camera.svg</file>
@@ -48,6 +49,7 @@
     <file alias="icons/refresh_cw.svg">qml/icons/refresh_cw.svg</file>
     <file alias="icons/list_restart.svg">qml/icons/list_restart.svg</file>
     <file alias="icons/user_cog.svg">qml/icons/user_cog.svg</file>
+    <file alias="icons/user.svg">qml/icons/user.svg</file>
     <file alias="icons/eye.svg">qml/icons/eye.svg</file>
     <file alias="icons/weight_tilde_lucide.svg">qml/icons/weight_tilde_lucide.svg</file>
     <file alias="icons/weight_tilde_lucide_red.svg">qml/icons/weight_tilde_lucide_red.svg</file>
@@ -75,6 +77,7 @@
     <file>qml/icons/refresh_cw.svg</file>
     <file>qml/icons/list_restart.svg</file>
     <file>qml/icons/user_cog.svg</file>
+    <file>qml/icons/user.svg</file>
     <file>qml/icons/eye.svg</file>
     <file>qml/icons/weight_tilde_yellow.svg</file>
     <file>qml/icons/weight_tilde_lucide.svg</file>

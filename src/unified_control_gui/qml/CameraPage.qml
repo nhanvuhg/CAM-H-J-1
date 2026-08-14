@@ -449,6 +449,15 @@ Item {
                         successColor: cOk
                     }
 
+                    AuthButton {
+                        Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                        borderColor: cServoRunEnd
+                        gradientStart: cServoRunStart
+                        gradientEnd: cServoRunEnd
+                        hintTextColor: cBtnBaseText
+                        onLoginRequested: mainWindow.openLoginDialog()
+                    }
+
                     Item {
                         Layout.fillWidth: true
                         Text {
