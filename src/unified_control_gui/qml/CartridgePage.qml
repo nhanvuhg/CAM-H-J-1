@@ -570,14 +570,6 @@ import QtGraphicalEffects 1.15
                 anchors.leftMargin: 12
                 anchors.rightMargin: 12
                 spacing: 8
-                AuthButton {
-                    Layout.preferredWidth: 50; Layout.preferredHeight: 50
-                    borderColor: root.cServoRunEnd
-                    gradientStart: root.cToolBtnStart
-                    gradientEnd: root.cServoRunEnd
-                    hintTextColor: root.cBtnBaseText
-                    onAccountRequested: mainWindow.openAccountDialog()
-                }
                 MotionButton {
                     id: backBtn
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
@@ -614,6 +606,14 @@ import QtGraphicalEffects 1.15
                         bc: root.cServoRunEnd
                         tc: root.cServoRunText
                     }
+                }
+                AuthButton {
+                    Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                    borderColor: root.cServoRunEnd
+                    gradientStart: root.cToolBtnStart
+                    gradientEnd: root.cServoRunEnd
+                    hintTextColor: root.cBtnBaseText
+                    onAccountRequested: mainWindow.openAccountDialog()
                 }
                 ScreenshotButton {
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
