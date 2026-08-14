@@ -915,17 +915,25 @@ ApplicationWindow {
         id: loginPopup
         parent: Overlay.overlay
         anchors.centerIn: parent
-        width: 520
+        width: 470
+
+        // Lề trên phải chừa chỗ cho nút X và nút ngôn ngữ ở góc phải trên, nên
+        // nó khác lề dưới. Cộng riêng từng lề thay vì 2 * margins — nếu không
+        // chiều cao tính thiếu và nút LOGIN tràn khỏi khung như lỗi cũ.
+        readonly property int contentTopInset: 78
+        readonly property int contentSideInset: 30
+        readonly property int contentBottomInset: 30
+
         // Tự co theo nội dung: fix cứng height 430 làm nút LOGIN tràn khỏi khung
         // (Popup mặc định còn có padding 12 mỗi cạnh)
-        height: loginColumn.implicitHeight + 2 * loginColumn.anchors.margins
+        height: loginColumn.implicitHeight + contentTopInset + contentBottomInset
                 + topPadding + bottomPadding
         modal: true
         focus: true
         closePolicy: Popup.NoAutoClose
 
         background: Rectangle {
-            radius: 12
+            radius: 22
             color: "#06101d"
             border.color: "#3ed0b4"
             border.width: 2
@@ -940,7 +948,7 @@ ApplicationWindow {
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: 1
-                radius: 11
+                radius: 21
                 color: "transparent"
                 border.color: "#22ffffff"
                 border.width: 1
@@ -1000,43 +1008,79 @@ ApplicationWindow {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.margins: 30
-                anchors.rightMargin: 34
+                anchors.leftMargin: loginPopup.contentSideInset
+                anchors.rightMargin: loginPopup.contentSideInset
+                anchors.topMargin: loginPopup.contentTopInset
                 spacing: 12
 
+                // Vòng avatar. Trước đây tiêu đề phải chịu Layout.rightMargin: 94
+                // để né nút X và nút ngôn ngữ, nên tâm chữ bị đẩy lệch sang trái.
+                // Giờ cả cột được đẩy xuống dưới hai nút đó (contentTopInset),
+                // nên tiêu đề căn giữa theo đúng chiều ngang của khung.
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: 92
+                    Layout.preferredHeight: 92
+                    radius: width / 2
+                    color: "#0c1726"
+                    border.color: "#3ed0b4"
+                    border.width: 2
+
+                    // Vành ngoài mờ thay cho đổ bóng kiểu neumorphism: dùng viền
+                    // thứ hai chứ không dùng DropShadow để khỏi thêm layer render
+                    // trên Jetson.
+                    Rectangle {
+                        anchors.centerIn: parent
+                        width: parent.width + 16
+                        height: parent.height + 16
+                        radius: width / 2
+                        color: "transparent"
+                        border.color: "#1b3a52"
+                        border.width: 1
+                        z: -1
+                    }
+
+                    Image {
+                        anchors.centerIn: parent
+                        source: "icons/user.svg"
+                        width: 44
+                        height: 44
+                        sourceSize.width: 44
+                        sourceSize.height: 44
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                    }
+                }
+
                 Text {
                     Layout.fillWidth: true
-                    Layout.rightMargin: 94
+                    Layout.topMargin: 6
                     text: qsTr("SYSTEM LOGIN")
                     color: "#7fcdf5"
-                    font.pixelSize: 24
+                    font.pixelSize: 26
                     font.bold: true
                     horizontalAlignment: Text.AlignHCenter
                 }
 
                 Text {
                     Layout.fillWidth: true
-                    Layout.rightMargin: 94
                     text: qsTr("Use a Fill HP account to unlock controls")
                     color: "#9fb3c8"
-                    font.pixelSize: 15
+                    font.pixelSize: 13
+                    font.letterSpacing: 1.1
+                    wrapMode: Text.WordWrap
                     horizontalAlignment: Text.AlignHCenter
                 }
 
-                Item { Layout.preferredHeight: 4 }
+                Item { Layout.preferredHeight: 10 }
 
-                Text {
-                    Layout.fillWidth: true
-                    text: qsTr("Account")
-                    color: "#d6f1ff"
-                    font.pixelSize: 15
-                    font.bold: true
-                }
-
+                // Bỏ nhãn "Account" / "Password" rời: icon dẫn bên trong ô đã nói
+                // rõ ô nào là ô nào, và bỏ nhãn thì khung gọn lại đúng kiểu mẫu.
                 TextField {
                     id: loginUsername
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 52
+                    Layout.preferredHeight: 54
+                    leftPadding: 54
                     placeholderText: qsTr("Enter account")
                     color: "#ffffff"
                     placeholderTextColor: "#6f8ba4"
@@ -1044,25 +1088,32 @@ ApplicationWindow {
                     font.pixelSize: 18
                     onAccepted: loginPassword.forceActiveFocus()
                     background: Rectangle {
-                        radius: 7
+                        radius: height / 2
                         color: "#0c1726"
                         border.color: loginUsername.activeFocus ? "#3ed0b4" : "#163a52"
                         border.width: loginUsername.activeFocus ? 2 : 1
                     }
-                }
 
-                Text {
-                    Layout.fillWidth: true
-                    text: qsTr("Password")
-                    color: "#d6f1ff"
-                    font.pixelSize: 15
-                    font.bold: true
+                    Image {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 20
+                        anchors.verticalCenter: parent.verticalCenter
+                        source: "icons/user.svg"
+                        width: 22
+                        height: 22
+                        sourceSize.width: 22
+                        sourceSize.height: 22
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        opacity: loginUsername.activeFocus ? 1.0 : 0.65
+                    }
                 }
 
                 TextField {
                     id: loginPassword
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 52
+                    Layout.preferredHeight: 54
+                    leftPadding: 54
                     rightPadding: 58
                     placeholderText: qsTr("Enter password")
                     color: "#ffffff"
@@ -1072,23 +1123,37 @@ ApplicationWindow {
                     font.pixelSize: 18
                     onAccepted: loginButton.clicked()
                     background: Rectangle {
-                        radius: 7
+                        radius: height / 2
                         color: "#0c1726"
                         border.color: loginPassword.activeFocus ? "#3ed0b4" : "#163a52"
                         border.width: loginPassword.activeFocus ? 2 : 1
+                    }
+
+                    Image {
+                        anchors.left: parent.left
+                        anchors.leftMargin: 20
+                        anchors.verticalCenter: parent.verticalCenter
+                        source: "icons/lock.svg"
+                        width: 22
+                        height: 22
+                        sourceSize.width: 22
+                        sourceSize.height: 22
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        opacity: loginPassword.activeFocus ? 1.0 : 0.65
                     }
 
                     ToolButton {
                         id: passwordEyeButton
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        anchors.rightMargin: 6
-                        width: 44
-                        height: 40
+                        anchors.rightMargin: 7
+                        width: 42
+                        height: 42
                         hoverEnabled: true
                         onClicked: mainWindow.passwordVisible = !mainWindow.passwordVisible
                         background: Rectangle {
-                            radius: 6
+                            radius: height / 2
                             color: passwordEyeButton.hovered || mainWindow.passwordVisible ? "#163a52" : "transparent"
                             border.color: passwordEyeButton.hovered ? "#3ed0b4" : "transparent"
                             border.width: 1
@@ -1137,7 +1202,10 @@ ApplicationWindow {
                         }
                     }
                     background: Rectangle {
-                        radius: 7
+                        // Dạng viên thuốc cho khớp mẫu. Giữ nguyên bộ màu cũ
+                        // (teal -> navy) chứ không đổi sang teal đặc, để tone
+                        // navy teal của hệ thống không bị lệch.
+                        radius: height / 2
                         border.color: "#3ed0b4"
                         border.width: 1
                         gradient: Gradient {
@@ -1189,7 +1257,7 @@ ApplicationWindow {
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         background: Rectangle {
-            radius: 12
+            radius: 22
             color: "#06101d"
             border.color: "#3ed0b4"
             border.width: 2
@@ -1204,7 +1272,7 @@ ApplicationWindow {
             Rectangle {
                 anchors.fill: parent
                 anchors.margins: 1
-                radius: 11
+                radius: 21
                 color: "transparent"
                 border.color: "#22ffffff"
                 border.width: 1
