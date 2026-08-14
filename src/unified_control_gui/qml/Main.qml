@@ -1110,7 +1110,7 @@ ApplicationWindow {
                         // nếu không thì mất dấu con trỏ trên màn cảm ứng.
                         FocusGlow { active: loginUsername.activeFocus }
 
-                        GlassHighlight {}
+                        GlassHighlight { atBottom: true; inset: parent.height / 2 }
                     }
 
                     Image {
@@ -1152,7 +1152,7 @@ ApplicationWindow {
 
                         FocusGlow { active: loginPassword.activeFocus }
 
-                        GlassHighlight {}
+                        GlassHighlight { atBottom: true; inset: parent.height / 2 }
                     }
 
                     Image {
@@ -1241,7 +1241,7 @@ ApplicationWindow {
                             GradientStop { position: 1.0; color: loginButton.pressed ? "#102739" : "#163a52" }
                         }
 
-                        GlassHighlight {}
+                        GlassHighlight { inset: parent.height / 2 }
                     }
                     contentItem: Text {
                         text: loginButton.text
@@ -1385,7 +1385,7 @@ ApplicationWindow {
                         }
                     }
 
-                    GlassHighlight {}
+                    GlassHighlight { inset: parent.height / 2 }
                 }
                 contentItem: Text {
                     text: logoutButton.text
@@ -1409,7 +1409,7 @@ ApplicationWindow {
                 background: Rectangle {
                     radius: height / 2
                     color: accountCloseButton.hovered ? "#b31d3a52" : "#8014263c"
-                    GlassHighlight {}
+                    GlassHighlight { inset: parent.height / 2 }
                 }
                 contentItem: Text {
                     text: accountCloseButton.text
