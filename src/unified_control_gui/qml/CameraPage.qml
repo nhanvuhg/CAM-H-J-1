@@ -1493,7 +1493,7 @@ Item {
                     }
                     Rectangle { width: 2; Layout.fillHeight: true; color: "#163a52" }
                     RowLayout { spacing: 6; Layout.alignment: Qt.AlignVCenter
-                        Image { source: "qrc:/icons/qml/icons/schedule.svg"; fillMode: Image.PreserveAspectFit; smooth: true; Layout.preferredWidth: 24; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
+                        Image { source: "icons/schedule_white.svg"; fillMode: Image.PreserveAspectFit; smooth: true; Layout.preferredWidth: 24; Layout.preferredHeight: 24; Layout.alignment: Qt.AlignVCenter }
                         Text { text: currentTime; font.pixelSize: 16; color: "#ffffff"; Layout.alignment: Qt.AlignVCenter }
                     }
                 }

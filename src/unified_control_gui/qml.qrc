@@ -52,6 +52,7 @@
     <file alias="icons/list_restart.svg">qml/icons/list_restart.svg</file>
     <file alias="icons/user_cog.svg">qml/icons/user_cog.svg</file>
     <file alias="icons/user.svg">qml/icons/user.svg</file>
+    <file alias="icons/schedule_white.svg">qml/icons/schedule_white.svg</file>
     <file alias="icons/lock.svg">qml/icons/lock.svg</file>
     <file alias="icons/eye.svg">qml/icons/eye.svg</file>
     <file alias="icons/weight_tilde_lucide.svg">qml/icons/weight_tilde_lucide.svg</file>
@@ -66,6 +67,7 @@
     <file>qml/icons/power_settings.svg</file>
     <file>qml/icons/rynan_logo.png</file>
     <file>qml/icons/schedule.svg</file>
+    <file>qml/icons/schedule_white.svg</file>
     <file>qml/icons/settings.svg</file>
     <file>qml/icons/stop-mini-line.svg</file>
     <file>qml/icons/reply_arrow.svg</file>
