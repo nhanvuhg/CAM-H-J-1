@@ -20,6 +20,14 @@ Button {
     property real pressSinkOffset: 2
     property color pressTintColor: "#42000000"
 
+    // "Chiếu sáng" khi trỏ vào — cùng nguyên tắc với pressTintColor ở trên.
+    // Trước 14/08/2026 chỉ INK SYSTEM có hiệu ứng này, vì ở đó mỗi nút tự khai
+    // báo thêm một bộ gradient bản hover (cActionHoverStart/End). Các trang
+    // khác chỉ có nhánh `pressed` nên trỏ vào thì phóng to mà không sáng lên.
+    // Làm ở tầng component nên cả 75 nút trong 9 file đều nhận, không phải sửa
+    // từng chỗ và không sót nút nào.
+    property color hoverTintColor: "#1affffff"
+
     hoverEnabled: true
     transformOrigin: Item.Center
     scale: !enabled ? 1.0 : (pressed ? pressScale : (hovered ? hoverScale : 1.0))
@@ -28,6 +36,17 @@ Button {
     transform: Translate {
         y: control.enabled && control.pressed ? control.pressSinkOffset : 0
         Behavior on y { NumberAnimation { duration: control.pressDuration; easing.type: Easing.OutQuad } }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        z: 89
+        radius: (control.background && control.background.radius !== undefined) ? control.background.radius : 6
+        color: control.hoverTintColor
+        // Khi đang nhấn thì nhường hẳn cho lớp phủ tối bên dưới, không chồng hai
+        // lớp ngược chiều nhau lên nhau.
+        opacity: control.enabled && control.hovered && !control.pressed ? 1.0 : 0.0
+        Behavior on opacity { NumberAnimation { duration: 120 } }
     }
 
     Rectangle {

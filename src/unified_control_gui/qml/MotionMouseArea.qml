@@ -18,6 +18,12 @@ MouseArea {
     property bool shimmerWhilePressed: false
     property bool raiseOnHover: false
 
+    // "Chiếu sáng" khi trỏ vào, khớp với hoverTintColor của MotionButton. Nút
+    // dựng bằng MotionMouseArea (jog, và nhiều nút trong CartridgePage) không
+    // đi qua MotionButton nên phải phủ riêng, nếu không chúng sẽ là nhóm duy
+    // nhất còn không sáng lên.
+    property color hoverTintColor: "#1affffff"
+
     hoverEnabled: true
     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
 
@@ -70,6 +76,17 @@ MouseArea {
             samples: area.containsMouse ? 21 : 13
             color: area.pressed ? area.pressedShadowColor : area.shadowColor
         }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        z: 99
+        radius: (area.targetItem && area.targetItem.radius !== undefined) ? area.targetItem.radius : 6
+        color: area.hoverTintColor
+        // Nhấn thì tắt: nút loại này tự đổi màu nền khi pressed, phủ thêm lớp
+        // sáng lên nữa sẽ triệt mất tín hiệu nhấn.
+        opacity: area.motionEnabled && area.enabled && area.containsMouse && !area.pressed ? 1.0 : 0.0
+        Behavior on opacity { NumberAnimation { duration: 120 } }
     }
 
     Item {
