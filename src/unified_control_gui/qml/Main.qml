@@ -934,25 +934,19 @@ ApplicationWindow {
 
         background: Rectangle {
             radius: 22
-            color: "#06101d"
-            border.color: "#3ed0b4"
-            border.width: 2
 
+            // Không dùng viền: mẫu tham chiếu không có vành cứng, độ nổi đến từ
+            // lớp trong suốt cộng dải sheen ở mép trên. Màu nền có alpha (~91%)
+            // nên lớp dim của Popup modal ánh qua, cho cảm giác kính. Lớp dim đó
+            // cũng là thứ tách khung khỏi nền, nên bỏ viền không làm mất ranh giới.
             gradient: Gradient {
                 orientation: Gradient.Vertical
-                GradientStop { position: 0.0; color: "#0d1e32" }
-                GradientStop { position: 0.55; color: "#081627" }
-                GradientStop { position: 1.0; color: "#06101d" }
+                GradientStop { position: 0.0; color: "#e80f2236" }
+                GradientStop { position: 0.55; color: "#e8081627" }
+                GradientStop { position: 1.0; color: "#e8050d18" }
             }
 
-            Rectangle {
-                anchors.fill: parent
-                anchors.margins: 1
-                radius: 21
-                color: "transparent"
-                border.color: "#22ffffff"
-                border.width: 1
-            }
+            GlassHighlight {}
         }
 
         Item {
@@ -973,10 +967,11 @@ ApplicationWindow {
                 pressScale: 0.96
                 onClicked: mainWindow.enterReadOnlyView()
                 background: Rectangle {
-                    radius: 6
-                    color: closeLoginButton.pressed ? "#7a2424" : "#14263c"
-                    border.color: closeLoginButton.hovered ? "#f0735c" : "#1a4a6e"
-                    border.width: 1
+                    radius: height / 2
+                    // Khong vien: hover bao bang nen do trong suot dam dan.
+                    color: closeLoginButton.pressed
+                           ? "#b37a2424"
+                           : (closeLoginButton.hovered ? "#80f0735c" : "#6614263c")
                 }
                 contentItem: Text {
                     text: closeLoginButton.text
@@ -1022,21 +1017,25 @@ ApplicationWindow {
                     Layout.preferredWidth: 92
                     Layout.preferredHeight: 92
                     radius: width / 2
-                    color: "#0c1726"
-                    border.color: "#3ed0b4"
-                    border.width: 2
 
-                    // Vành ngoài mờ thay cho đổ bóng kiểu neumorphism: dùng viền
-                    // thứ hai chứ không dùng DropShadow để khỏi thêm layer render
-                    // trên Jetson.
+                    // Không viền. GlassHighlight không dùng được cho hình tròn
+                    // (nó là dải thẳng ngang mép trên của khung chữ nhật), nên
+                    // độ nổi lấy từ gradient dọc: sáng ở đỉnh, tối ở đáy — mắt
+                    // đọc thành mặt kính vòm.
+                    gradient: Gradient {
+                        orientation: Gradient.Vertical
+                        GradientStop { position: 0.0; color: "#2a4a60" }
+                        GradientStop { position: 0.45; color: "#12293a" }
+                        GradientStop { position: 1.0; color: "#0a1622" }
+                    }
+
+                    // Hào sáng teal rất mờ phía sau, thay cho vành viền cũ.
                     Rectangle {
                         anchors.centerIn: parent
-                        width: parent.width + 16
-                        height: parent.height + 16
+                        width: parent.width + 10
+                        height: parent.height + 10
                         radius: width / 2
-                        color: "transparent"
-                        border.color: "#1b3a52"
-                        border.width: 1
+                        color: "#203ed0b4"
                         z: -1
                     }
 
@@ -1089,9 +1088,31 @@ ApplicationWindow {
                     onAccepted: loginPassword.forceActiveFocus()
                     background: Rectangle {
                         radius: height / 2
-                        color: "#0c1726"
-                        border.color: loginUsername.activeFocus ? "#3ed0b4" : "#163a52"
-                        border.width: loginUsername.activeFocus ? 2 : 1
+
+                        // Không viền. Ô nhập trông như lõm xuống: gradient tối ở
+                        // trên sáng dần xuống dưới (ngược chiều khung, nên mắt
+                        // đọc thành chìm), cộng sheen mép trên.
+                        gradient: Gradient {
+                            orientation: Gradient.Vertical
+                            GradientStop { position: 0.0; color: loginUsername.activeFocus ? "#071a24" : "#060d17" }
+                            GradientStop { position: 1.0; color: loginUsername.activeFocus ? "#123044" : "#0d1a2a" }
+                        }
+
+                        // Thay cho vành focus: hào sáng teal mờ phía sau, lan ra
+                        // 4px mỗi bên. Bỏ viền nhưng vẫn phải thấy rõ ô nào đang
+                        // nhập, nếu không thì mất dấu con trỏ trên màn cảm ứng.
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: parent.width + 8
+                            height: parent.height + 8
+                            radius: height / 2
+                            color: "#553ed0b4"
+                            opacity: loginUsername.activeFocus ? 1.0 : 0.0
+                            z: -1
+                            Behavior on opacity { NumberAnimation { duration: 120 } }
+                        }
+
+                        GlassHighlight {}
                     }
 
                     Image {
@@ -1124,9 +1145,25 @@ ApplicationWindow {
                     onAccepted: loginButton.clicked()
                     background: Rectangle {
                         radius: height / 2
-                        color: "#0c1726"
-                        border.color: loginPassword.activeFocus ? "#3ed0b4" : "#163a52"
-                        border.width: loginPassword.activeFocus ? 2 : 1
+
+                        gradient: Gradient {
+                            orientation: Gradient.Vertical
+                            GradientStop { position: 0.0; color: loginPassword.activeFocus ? "#071a24" : "#060d17" }
+                            GradientStop { position: 1.0; color: loginPassword.activeFocus ? "#123044" : "#0d1a2a" }
+                        }
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: parent.width + 8
+                            height: parent.height + 8
+                            radius: height / 2
+                            color: "#553ed0b4"
+                            opacity: loginPassword.activeFocus ? 1.0 : 0.0
+                            z: -1
+                            Behavior on opacity { NumberAnimation { duration: 120 } }
+                        }
+
+                        GlassHighlight {}
                     }
 
                     Image {
@@ -1154,9 +1191,11 @@ ApplicationWindow {
                         onClicked: mainWindow.passwordVisible = !mainWindow.passwordVisible
                         background: Rectangle {
                             radius: height / 2
-                            color: passwordEyeButton.hovered || mainWindow.passwordVisible ? "#163a52" : "transparent"
-                            border.color: passwordEyeButton.hovered ? "#3ed0b4" : "transparent"
-                            border.width: 1
+                            // Khong vien: trang thai bat/hover the hien bang nen
+                            // trong suot dam dan thay vi vanh cung.
+                            color: mainWindow.passwordVisible
+                                   ? "#803ed0b4"
+                                   : (passwordEyeButton.hovered ? "#66163a52" : "transparent")
                         }
                         contentItem: Item {
                             Image {
@@ -1204,15 +1243,16 @@ ApplicationWindow {
                     background: Rectangle {
                         // Dạng viên thuốc cho khớp mẫu. Giữ nguyên bộ màu cũ
                         // (teal -> navy) chứ không đổi sang teal đặc, để tone
-                        // navy teal của hệ thống không bị lệch.
+                        // navy teal của hệ thống không bị lệch. Bỏ viền teal,
+                        // độ nổi lấy từ sheen mép trên như các panel khác.
                         radius: height / 2
-                        border.color: "#3ed0b4"
-                        border.width: 1
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
                             GradientStop { position: 0.0; color: loginButton.pressed ? "#177c6d" : "#1f9e86" }
                             GradientStop { position: 1.0; color: loginButton.pressed ? "#102739" : "#163a52" }
                         }
+
+                        GlassHighlight {}
                     }
                     contentItem: Text {
                         text: loginButton.text
@@ -1258,25 +1298,19 @@ ApplicationWindow {
 
         background: Rectangle {
             radius: 22
-            color: "#06101d"
-            border.color: "#3ed0b4"
-            border.width: 2
 
+            // Không dùng viền: mẫu tham chiếu không có vành cứng, độ nổi đến từ
+            // lớp trong suốt cộng dải sheen ở mép trên. Màu nền có alpha (~91%)
+            // nên lớp dim của Popup modal ánh qua, cho cảm giác kính. Lớp dim đó
+            // cũng là thứ tách khung khỏi nền, nên bỏ viền không làm mất ranh giới.
             gradient: Gradient {
                 orientation: Gradient.Vertical
-                GradientStop { position: 0.0; color: "#0d1e32" }
-                GradientStop { position: 0.55; color: "#081627" }
-                GradientStop { position: 1.0; color: "#06101d" }
+                GradientStop { position: 0.0; color: "#e80f2236" }
+                GradientStop { position: 0.55; color: "#e8081627" }
+                GradientStop { position: 1.0; color: "#e8050d18" }
             }
 
-            Rectangle {
-                anchors.fill: parent
-                anchors.margins: 1
-                radius: 21
-                color: "transparent"
-                border.color: "#22ffffff"
-                border.width: 1
-            }
+            GlassHighlight {}
         }
 
         ColumnLayout {
@@ -1343,10 +1377,23 @@ ApplicationWindow {
                     authController.logout()
                 }
                 background: Rectangle {
-                    radius: 7
-                    color: logoutButton.pressed ? "#7a2424" : "#14263c"
-                    border.color: logoutButton.hovered ? "#f0735c" : "#8a3a30"
-                    border.width: 1
+                    // Khong vien. Nut nay pha huy phien dang nhap nen van phai
+                    // doc ra la "canh bao": bo vanh do thi chuyen tin hieu do
+                    // sang chinh mau nen, dam dan khi hover/nhan.
+                    radius: height / 2
+                    gradient: Gradient {
+                        orientation: Gradient.Vertical
+                        GradientStop {
+                            position: 0.0
+                            color: logoutButton.pressed ? "#8a2f2b" : (logoutButton.hovered ? "#6e2a28" : "#3a2028")
+                        }
+                        GradientStop {
+                            position: 1.0
+                            color: logoutButton.pressed ? "#5e2020" : (logoutButton.hovered ? "#4a1f21" : "#26161e")
+                        }
+                    }
+
+                    GlassHighlight {}
                 }
                 contentItem: Text {
                     text: logoutButton.text
@@ -1368,10 +1415,9 @@ ApplicationWindow {
                 pressScale: 0.985
                 onClicked: accountPopup.close()
                 background: Rectangle {
-                    radius: 6
-                    color: "#14263c"
-                    border.color: accountCloseButton.hovered ? "#3ed0b4" : "#1a4a6e"
-                    border.width: 1
+                    radius: height / 2
+                    color: accountCloseButton.hovered ? "#b31d3a52" : "#8014263c"
+                    GlassHighlight {}
                 }
                 contentItem: Text {
                     text: accountCloseButton.text
