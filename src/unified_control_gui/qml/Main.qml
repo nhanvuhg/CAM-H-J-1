@@ -133,6 +133,16 @@ ApplicationWindow {
         loginPopup.open()
     }
 
+    // Cua vao duy nhat cua nut user tren thanh cong cu (AuthButton). Chua dang
+    // nhap thi khong co gi de xem — mo thang popup dang nhap.
+    function openAccountDialog() {
+        if (!authController.authenticated) {
+            openLoginDialog()
+            return
+        }
+        accountPopup.open()
+    }
+
     function enterReadOnlyView() {
         loginOpen = false
         passwordVisible = false
@@ -1155,6 +1165,154 @@ ApplicationWindow {
         Component.onCompleted: {
             if (!authController.authenticated)
                 mainWindow.openLoginDialog()
+        }
+    }
+
+    // Popup tai khoan — mo tu nut user ngoai cung ben trai thanh cong cu.
+    // Hien user dang thao tac va la cho duy nhat co nut LOG OUT: de logout
+    // nam sau mot lop popup thi mot cu bam nham tren man cam ung khong lam
+    // mat phien dang nhap.
+    //
+    // Bam LOG OUT khong can tu mo lai man dang nhap: authController.logout()
+    // phat authenticatedChanged, Connections ben duoi thay authenticated ==
+    // false thi goi openLoginDialog(). Dong popup TRUOC khi logout de popup
+    // dang nhap khong bi ket duoi mot popup modal khac.
+    Popup {
+        id: accountPopup
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: 460
+        height: accountColumn.implicitHeight + 2 * accountColumn.anchors.margins
+                + topPadding + bottomPadding
+        modal: true
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+
+        background: Rectangle {
+            radius: 12
+            color: "#06101d"
+            border.color: "#3ed0b4"
+            border.width: 2
+
+            gradient: Gradient {
+                orientation: Gradient.Vertical
+                GradientStop { position: 0.0; color: "#0d1e32" }
+                GradientStop { position: 0.55; color: "#081627" }
+                GradientStop { position: 1.0; color: "#06101d" }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: 1
+                radius: 11
+                color: "transparent"
+                border.color: "#22ffffff"
+                border.width: 1
+            }
+        }
+
+        ColumnLayout {
+            id: accountColumn
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: 28
+            spacing: 10
+
+            Text {
+                Layout.fillWidth: true
+                text: qsTr("ACCOUNT")
+                color: "#7fcdf5"
+                font.pixelSize: 22
+                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Image {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: 48
+                Layout.preferredHeight: 48
+                Layout.topMargin: 6
+                source: "icons/user.svg"
+                sourceSize.width: 48
+                sourceSize.height: 48
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: authController.username
+                color: "#ffffff"
+                font.pixelSize: 22
+                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: authController.role ? authController.role.toUpperCase() : ""
+                color: "#9fb3c8"
+                font.pixelSize: 14
+                font.bold: true
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Item { Layout.preferredHeight: 8 }
+
+            MotionButton {
+                id: logoutButton
+                Layout.fillWidth: true
+                Layout.preferredHeight: 52
+                text: qsTr("LOG OUT")
+                font.pixelSize: 17
+                font.bold: true
+                hoverScale: 1.01
+                pressScale: 0.985
+                onClicked: {
+                    accountPopup.close()
+                    authController.logout()
+                }
+                background: Rectangle {
+                    radius: 7
+                    color: logoutButton.pressed ? "#7a2424" : "#14263c"
+                    border.color: logoutButton.hovered ? "#f0735c" : "#8a3a30"
+                    border.width: 1
+                }
+                contentItem: Text {
+                    text: logoutButton.text
+                    color: logoutButton.hovered ? "#ffffff" : "#f0a99c"
+                    font: logoutButton.font
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+
+            MotionButton {
+                id: accountCloseButton
+                Layout.fillWidth: true
+                Layout.preferredHeight: 44
+                text: qsTr("CLOSE")
+                font.pixelSize: 15
+                font.bold: true
+                hoverScale: 1.01
+                pressScale: 0.985
+                onClicked: accountPopup.close()
+                background: Rectangle {
+                    radius: 6
+                    color: "#14263c"
+                    border.color: accountCloseButton.hovered ? "#3ed0b4" : "#1a4a6e"
+                    border.width: 1
+                }
+                contentItem: Text {
+                    text: accountCloseButton.text
+                    color: "#c7dcef"
+                    font: accountCloseButton.font
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
         }
     }
 

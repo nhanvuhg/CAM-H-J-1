@@ -277,6 +277,15 @@ Item {
                     anchors.margins: 10
                     spacing: 10
 
+                    AuthButton {
+                        Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                        borderColor: cServoRunEnd
+                        gradientStart: cServoRunStart
+                        gradientEnd: cServoRunEnd
+                        hintTextColor: cBtnBaseText
+                        onAccountRequested: mainWindow.openAccountDialog()
+                    }
+
                     ScreenshotButton {
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         onCaptureRequested: {
@@ -447,15 +456,6 @@ Item {
                         warningColor: cWarn
                         errorColor: cBad
                         successColor: cOk
-                    }
-
-                    AuthButton {
-                        Layout.preferredWidth: 50; Layout.preferredHeight: 50
-                        borderColor: cServoRunEnd
-                        gradientStart: cServoRunStart
-                        gradientEnd: cServoRunEnd
-                        hintTextColor: cBtnBaseText
-                        onLoginRequested: mainWindow.openLoginDialog()
                     }
 
                     Item {

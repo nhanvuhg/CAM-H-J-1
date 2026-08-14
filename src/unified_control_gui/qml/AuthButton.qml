@@ -10,19 +10,20 @@ import QtQuick.Controls 2.15
 // duong ra, popup dang nhap chi hien dung mot lan moi phien GUI, muon doi tai
 // khoan phai khoi dong lai node GUI.
 //
-// Sau khi logout khong can tu mo popup: Main.qml da co Connections bat
-// authenticatedChanged, thay authenticated == false thi goi openLoginDialog().
-// Nen o day chi goi logout() roi de Main.qml lo phan con lai.
+// Nut nay chi la CUA VAO, khong tu dang xuat. Bam vao se mo popup tai khoan
+// (Main.qml) hien user dang thao tac, va nut LOG OUT nam trong popup do. Lam
+// vay de mot cu bam nham tren man cam ung khong lam mat phien dang nhap.
 //
 // Khong tham chieu mainWindow trong file nay: `mainWindow` la id khai bao
 // trong Main.qml chu khong phai context property, id khong xuyen sang file
-// component khac mot cach dam bao. Trang cha noi ho qua tin hieu loginRequested.
+// component khac mot cach dam bao. Trang cha noi ho qua tin hieu accountRequested.
 // authController thi an toan — no la context property dang ky trong main.cpp.
 MotionButton {
     id: control
 
-    // Phat khi bam luc DANG dang xuat. Trang cha noi vao mainWindow.openLoginDialog().
-    signal loginRequested()
+    // Trang cha noi vao mainWindow.openAccountDialog(): dang nhap roi thi mo
+    // popup tai khoan, chua dang nhap thi mo thang popup dang nhap.
+    signal accountRequested()
 
     property color borderColor: "#3ed0b4"
     property color gradientStart: "#1f9e86"
@@ -36,12 +37,7 @@ MotionButton {
     hoverScale: 1.012
     pressScale: 0.99
 
-    onClicked: {
-        if (control.signedIn)
-            authController.logout()
-        else
-            control.loginRequested()
-    }
+    onClicked: control.accountRequested()
 
     background: Rectangle {
         radius: 6
@@ -76,8 +72,8 @@ MotionButton {
         }
         HoverHint {
             visible: control.hovered
-            label: control.signedIn
-                   ? qsTr("Log out") + (authController.username ? " (" + authController.username + ")" : "")
+            label: control.signedIn && authController.username
+                   ? qsTr("Account") + " (" + authController.username + ")"
                    : qsTr("Log in")
             bc: control.hintBorderColor
             tc: control.hintTextColor
