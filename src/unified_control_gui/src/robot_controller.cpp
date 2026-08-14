@@ -1192,7 +1192,22 @@ void RobotController::sendCartesianStep()
         return;
     }
 
-    double step = (jog_cart_idx_ < 3) ? 0.5 : 0.2;  // 0.5mm for XYZ, 0.2° for rotation
+    // Jog Cartesian phai stream ServoP chu khong dung MoveJog: firmware nay tu
+    // choi jog theo he toa do Cartesian (do 14/08/2026 tren robot that):
+    //     MoveJog(X+,CoordType=1,User=0,Tool=0) -> -50001  (sai cu phap)
+    //     MoveJog(X+,1,0,0)                     -> -50001
+    //     MoveJog(X+)                           -> -6      (truc khong hop le)
+    //     MoveJog(J6+)                          -> 0       (chay that)
+    // Bare la cu phap duy nhat firmware nhan, ma o do chi co ten truc khop.
+    // Khong truyen duoc CoordType => khong co duong nao de SpeedFactor tac dong
+    // len jog Cartesian. Vi vay chia toc do o phia GUI.
+    //
+    // Dung dung hang so cua duong SEND/MovL (xem sendStep): 0.8mm / 0.4deg moi
+    // tick nhan speedScale. SEND chay tick 25ms nen dinh ~24mm/s; jog tick 33ms
+    // nen dinh ~24mm/s tuong duong — khong vuot muc da chay production.
+    // Truoc day step co dinh 0.5mm/33ms = 15mm/s bat ke speed.
+    const double speedScale = std::max(0.05, speed_ratio_ / 100.0);
+    double step = ((jog_cart_idx_ < 3) ? 0.8 : 0.4) * speedScale;
     double delta = jog_cart_positive_ ? step : -step;
 
     jog_cart_target_[jog_cart_idx_] += delta;
