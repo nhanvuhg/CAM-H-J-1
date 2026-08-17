@@ -16,6 +16,7 @@ Deploy:
 
 import json
 import threading
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -31,6 +32,13 @@ class LoadcellNode(Node):
         # ── Parameters ──────────────────────────────────────────────
         self.declare_parameter('use_simulation', True)
         self.declare_parameter('input_channel', 'InputValue_4')
+        # Vi tri module AIO trong PiCtory. RevPi nay co BA module AIO (pos 32,
+        # 33, 34) trung ten 'RevPi AIO' — revpimodio2 canh bao va chi cho truy
+        # cap theo so vi tri. Lay kenh theo TEN thi 'InputValue_4' chi tinh co
+        # roi dung vao pos 32; neu ai sua PiCtory hay doi thu tu module thi no
+        # se am tham bind sang module khac va can doc so rac ma khong bao gi.
+        # Dat 0 de quay ve cach lay theo ten (hanh vi cu).
+        self.declare_parameter('aio_position', 32)
         self.declare_parameter('max_capacity_g', 5000.0)
         self.declare_parameter('min_current_mA', 4.0)
         self.declare_parameter('max_current_mA', 20.0)
@@ -44,6 +52,7 @@ class LoadcellNode(Node):
 
         self._use_sim      = self.get_parameter('use_simulation').value
         self._input_ch     = self.get_parameter('input_channel').value
+        self._aio_pos      = self.get_parameter('aio_position').value
         self._max_cap_g    = self.get_parameter('max_capacity_g').value
         self._min_mA       = self.get_parameter('min_current_mA').value
         self._max_mA       = self.get_parameter('max_current_mA').value
@@ -57,6 +66,8 @@ class LoadcellNode(Node):
 
         # ── Hardware init ────────────────────────────────────────────
         self._rpi = None
+        self._io  = None          # doi tuong IO cua kenh analog, giai xong o init
+        self._fault_log_t = 0.0   # chan spam log FAULT (vong doc chay 20Hz)
         self._tare_base   = 0.0
         self._tared       = False
         self._cal_factor  = 1.0       # slope correction (default 1.0 = no correction)
@@ -142,16 +153,56 @@ class LoadcellNode(Node):
         try:
             import revpimodio2
             self._rpi = revpimodio2.RevPiModIO(autorefresh=False, monitoring=False)
-            # Verify the input channel exists
-            _ = getattr(self._rpi.io, self._input_ch)
+            self._io = self._resolve_input()
+            # Doc thu mot lan ngay luc init: neu day tin hieu chua noi thi thay
+            # ngay trong log khoi dong thay vi phai doi GUI bao FAULT roi moi
+            # doan. Truoc day log chi in ten kenh, khong in gia tri, nen khong
+            # the chan doan tu log.
+            self._rpi.readprocimg()
+            uA = self._io.value
             self.get_logger().info(
-                f'[4-20mA] Init OK — channel={self._input_ch}, '
-                f'range={self._min_mA}–{self._max_mA} mA → 0–{self._max_cap_g} g'
+                f'[4-20mA] Init OK — AIO pos={self._aio_pos or "theo ten"}, '
+                f'channel={self._io.name}, range={self._min_mA}–{self._max_mA} mA '
+                f'→ 0–{self._max_cap_g} g | doc thu: {uA} uA = {uA / 1000.0:.3f} mA'
             )
+            if uA / 1000.0 < self._min_mA:
+                self.get_logger().warn(
+                    f'[4-20mA] Kenh dang duoi {self._min_mA} mA — chua co dong '
+                    f'vong lap. Kiem nguon 24V cua transmitter, cau noi (wire '
+                    f'bridge) do dong tren AIO, va dau day vao dung kenh.'
+                )
         except Exception as e:
             self.get_logger().error(f'[4-20mA] Init FAILED: {e} — switching to simulation')
             self._use_sim = True
             self._rpi = None
+
+    def _resolve_input(self):
+        """Tra ve doi tuong IO cua kenh analog can doc.
+
+        Uu tien tim theo VI TRI module (aio_position). RevPi nay co ba module
+        AIO trung ten nen lay theo ten la khong xac dinh — revpimodio2 tu canh
+        bao 'you can access this devices by position number only'. Lay theo vi
+        tri thi doi thu tu module trong PiCtory se bao loi ngay thay vi doc
+        nham module trong im lang.
+        """
+        if self._aio_pos:
+            dev = next((d for d in self._rpi.device
+                        if d.position == self._aio_pos), None)
+            if dev is None:
+                raise RuntimeError(
+                    f'khong thay module AIO o vi tri {self._aio_pos} '
+                    f'(co: {[d.position for d in self._rpi.device]})')
+            # Kenh tren module co hau to theo vi tri (InputValue_4_i07...), nen
+            # so khop theo so thu tu cuoi cua ten thay vi so khop nguyen ten.
+            want = self._input_ch.split('_')[1]
+            for io in dev.get_inputs():
+                parts = io.name.split('_')
+                if len(parts) >= 2 and parts[0] == 'InputValue' and parts[1] == want:
+                    return io
+            raise RuntimeError(
+                f'module pos {self._aio_pos} khong co kenh {self._input_ch} '
+                f'(co: {[i.name for i in dev.get_inputs()]})')
+        return getattr(self._rpi.io, self._input_ch)
 
     def _read_raw_gram(self) -> float:
         """Read weight in gram from 4-20mA analog input (or simulation)."""
@@ -162,7 +213,7 @@ class LoadcellNode(Node):
             # Read raw µA from RevPi analog input
             # Refresh process image
             self._rpi.readprocimg()
-            raw_uA = getattr(self._rpi.io, self._input_ch).value
+            raw_uA = self._io.value
             mA = raw_uA / 1000.0
 
             # Store raw mA for debug publishing
@@ -172,6 +223,17 @@ class LoadcellNode(Node):
             if mA < 3.0:
                 self._status = 'FAULT'
                 gram = 0.0
+                # In gia tri thuc, 10 giay mot lan. Truoc day FAULT khong de lai
+                # dau vet nao trong log nen khong phan biet duoc "dut day",
+                # "transmitter mat nguon" hay "doc nham kenh" — deu ra 0.0 g.
+                now = time.time()
+                if now - self._fault_log_t > 10.0:
+                    self._fault_log_t = now
+                    self.get_logger().warn(
+                        f'[4-20mA] FAULT — AIO pos={self._aio_pos} '
+                        f'{self._io.name} = {raw_uA} uA ({mA:.3f} mA), '
+                        f'duoi nguong 3.0 mA nen coi la khong co tin hieu'
+                    )
             else:
                 self._status = 'OK'
                 gram = (mA - self._min_mA) / (self._max_mA - self._min_mA) * self._max_cap_g
