@@ -272,7 +272,7 @@ Item {
                     anchors.margins: 20
                     spacing: 12
 
-                    Text { text: qsTr("LIVE WEIGHT DISPLAY"); color: cAccent; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+                    Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("LIVE WEIGHT DISPLAY"); color: cAccent; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: cBorder }
 
@@ -316,7 +316,7 @@ Item {
                         Layout.fillWidth: true
                         spacing: 8
 
-	                        Text { text: qsTr("Status:"); color: cSubText; font.pixelSize: labelFont }
+	                        Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("Status:"); color: cSubText; font.pixelSize: labelFont }
                         Rectangle {
                             width: 140; height: 35; radius: 6
                             color: {
@@ -332,7 +332,7 @@ Item {
 
                         Item { Layout.fillWidth: true }
 
-	                        Text { text: qsTr("Profile:"); color: cSubText; font.pixelSize: labelFont }
+	                        Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("Profile:"); color: cSubText; font.pixelSize: labelFont }
 	                        Text { text: scaleController.activeInkName === "NONE" ? qsTr("NOT SELECTED") : scaleController.activeInkName; color: cAccent; font.pixelSize: valueFont; font.bold: true }
                     }
 
@@ -388,9 +388,9 @@ Item {
                     // ── MOVED: CALIBRATE SCALE ──
                     RowLayout {
                         Layout.fillWidth: true
-	                        Text { text: qsTr("CALIBRATE SCALE"); color: cAccent; font.pixelSize: sectionFont; font.bold: true }
+	                        Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CALIBRATE SCALE"); color: cAccent; font.pixelSize: sectionFont; font.bold: true }
                         Item { Layout.fillWidth: true }
-	                        Text { text: qsTr("Status: %1").arg(scaleController.calStatus); color: cWarning; font.pixelSize: labelFont; font.bold: true }
+	                        Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("Status: %1").arg(scaleController.calStatus); color: cWarning; font.pixelSize: labelFont; font.bold: true }
                     }
 
                     Rectangle {
@@ -402,8 +402,8 @@ Item {
                         RowLayout {
                             anchors.fill: parent; anchors.margins: 10
                             ColumnLayout {
-	                                Text { text: qsTr("STEP 1 — Empty Scale"); color: "#ecc45a"; font.pixelSize: labelFont; font.bold: true }
-	                                Text { text: qsTr("Ensure NOTHING is on the scale."); color: "#c7dcef"; font.pixelSize: helperFont }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("STEP 1 — Empty Scale"); color: "#ecc45a"; font.pixelSize: labelFont; font.bold: true }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("Ensure NOTHING is on the scale."); color: "#c7dcef"; font.pixelSize: helperFont }
                             }
                             Item { Layout.fillWidth: true }
                             MotionButton {
@@ -548,7 +548,7 @@ Item {
 
                     Rectangle { Layout.fillWidth: true; height: 2; color: cBorder }
 
-	                    Text { text: qsTr("PRODUCTION RESULTS"); color: cAccent; font.pixelSize: sectionFont; font.bold: true; font.letterSpacing: 2; Layout.alignment: Qt.AlignHCenter }
+	                    Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("PRODUCTION RESULTS"); color: cAccent; font.pixelSize: sectionFont; font.bold: true; font.letterSpacing: 2; Layout.alignment: Qt.AlignHCenter }
 
                     // ── STAT CARDS ROW ──
                     RowLayout {
@@ -559,9 +559,9 @@ Item {
 	                            color: cCard; border.color: cFrameBorder; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-	                                Text { text: qsTr("TOTAL"); color: cSubText; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("TOTAL"); color: cSubText; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
 	                                Text { text: scaleController.totalBatch.toString(); color: "#ffffff"; font.pixelSize: resultFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-	                                Text { text: qsTr("batch"); color: "#bfe0f5"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("batch"); color: "#bfe0f5"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                         // PASS card
@@ -570,9 +570,9 @@ Item {
 	                            color: Qt.rgba(0.13, 0.77, 0.37, 0.15); border.color: cFrameBorder; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-	                                Text { text: qsTr("✓ PASS"); color: "#3ed0b4"; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("✓ PASS"); color: "#3ed0b4"; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
 	                                Text { text: scaleController.passBatch.toString(); color: cSuccess; font.pixelSize: resultFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-	                                Text { text: qsTr("batch"); color: "#1f9e86"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("batch"); color: "#1f9e86"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                         // FAIL card
@@ -581,9 +581,9 @@ Item {
 	                            color: Qt.rgba(0.94, 0.27, 0.27, 0.15); border.color: cFrameBorder; border.width: 1
                             ColumnLayout {
                                 anchors.centerIn: parent; spacing: 4
-	                                Text { text: qsTr("✗ FAIL"); color: "#f5a394"; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("✗ FAIL"); color: "#f5a394"; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
 	                                Text { text: scaleController.failBatch.toString(); color: cDanger; font.pixelSize: resultFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-	                                Text { text: qsTr("batch"); color: "#b53527"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("batch"); color: "#b53527"; font.pixelSize: helperFont; Layout.alignment: Qt.AlignHCenter }
                             }
                         }
                     }
@@ -597,7 +597,7 @@ Item {
                             border.color: scaleController.consecFails >= 3 ? cDanger : cBorder; border.width: 1
                             RowLayout {
                                 anchors.centerIn: parent; spacing: 8
-	                                Text { text: qsTr("⚠ CONSECUTIVE FAILS:"); color: cSubText; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1 }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("⚠ CONSECUTIVE FAILS:"); color: cSubText; font.pixelSize: labelFont; font.bold: true; font.letterSpacing: 1 }
 	                                Text { text: scaleController.consecFails.toString(); color: scaleController.consecFails >= 3 ? cDanger : cWarning; font.pixelSize: valueFont; font.bold: true }
                             }
                         }
@@ -641,7 +641,7 @@ Item {
                     spacing: 15
 
                     // Title
-	                    Text { text: qsTr("INK PROFILES"); color: "#67d0ff"; font.pixelSize: titleFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
+	                    Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("INK PROFILES"); color: "#67d0ff"; font.pixelSize: titleFont; font.bold: true; font.letterSpacing: 1.5; Layout.alignment: Qt.AlignHCenter }
 
 	                    // ── MỤC CHỌN MỰC TƯƠNG TỰ 'SELECT MODE' ──
 	                    Rectangle { Layout.fillWidth: true; height: 1; color: cBorder; opacity: 0.5 }
@@ -887,7 +887,7 @@ Item {
 	                        ColumnLayout {
 	                            Layout.fillWidth: true
 	                            Layout.preferredWidth: 560
-	                            Text { text: qsTr("SELECT INK PROFILE"); color: "#67d0ff"; font.pixelSize: tableFont; font.bold: true; font.letterSpacing: 1 }
+	                            Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("SELECT INK PROFILE"); color: "#67d0ff"; font.pixelSize: tableFont; font.bold: true; font.letterSpacing: 1 }
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 36; radius: 4
                                 color: cField; border.color: cFieldBorder; border.width: 1
@@ -921,15 +921,15 @@ Item {
 	                                                width: parent.width; height: 32; color: cCard
                                                 Row {
 	                                                    anchors.fill: parent; spacing: 0
-	                                                    Item { width: parent.width * 0.07; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("No."); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.07; height: parent.height; Text { anchors.centerIn: parent; width: parent.width - 4; horizontalAlignment: Text.AlignHCenter; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 8; elide: Text.ElideRight; text: qsTr("No."); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
 	                                                    Item { width: parent.width * 0.16 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: qsTr("SCAN CODE"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
 	                                                    Item { width: parent.width * 0.18 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: qsTr("INK NAME"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-	                                                    Item { width: parent.width * 0.13 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("TOTAL KG"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.13 - 1; height: parent.height; Text { anchors.centerIn: parent; width: parent.width - 4; horizontalAlignment: Text.AlignHCenter; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 8; elide: Text.ElideRight; text: qsTr("TOTAL KG"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-	                                                    Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("DENSITY"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.12 - 1; height: parent.height; Text { anchors.centerIn: parent; width: parent.width - 4; horizontalAlignment: Text.AlignHCenter; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 8; elide: Text.ElideRight; text: qsTr("DENSITY"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
 	                                                    Item { width: parent.width * 0.34 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: qsTr("LOT PI"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                }
@@ -973,7 +973,7 @@ Item {
 	                            Layout.fillWidth: false
 	                            Layout.preferredWidth: 340
 	                            Layout.maximumWidth: 360
-	                            Text { text: qsTr("SELECT CARTRIDGE TYPE"); color: cAccent; font.pixelSize: tableFont; font.bold: true; font.letterSpacing: 1 }
+	                            Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("SELECT CARTRIDGE TYPE"); color: cAccent; font.pixelSize: tableFont; font.bold: true; font.letterSpacing: 1 }
                             Rectangle {
                                 Layout.fillWidth: true; Layout.preferredHeight: 36; radius: 4
                                 color: cField; border.color: cFieldBorder; border.width: 1
@@ -1006,13 +1006,13 @@ Item {
 	                                                width: parent.width; height: 32; color: cCard
                                                 Row {
                                                     anchors.fill: parent; spacing: 0
-	                                                    Item { width: parent.width * 0.14; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("No."); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.14; height: parent.height; Text { anchors.centerIn: parent; width: parent.width - 4; horizontalAlignment: Text.AlignHCenter; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 8; elide: Text.ElideRight; text: qsTr("No."); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
 	                                                    Item { width: parent.width * 0.46 - 1; height: parent.height; Text { anchors.left: parent.left; anchors.leftMargin: 8; anchors.verticalCenter: parent.verticalCenter; text: qsTr("CART NAME"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-	                                                    Item { width: parent.width * 0.30 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("CART WEIGHT"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.30 - 1; height: parent.height; Text { anchors.centerIn: parent; width: parent.width - 4; horizontalAlignment: Text.AlignHCenter; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 8; elide: Text.ElideRight; text: qsTr("CART WEIGHT"); color: cAccent; font.pixelSize: tableFont; font.bold: true } }
 	                                                    Rectangle { width: 1; height: parent.height; color: cBorder }
-	                                                    Item { width: parent.width * 0.10 - 1; height: parent.height; Text { anchors.centerIn: parent; text: qsTr("DEL"); color: cDanger; font.pixelSize: tableFont; font.bold: true } }
+	                                                    Item { width: parent.width * 0.10 - 1; height: parent.height; Text { anchors.centerIn: parent; width: parent.width - 4; horizontalAlignment: Text.AlignHCenter; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 8; elide: Text.ElideRight; text: qsTr("DEL"); color: cDanger; font.pixelSize: tableFont; font.bold: true } }
                                                 }
                                             }
                                             Rectangle { width: parent.width; height: 2; color: cAccent }
@@ -1064,29 +1064,29 @@ Item {
 
 	                            // Row 1
 	                            RowLayout {
-	                                Text { text: qsTr("SCAN CODE:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("SCAN CODE:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).scan_code : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Text { text: qsTr("INK NAME:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("INK NAME:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? (inkModel.get(inkSelector.currentIndex).ink_name || inkModel.get(inkSelector.currentIndex).name) : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Text { text: qsTr("TOTAL KG:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("TOTAL KG:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? Number(inkModel.get(inkSelector.currentIndex).total_kg || 0).toFixed(2) : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 
 	                            // Row 2
 	                            RowLayout {
-	                                Text { text: qsTr("DENSITY:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("DENSITY:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? Number(inkModel.get(inkSelector.currentIndex).density || 0).toFixed(2) + " g/ml" : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Text { text: qsTr("LOT PI:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("LOT PI:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? (inkModel.get(inkSelector.currentIndex).lot_pi || "--") : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-		                                Text { text: qsTr("RELATIVE ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
+		                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("RELATIVE ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
 		                                Rectangle {
 		                                    width: 70; height: 35; color: cField; border.color: cWarning; border.width: 0.5; radius: 4
 		                                    TextInput {
@@ -1101,15 +1101,15 @@ Item {
 
 	                            // Row 3
 	                            RowLayout {
-	                                Text { text: qsTr("CARTRIDGE TYPE:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CARTRIDGE TYPE:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).name : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Text { text: qsTr("CART WEIGHT:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
+	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CART WEIGHT:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: cartSelector.currentIndex >= 0 ? Number(cartModel.get(cartSelector.currentIndex).density || 0).toFixed(2) + " g" : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
                             RowLayout {
-                                Text { text: qsTr("CART WEIGHT ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
+                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CART WEIGHT ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     width: 70; height: 35; color: cField; border.color: cWarning; border.width: 0.5; radius: 4
                                     TextInput {
@@ -1136,7 +1136,7 @@ Item {
 
 	                            // Row 4
                             RowLayout {
-                                Text { text: qsTr("CURRENT ML FILL:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
+                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CURRENT ML FILL:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     width: 80; height: 35; color: cField; border.color: cFieldBorder; border.width: 1; radius: 4
                                     Text {
@@ -1145,7 +1145,7 @@ Item {
                                 }
                             }
                             RowLayout {
-                                Text { text: qsTr("TYPE WEIGHT FILL:"); color: cAccent; font.pixelSize: labelFont; font.bold: true }
+                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("TYPE WEIGHT FILL:"); color: cAccent; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     width: 70; height: 35; color: cField; border.color: cFieldBorder; border.width: 1; radius: 4
                                     TextInput {
@@ -1268,13 +1268,15 @@ Item {
                         spacing: 15
 
                         Rectangle {
+                            id: totalBatchCard
                             Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cFrameBorder; border.width: 1; radius: 6
                             Column { anchors.centerIn: parent; spacing: 2
-	                                Text { text: qsTr("TOTAL BATCH (g)"); color: cSubText; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+	                                Text { width: totalBatchCard.width - 12; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 8; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; text: qsTr("TOTAL BATCH (g)"); color: cSubText; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
 	                                Text { text: scaleController.totalBatchWeight.toFixed(2); color: cAccent; font.pixelSize: valueFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                             }
                         }
                         Rectangle {
+                            id: minWeightCard
                             Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cFrameBorder; border.width: 1; radius: 6
                             Row { anchors.centerIn: parent; spacing: 8
                                 Image {
@@ -1289,12 +1291,13 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Column { spacing: 2; anchors.verticalCenter: parent.verticalCenter
-	                                Text { text: qsTr("MIN WEIGHT (g)"); color: cWarning; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+	                                Text { width: minWeightCard.width - 48; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 8; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; text: qsTr("MIN WEIGHT (g)"); color: cWarning; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
 	                                Text { text: scaleController.minWeight.toFixed(2); color: cWarning; font.pixelSize: valueFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                 }
                             }
                         }
                         Rectangle {
+                            id: maxWeightCard
                             Layout.fillWidth: true; Layout.preferredHeight: 65; color: cCard; border.color: cFrameBorder; border.width: 1; radius: 6
                             Row { anchors.centerIn: parent; spacing: 8
                                 Image {
@@ -1309,7 +1312,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                 }
                                 Column { spacing: 2; anchors.verticalCenter: parent.verticalCenter
-	                                Text { text: qsTr("MAX WEIGHT (g)"); color: cSuccess; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
+	                                Text { width: maxWeightCard.width - 48; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 8; elide: Text.ElideRight; horizontalAlignment: Text.AlignHCenter; text: qsTr("MAX WEIGHT (g)"); color: cSuccess; font.pixelSize: tableFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
 	                                Text { text: scaleController.maxWeight.toFixed(2); color: cSuccess; font.pixelSize: valueFont; font.bold: true; anchors.horizontalCenter: parent.horizontalCenter }
                                 }
                             }
@@ -1371,8 +1374,8 @@ Item {
         background: Rectangle { color: cCard; border.color: cDanger; border.width: 1; radius: 10 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 20
-	            Text { text: qsTr("WARNING: OVERLOAD!"); color: cDanger; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-	            Text { text: qsTr("Scale load exceeds the maximum limit. Check immediately."); color: cSubText; font.pixelSize: buttonFont; Layout.alignment: Qt.AlignHCenter }
+	            Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("WARNING: OVERLOAD!"); color: cDanger; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+	            Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("Scale load exceeds the maximum limit. Check immediately."); color: cSubText; font.pixelSize: buttonFont; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
             MotionButton {
                 id: ackOverloadBtn
@@ -1404,8 +1407,8 @@ Item {
         background: Rectangle { color: cCard; border.color: cFrameBorder; border.width: 1; radius: 10 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 20
-	            Text { text: qsTr("Zero Drift Warning"); color: cAccent; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
-	            Text { text: qsTr("Loadcell zero drift detected. Re-tare is recommended."); color: cSubText; font.pixelSize: buttonFont; Layout.alignment: Qt.AlignHCenter }
+	            Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("Zero Drift Warning"); color: cAccent; font.pixelSize: titleFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+	            Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("Loadcell zero drift detected. Re-tare is recommended."); color: cSubText; font.pixelSize: buttonFont; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
             RowLayout {
                 Layout.alignment: Qt.AlignHCenter
@@ -1461,7 +1464,7 @@ Item {
         background: Rectangle { color: cCard; radius: 12; border.color: cFrameBorder; border.width: 1 }
         ColumnLayout {
             anchors.fill: parent; anchors.margins: 15; spacing: 8
-	            Text { text: qsTr("ENTER VALUE (g)"); color: cAccent; font.pixelSize: buttonFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
+	            Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("ENTER VALUE (g)"); color: cAccent; font.pixelSize: buttonFont; font.bold: true; Layout.alignment: Qt.AlignHCenter }
             Rectangle {
                 Layout.fillWidth: true; Layout.preferredHeight: 50; radius: 6
                 color: cField; border.color: cFieldBorder; border.width: 1
