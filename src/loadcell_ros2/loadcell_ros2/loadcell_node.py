@@ -67,6 +67,8 @@ class LoadcellNode(Node):
         # ── Hardware init ────────────────────────────────────────────
         self._rpi = None
         self._io  = None          # doi tuong IO cua kenh analog, giai xong o init
+        self._status_io = None    # InputStatus cua cung kenh (chan doan cua module)
+        self._input_status = -1   # gia tri InputStatus lan doc gan nhat
         self._fault_log_t = 0.0   # chan spam log FAULT (vong doc chay 20Hz)
         self._tare_base   = 0.0
         self._tared       = False
@@ -112,6 +114,10 @@ class LoadcellNode(Node):
         self._pub_mon         = self.create_publisher(String,  '/weight/monitor_status', qos)
         self._pub_ink_cap_ack = self.create_publisher(Float32, '/Fill_HP1/ink_capacity_ack', qos)
         self._pub_raw_mA      = self.create_publisher(Float32, '/loadcell/raw_mA', qos)
+        # Chan doan cua CHINH module AIO cho kenh nay (0 = binh thuong tren may
+        # nay, xac dinh qua hai kenh RTD dang doc tot). Phat ra de theo doi
+        # trang thai phan cung ma khong phai SSH vao RevPi. -1 = chua doc duoc.
+        self._pub_in_status   = self.create_publisher(Int32,   '/loadcell/input_status', qos)
 
         # ── Subscribers ──────────────────────────────────────────────
         self.create_subscription(Float32, '/loadcell/target_weight', self._cb_target, qos)
@@ -159,17 +165,19 @@ class LoadcellNode(Node):
             # doan. Truoc day log chi in ten kenh, khong in gia tri, nen khong
             # the chan doan tu log.
             self._rpi.readprocimg()
-            uA = self._io.value
+            uA = self._to_signed16(self._io.value)
+            st = self._status_io.value if self._status_io is not None else None
             self.get_logger().info(
                 f'[4-20mA] Init OK — AIO pos={self._aio_pos or "theo ten"}, '
                 f'channel={self._io.name}, range={self._min_mA}–{self._max_mA} mA '
                 f'→ 0–{self._max_cap_g} g | doc thu: {uA} uA = {uA / 1000.0:.3f} mA'
+                f'{"" if st is None else f", InputStatus={st}"}'
             )
             if uA / 1000.0 < self._min_mA:
                 self.get_logger().warn(
-                    f'[4-20mA] Kenh dang duoi {self._min_mA} mA — chua co dong '
-                    f'vong lap. Kiem nguon 24V cua transmitter, cau noi (wire '
-                    f'bridge) do dong tren AIO, va dau day vao dung kenh.'
+                    f'[4-20mA] {self._diagnose(uA / 1000.0)} '
+                    f'Cong cu do chi tiet: python3 aio_probe.py --pos '
+                    f'{self._aio_pos} --ch {self._input_ch.split("_")[1]}'
                 )
         except Exception as e:
             self.get_logger().error(f'[4-20mA] Init FAILED: {e} — switching to simulation')
@@ -195,14 +203,64 @@ class LoadcellNode(Node):
             # Kenh tren module co hau to theo vi tri (InputValue_4_i07...), nen
             # so khop theo so thu tu cuoi cua ten thay vi so khop nguyen ten.
             want = self._input_ch.split('_')[1]
+            val = sta = None
             for io in dev.get_inputs():
                 parts = io.name.split('_')
-                if len(parts) >= 2 and parts[0] == 'InputValue' and parts[1] == want:
-                    return io
-            raise RuntimeError(
-                f'module pos {self._aio_pos} khong co kenh {self._input_ch} '
-                f'(co: {[i.name for i in dev.get_inputs()]})')
+                if len(parts) >= 2 and parts[1] == want:
+                    if parts[0] == 'InputValue':
+                        val = io
+                    elif parts[0] == 'InputStatus':
+                        sta = io
+            if val is None:
+                raise RuntimeError(
+                    f'module pos {self._aio_pos} khong co kenh {self._input_ch} '
+                    f'(co: {[i.name for i in dev.get_inputs()]})')
+            # InputStatus la chan doan cua CHINH module cho tung kenh. Do duoc
+            # tren may nay: hai kenh RTD dang doc tot bao status 0, nen 0 = binh
+            # thuong; kenh hoi bao 2, kenh loadcell bao 1 — hai kieu loi khac
+            # nhau. Co no thi log noi duoc phan cung nghi gi, khong chi doan tu
+            # gia tri mA.
+            self._status_io = sta
+            return val
         return getattr(self._rpi.io, self._input_ch)
+
+    def _diagnose(self, mA: float) -> str:
+        """Cau chan doan theo dung vung gia tri do duoc.
+
+        Vung nao ra nguyen nhan nay la rut tu do thuc te tren may: kenh khong
+        noi gi troi len tran ~20.15 mA, con kenh co day nhung khong co dong bi
+        ghim quanh 0 va hoi am.
+        """
+        if mA < 0:
+            return ('Dong AM — khong co dong chay qua dien tro shunt. Thuong do '
+                    'thieu CAU NOI do dong tren hang kep AIO (khong co cau thi '
+                    'dau vao chi do ap du PiCtory da dat 4-20mA), dao cuc IOUT, '
+                    'hoac 0V cua transmitter chua ve chan moc chung.')
+        if mA < self._min_mA:
+            return (f'Duoi diem zero {self._min_mA} mA — transmitter co dong '
+                    f'nhung thap hon dai. Kiem chinh zero tren bo khuech dai.')
+        if mA > 20.5:
+            return ('Vuot 20.5 mA — qua dong hoac dau vao HO MACH (kenh trong '
+                    'tren may nay troi len ~20.15 mA).')
+        return 'Trong dai hop le.'
+
+    @staticmethod
+    def _to_signed16(v: int) -> int:
+        """Ep gia tri 16 bit ve dang CO DAU.
+
+        Do thuc te 17/08/2026 tren RevPi: cung mot thanh ghi cho ra
+
+            piTest -r InputValue_4  -> 65075 dez (0xFE33)   khong dau
+            revpimodio2 io.value    -> -461                 co dau
+
+        65075 - 65536 = -461, cung mot gia tri. revpimodio2 ban tren may nay tra
+        ve co dau nen duong nay khong doi gi; nhung neu doi ban thu vien hoac
+        doc qua duong khac ma nhan duoc ban khong dau thi -0.46 mA se thanh
+        65.075 mA — KHONG roi vao nhanh FAULT, va quy ra 5000 g (cham tran).
+        Can se bao day tai trong khi thuc te mat tin hieu. Chuan hoa o day de
+        kieu hong im lang do khong the xay ra.
+        """
+        return v - 65536 if v > 32767 else v
 
     def _read_raw_gram(self) -> float:
         """Read weight in gram from 4-20mA analog input (or simulation)."""
@@ -213,8 +271,11 @@ class LoadcellNode(Node):
             # Read raw µA from RevPi analog input
             # Refresh process image
             self._rpi.readprocimg()
-            raw_uA = self._io.value
+            # Chuan hoa ve co dau TRUOC khi chia — xem _to_signed16.
+            raw_uA = self._to_signed16(self._io.value)
             mA = raw_uA / 1000.0
+            if self._status_io is not None:
+                self._input_status = self._status_io.value
 
             # Store raw mA for debug publishing
             self._raw_mA = mA
@@ -232,7 +293,8 @@ class LoadcellNode(Node):
                     self.get_logger().warn(
                         f'[4-20mA] FAULT — AIO pos={self._aio_pos} '
                         f'{self._io.name} = {raw_uA} uA ({mA:.3f} mA), '
-                        f'duoi nguong 3.0 mA nen coi la khong co tin hieu'
+                        f'InputStatus={self._input_status}. '
+                        f'{self._diagnose(mA)}'
                     )
             else:
                 self._status = 'OK'
@@ -283,6 +345,7 @@ class LoadcellNode(Node):
         # Publish raw mA for debug
         if not self._use_sim:
             self._pub_raw_mA.publish(Float32(data=float(self._raw_mA)))
+            self._pub_in_status.publish(Int32(data=int(self._input_status)))
 
         # overload check
         if gram > self._overload_thr and not self._overloaded:
