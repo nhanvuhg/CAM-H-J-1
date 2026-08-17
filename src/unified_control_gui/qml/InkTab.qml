@@ -1201,7 +1201,14 @@ Item {
 
 	                            // Row 4
                             RowLayout {
-                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.narrowW; Layout.maximumWidth: inkInfoGrid.narrowW
+                                // Hang 4 chi co 2 o nen cot 3 bo trong, ma day lai la hai o chat
+                                // nhat: ca hai deu vua co nhan dai vua co hop nhap. Cho o nay trai
+                                // 2 cot thi o ke tiep don sang cot 3 (wideW) — het chat ma khong
+                                // phai ep chu co lai, va cot 3 khong con bo phi.
+                                Layout.columnSpan: 2
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: inkInfoGrid.narrowW * 2 + inkInfoGrid.columnSpacing
+                                Layout.maximumWidth:   inkInfoGrid.narrowW * 2 + inkInfoGrid.columnSpacing
                                 Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CURRENT ML FILL:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
@@ -1219,7 +1226,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                             }
                             RowLayout {
-                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.narrowW; Layout.maximumWidth: inkInfoGrid.narrowW
+                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.wideW; Layout.maximumWidth: inkInfoGrid.wideW
                                 Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("TYPE WEIGHT FILL:"); color: cAccent; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
