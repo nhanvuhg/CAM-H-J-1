@@ -34,9 +34,12 @@ try:
 except ImportError:
     sys.exit('khong import duoc revpimodio2 — script nay phai chay tren RevPi')
 
-# Node quy doi 4 mA -> 0 g, 20 mA -> max_capacity_g. Giu cung tham so mac dinh
-# voi loadcell_node de con so o day so sanh truc tiep duoc voi GUI.
-MIN_MA, MAX_MA, MAX_CAP_G = 4.0, 20.0, 5000.0
+# Mac dinh phai KHOP voi tham so node dang chay, neu khong cot `gram` o day se
+# lech han so tren GUI va gay chan doan sai. 17/08/2026: sau khi can chinh bang
+# qua chuan 2300g, start_loadcell.sh tren RevPi dat max_current_mA:=17.546 (SPAN
+# cua KM02A cho 2.7 uA/gam thay vi 3.2). Doi can chinh thi sua CA HAI cho, hoac
+# truyen --max-ma khi chay.
+MIN_MA, MAX_MA, MAX_CAP_G = 4.0, 17.546, 5000.0
 FAULT_BELOW_MA = 3.0
 
 
@@ -49,10 +52,12 @@ def as_unsigned(v: int) -> int:
     return v + 65536 if v < 0 else v
 
 
-def to_gram(mA: float) -> float:
+def to_gram(mA: float, min_ma=None, max_ma=None) -> float:
+    lo = MIN_MA if min_ma is None else min_ma
+    hi = MAX_MA if max_ma is None else max_ma
     if mA < FAULT_BELOW_MA:
         return 0.0
-    g = (mA - MIN_MA) / (MAX_MA - MIN_MA) * MAX_CAP_G
+    g = (mA - lo) / (hi - lo) * MAX_CAP_G
     return min(g, MAX_CAP_G)
 
 
@@ -95,15 +100,15 @@ def scan_all(rpi):
                   f'{as_unsigned(raw):>10} {s / 1000.0:>8.3f} {st:>7}')
 
 
-def watch(rpi, pos, ch, seconds, interval):
+def watch(rpi, pos, ch, seconds, interval, min_ma=MIN_MA, max_ma=MAX_MA):
     dev, val_io, sta_io = find_channel(rpi, pos, ch)
     rpi.readprocimg()
     probe = val_io.value
     print(f'module pos {pos} ({dev.name}) — {val_io.name}')
     print(f'revpimodio2 tra ve: {probe}  -> dien giai '
           f'{"CO DAU (am duoc)" if probe < 0 else "duong / chua ket luan duoc"}')
-    print(f'nguong FAULT cua node: < {FAULT_BELOW_MA} mA | '
-          f'quy doi {MIN_MA}-{MAX_MA} mA -> 0-{MAX_CAP_G:.0f} g\n')
+    print(f'nguong FAULT: < {FAULT_BELOW_MA} mA | quy doi {min_ma}-{max_ma} mA '
+          f'-> 0-{MAX_CAP_G:.0f} g  (phai khop tham so node!)\n')
     print(f'{"t(s)":>6} {"raw":>8} {"mA":>8} {"gram":>9} {"status":>7}  ghi chu')
     print('-' * 64)
 
@@ -120,13 +125,13 @@ def watch(rpi, pos, ch, seconds, interval):
             note = 'am -> khong co dong / dao cuc'
         elif mA < FAULT_BELOW_MA:
             note = 'duoi nguong FAULT'
-        elif mA < MIN_MA:
-            note = 'duoi 4mA -> duoi diem zero'
+        elif mA < min_ma:
+            note = f'duoi {min_ma} mA -> duoi diem zero'
         elif mA > 20.5:
             note = 'vuot 20.5 -> qua dong / ho mach'
         st = sta_io.value if sta_io is not None else '-'
         print(f'{time.time() - t0:>6.1f} {raw:>8} {mA:>8.3f} '
-              f'{to_gram(mA):>9.1f} {st:>7}  {note}')
+              f'{to_gram(mA, min_ma, max_ma):>9.1f} {st:>7}  {note}')
         time.sleep(interval)
 
     lo, hi = min(samples), max(samples)
@@ -149,6 +154,9 @@ def main():
     ap.add_argument('--seconds', type=float, default=10.0)
     ap.add_argument('--interval', type=float, default=0.5)
     ap.add_argument('--all', action='store_true', help='quet moi kenh AIO')
+    ap.add_argument('--min-ma', type=float, default=MIN_MA)
+    ap.add_argument('--max-ma', type=float, default=MAX_MA,
+                    help='mA ung voi day thang; phai khop max_current_mA cua node')
     a = ap.parse_args()
 
     # monitoring=True: chi doc, khong gianh quyen ghi voi loadcell_node dang chay
@@ -156,7 +164,7 @@ def main():
     if a.all:
         scan_all(rpi)
     else:
-        watch(rpi, a.pos, a.ch, a.seconds, a.interval)
+        watch(rpi, a.pos, a.ch, a.seconds, a.interval, a.min_ma, a.max_ma)
 
 
 if __name__ == '__main__':
