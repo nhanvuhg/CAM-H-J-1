@@ -1126,7 +1126,10 @@ Item {
 	                            }
 	                            RowLayout {
 	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.wideW; Layout.maximumWidth: inkInfoGrid.wideW
-		                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("RELATIVE ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
+		                                // Nhan an phan du de HOP NHAP bi day ra mep phai cua o.
+		                                // Mep phai o = mep phai cot 3 = mep phai luoi, dung bang
+		                                // mep nut XOA LUA CHON (hang do span ca 3 cot).
+		                                Text { Layout.fillWidth: true; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("RELATIVE ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
 		                                Rectangle {
 		                                    // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
 		                                    // chat cho, RowLayout se bop item nao con co the bop. Khong
@@ -1141,10 +1144,6 @@ Item {
 	                                        MotionMouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = relativeErrorInput; numpadPopup.currentValue = relativeErrorInput.text; numpadPopup.open() } }
 	                                    }
 	                                }
-                                    // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
-                                    // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
-                                    // ra xa nhan va phi cho ngang.
-                                    Item { Layout.fillWidth: true }
 	                            }
 
 	                            // Row 3
@@ -1168,7 +1167,10 @@ Item {
 	                            }
                             RowLayout {
                                 Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.wideW; Layout.maximumWidth: inkInfoGrid.wideW
-                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CART WEIGHT ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
+                                // Nhan an phan du de HOP NHAP bi day ra mep phai cua o.
+                                // Mep phai o = mep phai cot 3 = mep phai luoi, dung bang
+                                // mep nut XOA LUA CHON (hang do span ca 3 cot).
+                                Text { Layout.fillWidth: true; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CART WEIGHT ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
                                     // chat cho, RowLayout se bop item nao con co the bop. Khong
@@ -1195,10 +1197,6 @@ Item {
                                         }
                                     }
                                 }
-                                // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
-                                // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
-                                // ra xa nhan va phi cho ngang.
-                                Item { Layout.fillWidth: true }
                             }
 
 	                            // Row 4
