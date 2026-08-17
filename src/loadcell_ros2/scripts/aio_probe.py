@@ -36,10 +36,10 @@ except ImportError:
 
 # Mac dinh phai KHOP voi tham so node dang chay, neu khong cot `gram` o day se
 # lech han so tren GUI va gay chan doan sai. 17/08/2026: sau khi can chinh bang
-# qua chuan 2300g, start_loadcell.sh tren RevPi dat max_current_mA:=20.255 (SPAN
-# cua KM02A do duoc 3.251 uA/gam). Doi can chinh thi sua CA HAI cho, hoac
+# qua chuan 2300g, start_loadcell.sh tren RevPi dat max_current_mA:=20.381 (SPAN
+# cua KM02A do duoc 3.276 uA/gam, khop bang loadcell_cal.py). Doi can chinh thi sua CA HAI cho, hoac
 # truyen --max-ma khi chay.
-MIN_MA, MAX_MA, MAX_CAP_G = 4.0, 20.255, 5000.0
+MIN_MA, MAX_MA, MAX_CAP_G = 4.0, 20.381, 5000.0
 FAULT_BELOW_MA = 3.0
 
 
