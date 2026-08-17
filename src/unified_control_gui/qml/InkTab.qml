@@ -1060,41 +1060,51 @@ Item {
 
                         GridLayout {
                             id: inkInfoGrid
+                            // Be rong mot cot. Chan preferredWidth cua tung o theo
+                            // so nay: GridLayout lay preferred cua o lam be rong cot,
+                            // nen chi dat maximumWidth thi cot VAN no va luoi van rong
+                            // hon card — do la ly do lan sua truoc chua an.
+                            readonly property real cellW:
+                                (width - columnSpacing * (columns - 1)) / columns
                             anchors.fill: parent; anchors.margins: 15
                             columns: 3; rowSpacing: 15; columnSpacing: 30
 
 	                            // Row 1
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.maximumWidth: (inkInfoGrid.width - inkInfoGrid.columnSpacing * (inkInfoGrid.columns - 1)) / inkInfoGrid.columns
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("SCAN CODE:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).scan_code : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.maximumWidth: (inkInfoGrid.width - inkInfoGrid.columnSpacing * (inkInfoGrid.columns - 1)) / inkInfoGrid.columns
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("INK NAME:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? (inkModel.get(inkSelector.currentIndex).ink_name || inkModel.get(inkSelector.currentIndex).name) : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.maximumWidth: (inkInfoGrid.width - inkInfoGrid.columnSpacing * (inkInfoGrid.columns - 1)) / inkInfoGrid.columns
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("TOTAL KG:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? Number(inkModel.get(inkSelector.currentIndex).total_kg || 0).toFixed(2) : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 
 	                            // Row 2
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.maximumWidth: (inkInfoGrid.width - inkInfoGrid.columnSpacing * (inkInfoGrid.columns - 1)) / inkInfoGrid.columns
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("DENSITY:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? Number(inkModel.get(inkSelector.currentIndex).density || 0).toFixed(2) + " g/ml" : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.maximumWidth: (inkInfoGrid.width - inkInfoGrid.columnSpacing * (inkInfoGrid.columns - 1)) / inkInfoGrid.columns
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("LOT PI:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? (inkModel.get(inkSelector.currentIndex).lot_pi || "--") : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.maximumWidth: (inkInfoGrid.width - inkInfoGrid.columnSpacing * (inkInfoGrid.columns - 1)) / inkInfoGrid.columns
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
 		                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("RELATIVE ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
 		                                Rectangle {
+		                                    // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
+		                                    // chat cho, RowLayout se bop item nao con co the bop. Khong
+		                                    // khoa thi no bop chinh o nhap thay vi de nhan tu co font.
+		                                    Layout.preferredWidth: 70; Layout.minimumWidth: 70
 		                                    width: 70; height: 35; color: cField; border.color: cWarning; border.width: 0.5; radius: 4
 		                                    TextInput {
 		                                        id: relativeErrorInput
@@ -1108,19 +1118,23 @@ Item {
 
 	                            // Row 3
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.maximumWidth: (inkInfoGrid.width - inkInfoGrid.columnSpacing * (inkInfoGrid.columns - 1)) / inkInfoGrid.columns
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CARTRIDGE TYPE:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).name : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.maximumWidth: (inkInfoGrid.width - inkInfoGrid.columnSpacing * (inkInfoGrid.columns - 1)) / inkInfoGrid.columns
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CART WEIGHT:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: cartSelector.currentIndex >= 0 ? Number(cartModel.get(cartSelector.currentIndex).density || 0).toFixed(2) + " g" : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
 	                            }
                             RowLayout {
-                                Layout.fillWidth: true; Layout.maximumWidth: (inkInfoGrid.width - inkInfoGrid.columnSpacing * (inkInfoGrid.columns - 1)) / inkInfoGrid.columns
+                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
                                 Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CART WEIGHT ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
+                                    // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
+                                    // chat cho, RowLayout se bop item nao con co the bop. Khong
+                                    // khoa thi no bop chinh o nhap thay vi de nhan tu co font.
+                                    Layout.preferredWidth: 70; Layout.minimumWidth: 70
                                     width: 70; height: 35; color: cField; border.color: cWarning; border.width: 0.5; radius: 4
                                     TextInput {
                                         id: cartWeightErrorInput
@@ -1146,9 +1160,13 @@ Item {
 
 	                            // Row 4
                             RowLayout {
-                                Layout.fillWidth: true; Layout.maximumWidth: (inkInfoGrid.width - inkInfoGrid.columnSpacing * (inkInfoGrid.columns - 1)) / inkInfoGrid.columns
+                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
                                 Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CURRENT ML FILL:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
+                                    // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
+                                    // chat cho, RowLayout se bop item nao con co the bop. Khong
+                                    // khoa thi no bop chinh o nhap thay vi de nhan tu co font.
+                                    Layout.preferredWidth: 80; Layout.minimumWidth: 80
                                     width: 80; height: 35; color: cField; border.color: cFieldBorder; border.width: 1; radius: 4
                                     Text {
                                         anchors.centerIn: parent; text: scaleController.currentMlFill.toFixed(1) + " ml"; color: cSuccess; font.pixelSize: inputFont; font.bold: true
@@ -1156,9 +1174,13 @@ Item {
                                 }
                             }
                             RowLayout {
-                                Layout.fillWidth: true; Layout.maximumWidth: (inkInfoGrid.width - inkInfoGrid.columnSpacing * (inkInfoGrid.columns - 1)) / inkInfoGrid.columns
+                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
                                 Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("TYPE WEIGHT FILL:"); color: cAccent; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
+                                    // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
+                                    // chat cho, RowLayout se bop item nao con co the bop. Khong
+                                    // khoa thi no bop chinh o nhap thay vi de nhan tu co font.
+                                    Layout.preferredWidth: 70; Layout.minimumWidth: 70
                                     width: 70; height: 35; color: cField; border.color: cFieldBorder; border.width: 1; radius: 4
                                     TextInput {
                                         id: inkCapacityInput
