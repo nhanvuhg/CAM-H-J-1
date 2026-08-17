@@ -1099,7 +1099,7 @@ Item {
 	                            }
 	                            RowLayout {
 	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
-		                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("RELATIVE ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
+		                                Text { Layout.fillWidth: true; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("RELATIVE ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
 		                                Rectangle {
 		                                    // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
 		                                    // chat cho, RowLayout se bop item nao con co the bop. Khong
@@ -1129,7 +1129,7 @@ Item {
 	                            }
                             RowLayout {
                                 Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
-                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CART WEIGHT ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
+                                Text { Layout.fillWidth: true; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CART WEIGHT ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
                                     // chat cho, RowLayout se bop item nao con co the bop. Khong
@@ -1161,7 +1161,7 @@ Item {
 	                            // Row 4
                             RowLayout {
                                 Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
-                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CURRENT ML FILL:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
+                                Text { Layout.fillWidth: true; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CURRENT ML FILL:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
                                     // chat cho, RowLayout se bop item nao con co the bop. Khong
@@ -1175,7 +1175,7 @@ Item {
                             }
                             RowLayout {
                                 Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
-                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("TYPE WEIGHT FILL:"); color: cAccent; font.pixelSize: labelFont; font.bold: true }
+                                Text { Layout.fillWidth: true; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("TYPE WEIGHT FILL:"); color: cAccent; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
                                     // chat cho, RowLayout se bop item nao con co the bop. Khong
