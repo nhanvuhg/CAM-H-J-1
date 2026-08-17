@@ -1066,40 +1066,67 @@ Item {
                             // hon card — do la ly do lan sua truoc chua an.
                             readonly property real cellW:
                                 (width - columnSpacing * (columns - 1)) / columns
+                            // Cot 3 chua ba nhan dai nhat (SAI SO ...). Chia deu ba cot
+                            // thi no khong the du: nhan ~288px + hop nhap 70px > cellW
+                            // (~271px voi be ngang card hien tai). Doi be rong tu hai
+                            // cot kia sang — chung chi co nhan ngan nen thua cho.
+                            // 2*0.82 + 1.36 = 3.00 nen tong van bang 3 * cellW.
+                            readonly property real narrowW: cellW * 0.82
+                            readonly property real wideW:   cellW * 1.36
                             anchors.fill: parent; anchors.margins: 15
                             columns: 3; rowSpacing: 15; columnSpacing: 30
 
 	                            // Row 1
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.narrowW; Layout.maximumWidth: inkInfoGrid.narrowW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("SCAN CODE:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? inkModel.get(inkSelector.currentIndex).scan_code : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+                                    // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
+                                    // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
+                                    // ra xa nhan va phi cho ngang.
+                                    Item { Layout.fillWidth: true }
 	                            }
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.narrowW; Layout.maximumWidth: inkInfoGrid.narrowW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("INK NAME:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? (inkModel.get(inkSelector.currentIndex).ink_name || inkModel.get(inkSelector.currentIndex).name) : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+                                    // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
+                                    // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
+                                    // ra xa nhan va phi cho ngang.
+                                    Item { Layout.fillWidth: true }
 	                            }
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.wideW; Layout.maximumWidth: inkInfoGrid.wideW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("TOTAL KG:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? Number(inkModel.get(inkSelector.currentIndex).total_kg || 0).toFixed(2) : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+                                    // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
+                                    // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
+                                    // ra xa nhan va phi cho ngang.
+                                    Item { Layout.fillWidth: true }
 	                            }
 
 	                            // Row 2
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.narrowW; Layout.maximumWidth: inkInfoGrid.narrowW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("DENSITY:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? Number(inkModel.get(inkSelector.currentIndex).density || 0).toFixed(2) + " g/ml" : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+                                    // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
+                                    // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
+                                    // ra xa nhan va phi cho ngang.
+                                    Item { Layout.fillWidth: true }
 	                            }
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.narrowW; Layout.maximumWidth: inkInfoGrid.narrowW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("LOT PI:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: inkSelector.currentIndex >= 0 ? (inkModel.get(inkSelector.currentIndex).lot_pi || "--") : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+                                    // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
+                                    // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
+                                    // ra xa nhan va phi cho ngang.
+                                    Item { Layout.fillWidth: true }
 	                            }
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
-		                                Text { Layout.fillWidth: true; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("RELATIVE ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.wideW; Layout.maximumWidth: inkInfoGrid.wideW
+		                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("RELATIVE ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
 		                                Rectangle {
 		                                    // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
 		                                    // chat cho, RowLayout se bop item nao con co the bop. Khong
@@ -1114,22 +1141,34 @@ Item {
 	                                        MotionMouseArea { anchors.fill: parent; onClicked: { inkTab.numpadTarget = relativeErrorInput; numpadPopup.currentValue = relativeErrorInput.text; numpadPopup.open() } }
 	                                    }
 	                                }
+                                    // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
+                                    // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
+                                    // ra xa nhan va phi cho ngang.
+                                    Item { Layout.fillWidth: true }
 	                            }
 
 	                            // Row 3
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.narrowW; Layout.maximumWidth: inkInfoGrid.narrowW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CARTRIDGE TYPE:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: cartSelector.currentIndex >= 0 ? cartModel.get(cartSelector.currentIndex).name : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+                                    // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
+                                    // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
+                                    // ra xa nhan va phi cho ngang.
+                                    Item { Layout.fillWidth: true }
 	                            }
 	                            RowLayout {
-	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
+	                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.narrowW; Layout.maximumWidth: inkInfoGrid.narrowW
 	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CART WEIGHT:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
 	                                Text { text: cartSelector.currentIndex >= 0 ? Number(cartModel.get(cartSelector.currentIndex).density || 0).toFixed(2) + " g" : "--"; color: cAccent; font.pixelSize: valueFont; font.bold: true }
+                                    // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
+                                    // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
+                                    // ra xa nhan va phi cho ngang.
+                                    Item { Layout.fillWidth: true }
 	                            }
                             RowLayout {
-                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
-                                Text { Layout.fillWidth: true; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CART WEIGHT ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
+                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.wideW; Layout.maximumWidth: inkInfoGrid.wideW
+                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CART WEIGHT ERROR (g):"); color: cWarning; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
                                     // chat cho, RowLayout se bop item nao con co the bop. Khong
@@ -1156,12 +1195,16 @@ Item {
                                         }
                                     }
                                 }
+                                // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
+                                // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
+                                // ra xa nhan va phi cho ngang.
+                                Item { Layout.fillWidth: true }
                             }
 
 	                            // Row 4
                             RowLayout {
-                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
-                                Text { Layout.fillWidth: true; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CURRENT ML FILL:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
+                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.narrowW; Layout.maximumWidth: inkInfoGrid.narrowW
+                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("CURRENT ML FILL:"); color: cSubText; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
                                     // chat cho, RowLayout se bop item nao con co the bop. Khong
@@ -1172,10 +1215,14 @@ Item {
                                         anchors.centerIn: parent; text: scaleController.currentMlFill.toFixed(1) + " ml"; color: cSuccess; font.pixelSize: inputFont; font.bold: true
                                     }
                                 }
+                                // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
+                                // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
+                                // ra xa nhan va phi cho ngang.
+                                Item { Layout.fillWidth: true }
                             }
                             RowLayout {
-                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.cellW; Layout.maximumWidth: inkInfoGrid.cellW
-                                Text { Layout.fillWidth: true; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("TYPE WEIGHT FILL:"); color: cAccent; font.pixelSize: labelFont; font.bold: true }
+                                Layout.fillWidth: true; Layout.preferredWidth: inkInfoGrid.narrowW; Layout.maximumWidth: inkInfoGrid.narrowW
+                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("TYPE WEIGHT FILL:"); color: cAccent; font.pixelSize: labelFont; font.bold: true }
                                 Rectangle {
                                     // Khoa be ngang o nhap: o cua luoi da bi chan tran nen khi
                                     // chat cho, RowLayout se bop item nao con co the bop. Khong
@@ -1204,6 +1251,10 @@ Item {
                                         }
                                     }
                                 }
+                                // Nhan phan du de nhan va gia tri nam SAT nhau. Khong co no thi
+                                // RowLayout chia deu phan thua cho chinh hai Text, day gia tri
+                                // ra xa nhan va phi cho ngang.
+                                Item { Layout.fillWidth: true }
                             }
                             Item { Layout.fillWidth: true }
 
