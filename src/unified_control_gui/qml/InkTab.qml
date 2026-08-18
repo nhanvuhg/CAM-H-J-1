@@ -431,7 +431,7 @@ Item {
                                 spacing: 8
 
                                 Text {
-                                    text: qsTr("Khoi luong chuan (g):")
+                                    text: qsTr("Known weight (g):")
                                     color: "#c7dcef"
                                     font.pixelSize: labelFont
                                     font.bold: true
@@ -469,7 +469,7 @@ Item {
                                 }
                                 MotionButton {
                                     id: calAddBtn
-                                    text: qsTr("GHI DIEM")
+                                    text: qsTr("ADD POINT")
                                     Layout.preferredWidth: 110
                                     Layout.preferredHeight: 32
                                     font.pixelSize: labelFont
@@ -495,7 +495,7 @@ Item {
                                 Item { Layout.fillWidth: true }
                                 MotionButton {
                                     id: calApplyBtn
-                                    text: qsTr("TINH & AP DUNG")
+                                    text: qsTr("COMPUTE && APPLY")
                                     Layout.preferredWidth: 150
                                     Layout.preferredHeight: 32
                                     font.pixelSize: labelFont
@@ -519,7 +519,7 @@ Item {
                                 }
                                 MotionButton {
                                     id: calClearBtn
-                                    text: qsTr("XOA")
+                                    text: qsTr("CLEAR")
                                     Layout.preferredWidth: 70
                                     Layout.preferredHeight: 32
                                     font.pixelSize: labelFont
@@ -554,17 +554,17 @@ Item {
                                 font.pixelSize: helperFont
                                 color: "#c7dcef"
                                 text: {
-                                    var out = qsTr("Diem da ghi: (chua co)")
+                                    var out = qsTr("Points: (none yet)")
                                     try {
                                         var d = JSON.parse(scaleController.calPoints)
                                         if (d.points && d.points.length > 0) {
                                             var parts = []
                                             for (var i = 0; i < d.points.length; ++i)
                                                 parts.push(d.points[i].g + "g=" + d.points[i].mA + "mA")
-                                            out = qsTr("Diem da ghi: ") + parts.join("  |  ")
+                                            out = qsTr("Points: ") + parts.join("  |  ")
                                         }
                                         if (d.min_mA !== undefined)
-                                            out += qsTr("     [dang dung %1-%2 mA]").arg(d.min_mA).arg(d.max_mA)
+                                            out += qsTr("     [in use: %1-%2 mA]").arg(d.min_mA).arg(d.max_mA)
                                     } catch (e) { }
                                     return out
                                 }
@@ -587,7 +587,7 @@ Item {
                                 wrapMode: Text.WordWrap
                                 font.pixelSize: helperFont
                                 color: cSubText
-                                text: qsTr("Can trong -> nhap 0 -> GHI DIEM. Dat tai chuan -> nhap so gam -> GHI DIEM. It nhat 2 diem, cang nhieu cang chinh xac. Xong bam TINH & AP DUNG.")
+                                text: qsTr("Empty scale -> enter 0 -> ADD POINT. Place a known weight -> enter grams -> ADD POINT. At least 2 points; more points, better accuracy. Then press COMPUTE & APPLY.")
                             }
                         }
                     }

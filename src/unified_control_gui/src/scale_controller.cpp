@@ -584,7 +584,7 @@ void ScaleController::callCalService(
     const QString &label)
 {
     if (!client || !client->wait_for_service(std::chrono::milliseconds(500))) {
-        cal_message_ = tr("%1: node khong phan hoi").arg(label);
+        cal_message_ = tr("%1: node not responding").arg(label);
         emit calMessageChanged();
         return;
     }
@@ -612,9 +612,9 @@ void ScaleController::calAddPoint(float knownWeight)
     // service, va cho mot nhip de no toi noi.
     setKnownCalibration(knownWeight);
     QTimer::singleShot(150, this, [this]() {
-        callCalService(client_cal_add_, tr("Ghi diem"));
+        callCalService(client_cal_add_, tr("Add point"));
     });
 }
 
-void ScaleController::calApply() { callCalService(client_cal_apply_, tr("Ap dung")); }
-void ScaleController::calClear() { callCalService(client_cal_clear_, tr("Xoa diem")); }
+void ScaleController::calApply() { callCalService(client_cal_apply_, tr("Apply")); }
+void ScaleController::calClear() { callCalService(client_cal_clear_, tr("Clear points")); }
