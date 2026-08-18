@@ -279,17 +279,17 @@ private:
     std::atomic<bool> feed_chamber_signal_{false};
     // feed_chamber wait timeout in LOAD_CHAMBER_FROM_BUFFER → if timeout, skip
     // BUFFER→CHAMBER and drain SCALE, then enter WAIT_RESUME_CHOICE after PLACE.
-    // 0 = CHO VO HAN (thiet ke hien tai). May Fill tu xu ly loi cua no va tu
-    // ngung phat /revpi/feed_chamber khi co van de; he thong nay chi chay THEO
-    // topic cua Fill, khong phan doan thay no. Nen khi vang tin hieu, robot dung
-    // yen nhu dang PAUSE — khong bao timeout, khong xa SCALE — va tu chay tiep
-    // ngay khi topic tro lai.
+    // May Fill tu xu ly loi cua no va tu ngung phat /revpi/feed_chamber khi co
+    // van de; he thong nay chi chay THEO topic cua Fill. Khi vang tin hieu robot
+    // dung yen nhu dang PAUSE — khong bao loi, khong dong cham gi toi SCALE.
     //
-    // Truoc day 150s: het gio thi bo qua BUFFER->CHAMBER, XA SCALE roi vao
-    // WAIT_RESUME_CHOICE. Do la hanh dong pha huy do mot su cham tre binh thuong
-    // cua may Fill gay ra, va no keo ca day chuyen dung theo.
-    // Dat > 0 de bat lai gioi han cu.
-    static constexpr double LOAD_BUFFER_FEED_TIMEOUT_S = 0.0;
+    // Sau 10 phut moi hoi operator, vi luc do nhieu kha nang su co da duoc khac
+    // phuc nhung robot van dang cho. Popup de ho chon: cho tiep, hay bo qua ma
+    // sang xu ly can (khi ho da tu xu ly chamber).
+    //
+    // Truoc day 150s VA XA SCALE truoc khi hoi — hanh dong pha huy do mot su
+    // cham tre binh thuong cua may Fill gay ra. Dat 0 de cho vo han khong hoi.
+    static constexpr double LOAD_BUFFER_FEED_TIMEOUT_S = 600.0;
     static constexpr double SCALE_TOPIC_TIMEOUT_S      = 150.0;  // PROCESSING_SCALE: no loadcell msg → WAIT_SCALE_CHOICE
     rclcpp::Time feed_chamber_wait_start_;          // set on first wait, reset on pass/exit
     bool feed_chamber_wait_active_{false};          // true while measuring elapsed
@@ -1931,7 +1931,9 @@ void RobotLogicNode::gotoStateCallback(const std_msgs::msg::String::SharedPtr ms
                                current_state_ == SystemState::PLACE_TO_FAIL);
 
         // Resume from WAIT_RESUME_CHOICE: chỉ cho phép operator chọn 2 target hợp lệ.
-        bool is_resume_cmd = (sn == "INIT_LOAD_CHAMBER_DIRECT" || sn == "LOAD_CHAMBER_FROM_BUFFER");
+        // PROCESSING_SCALE: operator da tu xu ly chamber → bo qua cho fill, sang can luon.
+        bool is_resume_cmd = (sn == "INIT_LOAD_CHAMBER_DIRECT" || sn == "LOAD_CHAMBER_FROM_BUFFER"
+                              || sn == "PROCESSING_SCALE");
         bool in_resume_wait = (current_state_ == SystemState::WAIT_RESUME_CHOICE);
 
         // Scale choice from WAIT_SCALE_CHOICE: 3 target hợp lệ.
@@ -3841,11 +3843,13 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
         double elapsed = (this->now() - feed_chamber_wait_start_).seconds();
         if (LOAD_BUFFER_FEED_TIMEOUT_S > 0.0 && elapsed > LOAD_BUFFER_FEED_TIMEOUT_S) {
             RCLCPP_WARN(get_logger(),
-                "[LOAD_BUFFER] ⏰ feed_chamber timeout (%.0fs) — skip BUFFER→CHAMBER, drain SCALE",
+                "[LOAD_BUFFER] ⏸ Cho feed_chamber %.0fs — hoi operator cach xu ly",
                 elapsed);
-            skipped_buffer_load_       = true;
+            // KHONG dat skipped_buffer_load_ va KHONG di qua PROCESSING_SCALE:
+            // truoc day duong do xa SCALE TRUOC khi hoi, tuc tu quyet dinh thay
+            // operator roi moi bao. Gio vao thang trang thai hoi.
             feed_chamber_wait_active_  = false;
-            transitionTo(SystemState::PROCESSING_SCALE);
+            transitionTo(SystemState::WAIT_RESUME_CHOICE);
             return;
         }
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 10000,

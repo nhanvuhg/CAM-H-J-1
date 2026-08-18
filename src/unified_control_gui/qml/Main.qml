@@ -432,7 +432,7 @@ ApplicationWindow {
             }
             Text {
                 Layout.fillWidth: true
-                text: qsTr("feed_chamber timed out after 150 seconds — SCALE has been drained to PLACE.\nSelect how to resume the cycle:")
+                text: qsTr("The Fill machine has not sent feed_chamber for 10 minutes.\nNothing has been changed — the cartridge on the scale is untouched.\nChoose how to continue:")
                 color: "#c7dcef"
                 font.pixelSize: 17
                 wrapMode: Text.WordWrap
@@ -488,6 +488,33 @@ ApplicationWindow {
                         verticalAlignment: Text.AlignVCenter
                     }
                     onClicked: confirmEmptyBufferPopup.open()
+                }
+                // Operator da tu xu ly chamber roi -> bo qua cho fill, sang can
+                // luon. Truoc day robot TU dong lam viec nay sau 150s; gio no la
+                // lua chon cua nguoi van hanh chu khong phai quyet dinh cua may.
+                MotionButton {
+                    Layout.preferredWidth: 250; Layout.preferredHeight: 60
+                    text: qsTr("⚖  PROCESS SCALE\n(chamber already handled)")
+                    font.pixelSize: 15; font.bold: true
+                    background: Rectangle {
+                        radius: 6
+                        border.color: "#3ed0b4"; border.width: 2
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: "#1f9e86" }
+                            GradientStop { position: 1.0; color: "#10473c" }
+                        }
+                    }
+                    contentItem: Text {
+                        text: parent.text; color: "#ffffff"
+                        font: parent.font
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    onClicked: {
+                        robotController.gotoState("PROCESSING_SCALE")
+                        resumeChoicePopup.close()
+                    }
                 }
             }
 
