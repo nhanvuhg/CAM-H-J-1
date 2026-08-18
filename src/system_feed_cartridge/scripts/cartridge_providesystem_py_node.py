@@ -4453,8 +4453,15 @@ class CartridgeSystem(Node):
             msg = String()
             msg.data = json.dumps(data)
             self.pub_servo_pos.publish(msg)
-        except Exception:
-            pass
+        except Exception as e:
+            # Truoc day la `except Exception: pass`. Mot loi bat ky trong ham nay
+            # lam ca topic servo_positions cam luon, ma GUI dung chinh topic do
+            # de quyet dinh servo LIVE hay OFFLINE — nen trieu chung la "servo
+            # bao offline du da ket noi", khong co lay mot dong log. Throttle 5s
+            # de 20Hz khong lam ngap log.
+            self.get_logger().error(
+                f"[pos_publish] {type(e).__name__}: {e}",
+                throttle_duration_sec=5.0)
 
     def _watchdog(self):
         """
