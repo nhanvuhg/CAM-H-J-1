@@ -13,6 +13,32 @@
 #include "std_msgs/msg/string.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 
+// Fill HP phat chuoi dang:
+//   LEVEL:<WARN|ERROR>|TIME:hh:mm:ss|AREA:<vung>|MESSAGE:<noi dung>
+// Tach mot truong bat ky ra khoi chuoi do.
+static QString fillField(const QString &value, const QString &key)
+{
+    const QString tag = key + QLatin1Char(':');
+    const int i = value.indexOf(tag);
+    if (i < 0)
+        return QString();
+    QString v = value.mid(i + tag.size());
+    const int cut = v.indexOf(QLatin1Char('|'));
+    if (cut >= 0)
+        v = v.left(cut);
+    return v.trimmed().toUpper();
+}
+
+// Cam bien an toan cua may Fill do CHINH ROBOT lam tac khi dua cartridge vao —
+// day la hanh vi binh thuong cua chu ky, khong phai su co. May Fill tu xoa co
+// khi robot rut ra khoi vung cam bien. Hien no nhu mot muc canh bao chi lam
+// nhieu danh sach va che mat loi that, nen bo qua han.
+static bool isFillSafetyFlag(const QString &value)
+{
+    return fillField(value, QStringLiteral("AREA")).contains(QStringLiteral("SAFETY"));
+}
+
+
 namespace {
 
 QString compactText(const QString &value)
@@ -161,6 +187,13 @@ bool SystemAlertController::blocksStart(const Alert &alert) const
     // viec ho van lam duoc. Alert van hien trong danh sach de khong ai quen no.
     // AI thi nguoc lai — quyet dinh row/slot lay tu camera, phai chan.
     if (alert.area == "CAMERA" && operation_mode_.trimmed().toLower() == "auto")
+        return false;
+    // May Fill la cum RIENG BIET voi cum cartridge: no khong dieu khien servo,
+    // xy lanh hay robot cua day chuyen nay. Loi cua no khong the lam hong mot
+    // chu ky cap cartridge, nen chan START chi la ngan nguoi van hanh khoi viec
+    // ho van lam duoc — giong het truong hop CAMERA o AUTO ben tren.
+    // Alert van hien trong danh sach (muc WARNING) de khong ai quen no.
+    if (alert.area == "FILL_HP")
         return false;
     return true;
 }
@@ -430,19 +463,21 @@ void SystemAlertController::observeString(const QString &source, const QString &
     }
 
     if (source == "error_status") {
-        if (isHealthy(value))
+        // May Fill la cum RIENG BIET: loi cua no khong the lam hong mot chu ky
+        // cap cartridge, nen luon o muc WARNING du may Fill gui LEVEL:ERROR.
+        if (isHealthy(value) || isFillSafetyFlag(value))
             clearAlert(source);
         else
-            upsertAlert(source, source, "ERROR", "FILL_HP", "Fill HP error", value,
+            upsertAlert(source, source, "WARNING", "FILL_HP", "Fill HP error", value,
                         isConnectionIssue(value));
         return;
     }
 
     if (source == "hw_status") {
-        if (isHealthy(value) || !hasCriticalToken(value))
+        if (isHealthy(value) || !hasCriticalToken(value) || isFillSafetyFlag(value))
             clearAlert(source);
         else
-            upsertAlert(source, source, "ERROR", "FILL_HP", "Fill HP hardware", value,
+            upsertAlert(source, source, "WARNING", "FILL_HP", "Fill HP hardware", value,
                         isConnectionIssue(value));
         return;
     }
