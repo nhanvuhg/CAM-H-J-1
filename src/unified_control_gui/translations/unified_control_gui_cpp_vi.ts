@@ -445,6 +445,16 @@
     </message>
     <message>
         <location line="+1"/>
+        <source>Scale offline</source>
+        <translation>Cân đang offline</translation>
+    </message>
+    <message>
+        <location line="+1"/>
+        <source>No /loadcell/status update was received for 12 seconds.</source>
+        <translation>Không nhận được cập nhật /loadcell/status trong 12 giây.</translation>
+    </message>
+    <message>
+        <location line="+1"/>
         <source>Robot status offline</source>
         <translation>Trạng thái robot đang offline</translation>
     </message>

@@ -1686,9 +1686,9 @@ Bạn đã lấy thủ công tất cả cartridge ra khỏi BUFFER chưa?</trans
     <message>
         <location line="+7" />
         <source>No loadcell topic was received for 150 seconds in PROCESSING_SCALE.
-Select how to handle this cartridge:</source>
+Place this cartridge, then the system stops and returns to MANUAL — press START to run again.</source>
         <translation>Không nhận được topic loadcell trong 150 giây ở PROCESSING_SCALE.
-Chọn cách xử lý cartridge này:</translation>
+Đặt cartridge này xong, hệ thống sẽ dừng và về MANUAL — nhấn START để chạy lại.</translation>
     </message>
     <message>
         <location line="+14" />

@@ -152,7 +152,15 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
         "/robot/system_status", 10,
         [this](const std_msgs::msg::String::SharedPtr msg) {
             QMetaObject::invokeMethod(this, [this, msg]() {
-                system_status_ = QString::fromStdString(msg->data);
+                // robot_logic_node phat lai trang thai moi 1 s de GUI khoi dong
+                // tre van bat duoc gia tri hien tai. Chi emit khi gia tri that
+                // su doi: handler onSystemStatusChanged trong Main.qml goi
+                // confirmEmptyBufferPopup.close(), nen emit lap lai se dong mat
+                // bang xac nhan ngay khi operator dang doc no.
+                const QString value = QString::fromStdString(msg->data);
+                if (system_status_ == value)
+                    return;
+                system_status_ = value;
                 emit systemStatusChanged();
             }, Qt::QueuedConnection);
         });

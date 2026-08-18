@@ -410,7 +410,7 @@ ApplicationWindow {
         anchors.centerIn: parent
         modal: true
         closePolicy: Popup.NoAutoClose
-        width: 620; height: 400
+        width: 900; height: 360
         background: Rectangle {
             color: "#081627"
             border.color: "#f5a623"
@@ -441,11 +441,12 @@ ApplicationWindow {
             Item { Layout.fillHeight: true }
 
             RowLayout {
-                Layout.alignment: Qt.AlignHCenter
+                Layout.fillWidth: true
                 spacing: 16
 
                 MotionButton {
-                    Layout.preferredWidth: 250; Layout.preferredHeight: 60
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1; Layout.preferredHeight: 64
                     text: qsTr("🔁  LOAD CHAMBER\nFROM BUFFER")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
@@ -469,7 +470,8 @@ ApplicationWindow {
                     }
                 }
                 MotionButton {
-                    Layout.preferredWidth: 250; Layout.preferredHeight: 60
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1; Layout.preferredHeight: 64
                     text: qsTr("🔂  LOAD CHAMBER\nFROM TRAY")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
@@ -493,7 +495,8 @@ ApplicationWindow {
                 // luon. Truoc day robot TU dong lam viec nay sau 150s; gio no la
                 // lua chon cua nguoi van hanh chu khong phai quyet dinh cua may.
                 MotionButton {
-                    Layout.preferredWidth: 250; Layout.preferredHeight: 60
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1; Layout.preferredHeight: 64
                     text: qsTr("⚖  PROCESS SCALE\n(chamber already handled)")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
@@ -519,8 +522,8 @@ ApplicationWindow {
             }
 
             MotionButton {
-                Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: 516; Layout.preferredHeight: 52
+                Layout.fillWidth: true
+                Layout.preferredHeight: 52
                 text: qsTr("⏹  STOP — Stop the system and hold the current position")
                 font.pixelSize: 15; font.bold: true
                 background: Rectangle { color: "#3a1614"; border.color: "#f0735c"; border.width: 2; radius: 6 }
@@ -623,7 +626,7 @@ ApplicationWindow {
         anchors.centerIn: parent
         modal: true
         closePolicy: Popup.NoAutoClose
-        width: 660; height: 430
+        width: 720; height: 360
         background: Rectangle {
             color: "#081627"
             border.color: "#f0735c"
@@ -645,7 +648,7 @@ ApplicationWindow {
             }
             Text {
                 Layout.fillWidth: true
-                text: qsTr("No loadcell topic was received for 150 seconds in PROCESSING_SCALE.\nSelect how to handle this cartridge:")
+                text: qsTr("No loadcell topic was received for 150 seconds in PROCESSING_SCALE.\nPlace this cartridge, then the system stops and returns to MANUAL — press START to run again.")
                 color: "#c7dcef"
                 font.pixelSize: 16
                 wrapMode: Text.WordWrap
@@ -654,28 +657,12 @@ ApplicationWindow {
             Item { Layout.fillHeight: true }
 
             RowLayout {
-                Layout.alignment: Qt.AlignHCenter
+                Layout.fillWidth: true
                 spacing: 12
 
                 MotionButton {
-                    Layout.preferredWidth: 196; Layout.preferredHeight: 72
-                    text: qsTr("↩  BACK TO\nWAIT FILLING\n(cartridge removed)")
-                    font.pixelSize: 13; font.bold: true
-                    background: Rectangle { color: "#081627"; border.color: "#36b6ff"; border.width: 2; radius: 6 }
-                    contentItem: Text {
-                        text: parent.text; color: "#7fcdf5"
-                        font: parent.font
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                    }
-                    onClicked: {
-                        robotController.gotoState("WAIT_FILLING")
-                        mainWindow.scaleIssueWarning = true
-                        scaleChoicePopup.close()
-                    }
-                }
-                MotionButton {
-                    Layout.preferredWidth: 196; Layout.preferredHeight: 72
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1; Layout.preferredHeight: 72
                     text: qsTr("✓  PLACE TO\nOUTPUT\n(force PASS)")
                     font.pixelSize: 13; font.bold: true
                     background: Rectangle { color: "#0a2418"; border.color: "#3ed0b4"; border.width: 2; radius: 6 }
@@ -688,11 +675,17 @@ ApplicationWindow {
                     onClicked: {
                         robotController.gotoState("PLACE_TO_OUTPUT")
                         mainWindow.scaleIssueWarning = true
+                        // Node robot phat /system/stop_button sau khi dat xong;
+                        // rieng o hien thi mode nay khong con binding nen phai
+                        // tu tra ve manual.
+                        mainWindow.selectedCartridgeMode = "manual"
+                        mainWindow.autoAiStartedSinceModeSelect = false
                         scaleChoicePopup.close()
                     }
                 }
                 MotionButton {
-                    Layout.preferredWidth: 196; Layout.preferredHeight: 72
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1; Layout.preferredHeight: 72
                     text: qsTr("✗  PLACE TO\nFAIL\n(force FAIL)")
                     font.pixelSize: 13; font.bold: true
                     background: Rectangle { color: "#220c0b"; border.color: "#f0735c"; border.width: 2; radius: 6 }
@@ -705,6 +698,11 @@ ApplicationWindow {
                     onClicked: {
                         robotController.gotoState("PLACE_TO_FAIL")
                         mainWindow.scaleIssueWarning = true
+                        // Node robot phat /system/stop_button sau khi dat xong;
+                        // rieng o hien thi mode nay khong con binding nen phai
+                        // tu tra ve manual.
+                        mainWindow.selectedCartridgeMode = "manual"
+                        mainWindow.autoAiStartedSinceModeSelect = false
                         scaleChoicePopup.close()
                     }
                 }
@@ -712,7 +710,8 @@ ApplicationWindow {
 
             MotionButton {
                 Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: 612; Layout.preferredHeight: 52
+                Layout.fillWidth: true
+                Layout.preferredHeight: 52
                 text: qsTr("⏹  STOP — Stop the system and hold the current position")
                 font.pixelSize: 15; font.bold: true
                 background: Rectangle { color: "#160a09"; border.color: "#f0735c"; border.width: 2; radius: 6 }

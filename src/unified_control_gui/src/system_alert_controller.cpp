@@ -701,29 +701,47 @@ void SystemAlertController::checkHeartbeats()
         const char *title;
         const char *message;
         qint64 timeout_ms;
+        const char *level;      // "ERROR" = interlock, "WARNING" = xac nhan duoc
+        bool connection;        // true -> effectiveLevel nang len ERROR o AUTO/AI
     };
     static const Watch watches[] = {
         {"robot_heartbeat", "ROBOT", "Robot status offline",
-         "No /robot/system_uptime heartbeat was received for 12 seconds.", 12000},
+         "No /robot/system_uptime heartbeat was received for 12 seconds.", 12000, "ERROR", true},
         {"robot_feedback", "ROBOT", "Robot hardware disconnected",
-         "No hardware feedback was received from /nova5/joint_states_robot for 5 seconds.", 5000},
+         "No hardware feedback was received from /nova5/joint_states_robot for 5 seconds.", 5000, "ERROR", true},
         {"feeder_system_state", "FEEDER", "Cartridge status offline",
-         "No /system_state update was received from the cartridge system for 12 seconds.", 12000},
+         "No /system_state update was received from the cartridge system for 12 seconds.", 12000, "ERROR", true},
         {"feeder_servo_positions", "FEEDER", "Servo feedback offline",
-         "No /providesystem/servo_positions feedback was received for 6 seconds.", 6000},
+         "No /providesystem/servo_positions feedback was received for 6 seconds.", 6000, "ERROR", true},
         {"camera_cam0_health", "CAMERA", "CAM0 status offline",
-         "No /camera/cam0/health update was received for 12 seconds.", 12000},
+         "No /camera/cam0/health update was received for 12 seconds.", 12000, "ERROR", true},
         {"camera_cam1_health", "CAMERA", "CAM1 status offline",
-         "No /camera/cam1/health update was received for 12 seconds.", 12000},
+         "No /camera/cam1/health update was received for 12 seconds.", 12000, "ERROR", true},
+        // RevPi tat / loadcell_node chet thi khong con message nao tren
+        // /loadcell/status, ma cac canh bao can khac deu chi phan ung theo NOI
+        // DUNG message nen su im lang truoc day lot luoi hoan toan. Node phat
+        // 10 Hz trong _publish_weight nen 12 s la du rong.
+        // Muc WARNING chu khong phai ERROR: operator van chay duoc sau khi xac
+        // nhan, hoac bat IGNORE SCALE de tat han.
+        {"scale_status", "SCALE", "Scale offline",
+         "No /loadcell/status update was received for 12 seconds.", 12000, "WARNING", false},
     };
 
     for (const Watch &watch : watches) {
         const QString source = QString::fromLatin1(watch.source);
+        // IGNORE SCALE da tat vung SCALE thi watchdog khong duoc dung lai canh
+        // bao o tick ke tiep — neu khong, clearArea() se bi ghi de sau 1 giay.
+        if (scale_ignored_ && qstrcmp(watch.area, "SCALE") == 0) {
+            clearAlert("watchdog_" + source);
+            continue;
+        }
         const qint64 lastSeen = heartbeat_seen_ms_.value(source, heartbeat_watch_started_ms_);
         if (now - lastSeen <= watch.timeout_ms)
             continue;
-        upsertAlert("watchdog_" + source, source, "ERROR", QString::fromLatin1(watch.area),
-                    QString::fromUtf8(watch.title), QString::fromUtf8(watch.message), true);
+        upsertAlert("watchdog_" + source, source, QString::fromLatin1(watch.level),
+                    QString::fromLatin1(watch.area),
+                    QString::fromUtf8(watch.title), QString::fromUtf8(watch.message),
+                    watch.connection);
     }
 }
 
@@ -770,6 +788,7 @@ QString SystemAlertController::localizedAlertText(const QString &text) const
     if (text == "Loadcell overload") return tr("Loadcell overload");
     if (text == "Loadcell zero drift") return tr("Loadcell zero drift");
     if (text == "Cartridge notification") return tr("Cartridge notification");
+    if (text == "Scale offline") return tr("Scale offline");
     if (text == "Robot status offline") return tr("Robot status offline");
     if (text == "Robot hardware disconnected") return tr("Robot hardware disconnected");
     if (text == "Cartridge status offline") return tr("Cartridge status offline");
@@ -780,6 +799,8 @@ QString SystemAlertController::localizedAlertText(const QString &text) const
         return tr("The loadcell reports an overload.");
     if (text == "The loadcell reports a zero-point drift warning.")
         return tr("The loadcell reports a zero-point drift warning.");
+    if (text == "No /loadcell/status update was received for 12 seconds.")
+        return tr("No /loadcell/status update was received for 12 seconds.");
     if (text == "No /robot/system_uptime heartbeat was received for 12 seconds.")
         return tr("No /robot/system_uptime heartbeat was received for 12 seconds.");
     if (text == "No hardware feedback was received from /nova5/joint_states_robot for 5 seconds.")
