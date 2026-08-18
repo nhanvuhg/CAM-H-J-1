@@ -27,12 +27,20 @@ MouseArea {
     hoverEnabled: true
     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
 
+    // Tren man cam ung, nha tay ra thi con tro van dung nguyen tren nut nen
+    // containsMouse mai true — nut sang va phong to vinh vien du khong con
+    // thao tac nao. Chan hieu ung hover ngay khi nha tay, mo lai khi con tro
+    // that su di chuyen hoac roi ra rooi vao lai (chuot that van hoat dong
+    // binh thuong).
+    property bool hoverSuppressed: false
+    readonly property bool hoverActive: containsMouse && !hoverSuppressed
+
     function applyMotion() {
         if (!targetItem) return
-        var nextScale = (motionEnabled && enabled) ? (pressed ? pressScale : (containsMouse ? hoverScale : 1.0)) : 1.0
+        var nextScale = (motionEnabled && enabled) ? (pressed ? pressScale : (hoverActive ? hoverScale : 1.0)) : 1.0
         if (motionEnabled) {
             targetItem.transformOrigin = Item.Center
-            targetItem.z = raiseOnHover && (containsMouse || pressed || (shimmerEnabled && shimmerAnim.running)) ? 20 : 0
+            targetItem.z = raiseOnHover && (hoverActive || pressed || (shimmerEnabled && shimmerAnim.running)) ? 20 : 0
         }
         if (Math.abs(targetItem.scale - nextScale) > 0.001) {
             scaleAnim.stop()
@@ -43,6 +51,18 @@ MouseArea {
     }
 
     onContainsMouseChanged: applyMotion()
+    onHoverActiveChanged: applyMotion()
+
+    Connections {
+        target: area
+        function onReleased(mouse) { area.hoverSuppressed = true }
+        function onCanceled()      { area.hoverSuppressed = true }
+        function onEntered()       { area.hoverSuppressed = false }
+        function onExited()        { area.hoverSuppressed = false }
+        function onPositionChanged(mouse) {
+            if (!area.pressed) area.hoverSuppressed = false
+        }
+    }
     onPressedChanged: {
         applyMotion()
         if (pressed && enabled && motionEnabled && shimmerEnabled) {
@@ -63,17 +83,17 @@ MouseArea {
     Loader {
         id: shadowLoader
         anchors.fill: parent
-        active: area.motionEnabled && area.shadowEnabled && area.enabled && (area.containsMouse || area.pressed || (area.shimmerEnabled && shimmerAnim.running))
+        active: area.motionEnabled && area.shadowEnabled && area.enabled && (area.hoverActive || area.pressed || (area.shimmerEnabled && shimmerAnim.running))
         z: -1
 
         sourceComponent: DropShadow {
             anchors.fill: parent
             source: area.targetItem
             transparentBorder: true
-            horizontalOffset: area.containsMouse ? 1 : 0
-            verticalOffset: area.containsMouse ? 4 : 2
-            radius: area.containsMouse ? 10 : 6
-            samples: area.containsMouse ? 21 : 13
+            horizontalOffset: area.hoverActive ? 1 : 0
+            verticalOffset: area.hoverActive ? 4 : 2
+            radius: area.hoverActive ? 10 : 6
+            samples: area.hoverActive ? 21 : 13
             color: area.pressed ? area.pressedShadowColor : area.shadowColor
         }
     }
@@ -85,7 +105,7 @@ MouseArea {
         color: area.hoverTintColor
         // Nhấn thì tắt: nút loại này tự đổi màu nền khi pressed, phủ thêm lớp
         // sáng lên nữa sẽ triệt mất tín hiệu nhấn.
-        opacity: area.motionEnabled && area.enabled && area.containsMouse && !area.pressed ? 1.0 : 0.0
+        opacity: area.motionEnabled && area.enabled && area.hoverActive && !area.pressed ? 1.0 : 0.0
         Behavior on opacity { NumberAnimation { duration: 120 } }
     }
 

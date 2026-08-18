@@ -29,9 +29,25 @@ Button {
     property color hoverTintColor: "#1affffff"
 
     hoverEnabled: true
+
+    // Man cam ung khong co khai niem "roi con tro ra": nha tay xong thi hovered
+    // van true nen nut sang va phong to mai. Tat hieu ung hover ngay khi nha
+    // tay, mo lai khi con tro roi khoi nut roi vao lai.
+    property bool hoverSuppressed: false
+    readonly property bool hoverActive: hovered && !hoverSuppressed
+
+    Connections {
+        target: control
+        function onReleased() { control.hoverSuppressed = true }
+        function onCanceled() { control.hoverSuppressed = true }
+        function onHoveredChanged() {
+            if (!control.hovered) control.hoverSuppressed = false
+        }
+    }
+
     transformOrigin: Item.Center
-    scale: !enabled ? 1.0 : (pressed ? pressScale : (hovered ? hoverScale : 1.0))
-    z: raiseOnHover && (hovered || pressed || (shimmerEnabled && shimmerAnim.running)) ? 20 : 0
+    scale: !enabled ? 1.0 : (pressed ? pressScale : (hoverActive ? hoverScale : 1.0))
+    z: raiseOnHover && (hoverActive || pressed || (shimmerEnabled && shimmerAnim.running)) ? 20 : 0
 
     transform: Translate {
         y: control.enabled && control.pressed ? control.pressSinkOffset : 0
@@ -45,7 +61,7 @@ Button {
         color: control.hoverTintColor
         // Khi đang nhấn thì nhường hẳn cho lớp phủ tối bên dưới, không chồng hai
         // lớp ngược chiều nhau lên nhau.
-        opacity: control.enabled && control.hovered && !control.pressed ? 1.0 : 0.0
+        opacity: control.enabled && control.hoverActive && !control.pressed ? 1.0 : 0.0
         Behavior on opacity { NumberAnimation { duration: 120 } }
     }
 
@@ -58,14 +74,14 @@ Button {
         Behavior on opacity { NumberAnimation { duration: 90 } }
     }
 
-    layer.enabled: shadowEnabled && enabled && (hovered || pressed || (shimmerEnabled && shimmerAnim.running))
+    layer.enabled: shadowEnabled && enabled && (hoverActive || pressed || (shimmerEnabled && shimmerAnim.running))
     layer.smooth: true
     layer.effect: DropShadow {
         transparentBorder: true
-        horizontalOffset: control.hovered ? 1 : 0
-        verticalOffset: control.hovered ? 4 : 2
-        radius: control.hovered ? 10 : 6
-        samples: control.hovered ? 21 : 13
+        horizontalOffset: control.hoverActive ? 1 : 0
+        verticalOffset: control.hoverActive ? 4 : 2
+        radius: control.hoverActive ? 10 : 6
+        samples: control.hoverActive ? 21 : 13
         color: control.pressed ? control.pressedShadowColor : control.shadowColor
     }
 
