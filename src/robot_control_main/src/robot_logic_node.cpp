@@ -279,7 +279,17 @@ private:
     std::atomic<bool> feed_chamber_signal_{false};
     // feed_chamber wait timeout in LOAD_CHAMBER_FROM_BUFFER → if timeout, skip
     // BUFFER→CHAMBER and drain SCALE, then enter WAIT_RESUME_CHOICE after PLACE.
-    static constexpr double LOAD_BUFFER_FEED_TIMEOUT_S = 150.0;
+    // 0 = CHO VO HAN (thiet ke hien tai). May Fill tu xu ly loi cua no va tu
+    // ngung phat /revpi/feed_chamber khi co van de; he thong nay chi chay THEO
+    // topic cua Fill, khong phan doan thay no. Nen khi vang tin hieu, robot dung
+    // yen nhu dang PAUSE — khong bao timeout, khong xa SCALE — va tu chay tiep
+    // ngay khi topic tro lai.
+    //
+    // Truoc day 150s: het gio thi bo qua BUFFER->CHAMBER, XA SCALE roi vao
+    // WAIT_RESUME_CHOICE. Do la hanh dong pha huy do mot su cham tre binh thuong
+    // cua may Fill gay ra, va no keo ca day chuyen dung theo.
+    // Dat > 0 de bat lai gioi han cu.
+    static constexpr double LOAD_BUFFER_FEED_TIMEOUT_S = 0.0;
     static constexpr double SCALE_TOPIC_TIMEOUT_S      = 150.0;  // PROCESSING_SCALE: no loadcell msg → WAIT_SCALE_CHOICE
     rclcpp::Time feed_chamber_wait_start_;          // set on first wait, reset on pass/exit
     bool feed_chamber_wait_active_{false};          // true while measuring elapsed
@@ -3829,7 +3839,7 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
             feed_chamber_wait_active_ = true;
         }
         double elapsed = (this->now() - feed_chamber_wait_start_).seconds();
-        if (elapsed > LOAD_BUFFER_FEED_TIMEOUT_S) {
+        if (LOAD_BUFFER_FEED_TIMEOUT_S > 0.0 && elapsed > LOAD_BUFFER_FEED_TIMEOUT_S) {
             RCLCPP_WARN(get_logger(),
                 "[LOAD_BUFFER] ⏰ feed_chamber timeout (%.0fs) — skip BUFFER→CHAMBER, drain SCALE",
                 elapsed);
@@ -3838,9 +3848,9 @@ void RobotLogicNode::stateLoadChamberFromBuffer()
             transitionTo(SystemState::PROCESSING_SCALE);
             return;
         }
-        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 5000,
-            "[LOAD_BUFFER] Waiting for feed_chamber signal... (%.0f/%.0fs)",
-            elapsed, LOAD_BUFFER_FEED_TIMEOUT_S);
+        RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 10000,
+            "[LOAD_BUFFER] ⏸ Cho /revpi/feed_chamber tu may Fill (%.0fs) — dung yen, "
+            "se tu chay tiep khi topic tro lai", elapsed);
         return;
     }
     feed_chamber_wait_active_ = false;  // signal arrived → reset timer
