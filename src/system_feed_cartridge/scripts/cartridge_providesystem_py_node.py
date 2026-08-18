@@ -463,6 +463,10 @@ class CartridgeSystem(Node):
         # homing.  Without an explicit initial value that callback can crash
         # the entire cartridge node before /cartridge/homing_done is emitted.
         self._system_running = False
+        # Moc thoi diem nhan START. Nhanh hoi tu cuoi _cb_mode dung no de phan
+        # biet "MODE toi cham sau START" (dua topic, tinh bang mili giay) voi
+        # "START tu luc nao do o MANUAL roi gio moi doi mode" (thao tac co chu y).
+        self._start_cmd_t = 0.0
         self._system_paused  = False  # True = state machine + motion đã dừng tức thời
         self._pause_pending  = False  # Legacy compatibility; instant PAUSE luôn để False
         self._input_trays_empty_debounce_count = 0
@@ -2695,6 +2699,7 @@ class CartridgeSystem(Node):
         self._pause_started_at = 0.0
         self._pause_restart_homing = False
         self._system_running = True
+        self._start_cmd_t = time.time()
         self._inx_moving = self._iny_moving = False
         self._state1_enabled = (self.operation_mode in ['auto', 'ai'])
         self._drain_armed_after_s2 = False
@@ -3272,7 +3277,24 @@ class CartridgeSystem(Node):
         # while operation_mode is still MANUAL, in which case _cb_start cannot
         # begin automatic homing. Converge to the requested running state when
         # the delayed AUTO/AI mode message arrives.
-        if self._system_running and requested in ('auto', 'ai'):
+        # Cua so hoi tu. START o MANUAL cung set _system_running (co y — de cho
+        # phep trigger STATE thu cong), va khong cho nao xoa co do khi doi mode.
+        # Khong gioi han thoi gian thi: nhan START luc MANUAL, khong nhan STOP,
+        # lat sang AI vai phut sau -> servo TU HOMING du chua ai nhan START o AI.
+        # Con te hon: nhanh nay khong bao gi cho robot (robot cho
+        # /cartridge/homing_done hoac /system/start_button) nen he chay lech nua
+        # — servo homing, robot dung yen.
+        START_CONVERGE_WINDOW_S = 5.0
+        stale = (time.time() - self._start_cmd_t) > START_CONVERGE_WINDOW_S
+        # Chi bao khi THAT SU doi mode (old != requested) — _cb_mode duoc goi moi
+        # lan GUI phat lai mode nen khong loc se spam log.
+        if (self._system_running and requested in ('auto', 'ai')
+                and stale and old != requested):
+            self.get_logger().warn(
+                f"[MODE] Doi sang {requested.upper()} nhung START da tu "
+                f"{time.time() - self._start_cmd_t:.0f}s truoc — KHONG tu dong "
+                f"chay. Nhan START de bat dau.")
+        if self._system_running and requested in ('auto', 'ai') and not stale:
             self._jog_mode = False
             self._state1_enabled = True
             self._setup_cpx_valves_for_auto_ai()
