@@ -38,6 +38,10 @@ class ScaleController : public QObject
     // FAULT) thi man hinh van bao da tru bi.
     Q_PROPERTY(bool tared READ tared NOTIFY tareChanged)
     Q_PROPERTY(float tareBase READ tareBase NOTIFY tareChanged)
+    // JSON tho tu /loadcell/cal_points — QML tu doc de liet ke diem da ghi.
+    Q_PROPERTY(QString calPoints READ calPoints NOTIFY calPointsChanged)
+    // Ket qua lan goi service gan nhat, de hien cho operator biet dieu gi vua xay ra.
+    Q_PROPERTY(QString calMessage READ calMessage NOTIFY calMessageChanged)
 
 public:
     explicit ScaleController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -63,6 +67,8 @@ public:
     int consecFails() const { return consec_fails_; }
     bool zeroDriftPending() const { return zero_drift_pending_; }
     bool tared() const { return tared_; }
+    QString calPoints() const { return cal_points_; }
+    QString calMessage() const { return cal_message_; }
     float tareBase() const { return tare_base_; }
 
 public slots:
@@ -84,6 +90,12 @@ public slots:
     void resetBatch();
     void startCalibration();
     void setKnownCalibration(float weight);
+    // Can chinh NHIEU DIEM (giong scripts/loadcell_cal.py): khai bao khoi luong
+    // roi ghi tung diem, cuoi cung khop duong thang va ap dung. Node lo phan
+    // tinh toan va luu lai.
+    void calAddPoint(float knownWeight);
+    void calApply();
+    void calClear();
     void setLastKnownCalWeight(float weight);
 
 signals:
@@ -105,16 +117,23 @@ signals:
     // Alarms to trigger QML Popups
     void overloadAlarm();
     void tareChanged();
+    void calPointsChanged();
+    void calMessageChanged();
     void zeroDriftAlarm();
     void calErrorAlarm();
     void calDoneAlarm();
 
 private:
+    void callCalService(const rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr &client,
+                        const QString &label);
+
     rclcpp::Node::SharedPtr node_;
 
     // Values
     float current_weight_{0.0f};
     bool  tared_{false};
+    QString cal_points_{""};
+    QString cal_message_{""};
     float tare_base_{0.0f};
     QString monitor_status_{"NO_SIGNAL"};
     QString loadcell_status_{"UNKNOWN"};
@@ -165,6 +184,10 @@ private:
 
     // Services
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_cal_start_;
+    rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_cal_add_;
+    rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_cal_apply_;
+    rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_cal_clear_;
+    rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_cal_points_;
     rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr client_cal_set_known_;
 };
 

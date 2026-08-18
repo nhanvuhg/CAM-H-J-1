@@ -15,6 +15,7 @@ Deploy:
 """
 
 import json
+import os
 import threading
 import time
 
@@ -76,6 +77,16 @@ class LoadcellNode(Node):
         self._cal_zero    = 0.0       # zero offset correction (gram)
         self._cal_weight_known = 0.0
         self._cal_state   = 'IDLE'
+        # Can chinh NHIEU DIEM: [(gam, mA), ...]. Khop duong thang bang binh
+        # phuong toi thieu roi suy ra min/max_current_mA — cung phuong phap da
+        # dung thanh cong bang scripts/loadcell_cal.py.
+        self._cal_points: list = []
+        # File luu can chinh + tru bi. Truoc day ca hai chi nam trong bo nho nen
+        # restart node la mat sach: tham so phai sua tay trong start_loadcell.sh,
+        # con tru bi thi bien mat khong bao gi.
+        self._state_file = os.path.expanduser('~/loadcell_state.json')
+
+        self._load_state()
 
         if not self._use_sim:
             self._init_revpi_420()
@@ -123,6 +134,7 @@ class LoadcellNode(Node):
         # ngay khi bam nut. Phat ra day de GUI hien trang thai THAT.
         self._pub_tared     = self.create_publisher(Bool,    '/loadcell/tared', qos)
         self._pub_tare_base = self.create_publisher(Float32, '/loadcell/tare_base', qos)
+        self._pub_cal_pts   = self.create_publisher(String,  '/loadcell/cal_points', qos)
 
         # ── Subscribers ──────────────────────────────────────────────
         self.create_subscription(Float32, '/loadcell/target_weight', self._cb_target, qos)
@@ -139,6 +151,10 @@ class LoadcellNode(Node):
         # ── Services ─────────────────────────────────────────────────
         self.create_service(Trigger, '/loadcell/cal_start',     self._srv_cal_start)
         self.create_service(Trigger, '/loadcell/cal_set_known', self._srv_cal_set)
+        # Can chinh nhieu diem — cung phuong phap loadcell_cal.py da dung thanh cong.
+        self.create_service(Trigger, '/loadcell/cal_add_point', self._srv_cal_add)
+        self.create_service(Trigger, '/loadcell/cal_apply',     self._srv_cal_apply)
+        self.create_service(Trigger, '/loadcell/cal_clear',     self._srv_cal_clear)
 
         # ── Timers ───────────────────────────────────────────────────
         period = 1.0 / pub_rate
@@ -148,6 +164,7 @@ class LoadcellNode(Node):
         self._pub_status.publish(self._str('OK'))
         self._pub_cal_st.publish(self._str('IDLE'))
         self._publish_batch_stats()
+        self._publish_cal_points()
 
         # simulation state machine
         self._sim_weight    = 0.0
@@ -477,6 +494,7 @@ class LoadcellNode(Node):
         with self._lock:
             self._tare_base = self._raw_weight
             self._tared = True
+        self._save_state()
         self.get_logger().info(f'[TARE] base={self._tare_base:.1f}g')
 
     def _cb_tare_r(self, msg: Bool):
@@ -485,6 +503,7 @@ class LoadcellNode(Node):
         with self._lock:
             self._tare_base = 0.0
             self._tared = False
+        self._save_state()
         self.get_logger().info('[TARE] Reset — back to raw')
 
     def _cb_ol_ack(self, msg: Bool):
@@ -547,6 +566,154 @@ class LoadcellNode(Node):
         self.get_logger().info(f'[CAL] factor={self._cal_factor:.4f} (span={span:.1f}→{known:.1f}g)')
         res.success = True
         res.message = f'Calibration done. factor={self._cal_factor:.4f}'
+        return res
+
+
+    # ── Luu / nap can chinh + tru bi ──────────────────────────────────
+
+    def _load_state(self):
+        """Nap can chinh va tru bi tu file. Loi thi bo qua, dung mac dinh."""
+        try:
+            with open(self._state_file) as f:
+                d = json.load(f)
+        except FileNotFoundError:
+            return
+        except Exception as e:
+            self.get_logger().warn(f'[STATE] khong doc duoc {self._state_file}: {e}')
+            return
+        # Chi nhan gia tri hop le. File hong khong duoc phep lam can doc sai
+        # trong im lang — do nguy hiem hon la mat can chinh.
+        mn, mx = d.get('min_mA'), d.get('max_mA')
+        if isinstance(mn, (int, float)) and isinstance(mx, (int, float)) and mx > mn:
+            # File GHI DE tham so dong lenh. Noi ro khi khac nhau, neu khong
+            # nguoi sua start_loadcell.sh se tuong lenh khong an.
+            if abs(mn - self._min_mA) > 1e-6 or abs(mx - self._max_mA) > 1e-6:
+                self.get_logger().warn(
+                    f'[STATE] file {self._state_file} GHI DE tham so dong lenh: '
+                    f'{self._min_mA:.3f}-{self._max_mA:.3f} -> {mn:.3f}-{mx:.3f} mA. '
+                    f'Xoa file nay neu muon dung lai tham so.')
+            self._min_mA, self._max_mA = float(mn), float(mx)
+            self.get_logger().info(
+                f'[STATE] nap can chinh: {self._min_mA:.3f}-{self._max_mA:.3f} mA')
+        tb = d.get('tare_base')
+        if isinstance(tb, (int, float)) and d.get('tared'):
+            self._tare_base, self._tared = float(tb), True
+            self.get_logger().info(f'[STATE] nap tru bi: {self._tare_base:.1f} g')
+        pts = d.get('cal_points')
+        if isinstance(pts, list):
+            self._cal_points = [(float(g), float(m)) for g, m in pts]
+
+    def _save_state(self):
+        try:
+            tmp = self._state_file + '.tmp'
+            with open(tmp, 'w') as f:
+                json.dump({
+                    'min_mA': self._min_mA,
+                    'max_mA': self._max_mA,
+                    'tared': self._tared,
+                    'tare_base': self._tare_base,
+                    'cal_points': [[g, m] for g, m in self._cal_points],
+                }, f, indent=2)
+            os.replace(tmp, self._state_file)   # thay the nguyen tu
+        except Exception as e:
+            self.get_logger().warn(f'[STATE] khong ghi duoc {self._state_file}: {e}')
+
+    # ── Can chinh nhieu diem ──────────────────────────────────────────
+
+    def _publish_cal_points(self):
+        with self._lock:
+            pts = list(self._cal_points)
+        self._pub_cal_pts.publish(self._str(json.dumps({
+            'points': [{'g': round(g, 1), 'mA': round(m, 4)} for g, m in pts],
+            'min_mA': round(self._min_mA, 3),
+            'max_mA': round(self._max_mA, 3),
+        })))
+
+    def _srv_cal_add(self, _req, res):
+        """Ghi mot diem: khoi luong da khai bao qua /loadcell/cal_weight + mA hien tai."""
+        with self._lock:
+            g = self._cal_weight_known
+            mA = self._raw_mA
+        if self._use_sim:
+            res.success = False
+            res.message = 'dang o che do mo phong'
+            return res
+        if mA < 3.0:
+            res.success = False
+            res.message = f'mat tin hieu ({mA:.3f} mA) — khong ghi diem'
+            return res
+        if any(abs(g - pg) < 0.5 for pg, _ in self._cal_points):
+            res.success = False
+            res.message = f'da co diem {g:.1f} g — xoa het roi ghi lai'
+            return res
+        with self._lock:
+            self._cal_points.append((g, mA))
+            n = len(self._cal_points)
+        self.get_logger().info(f'[CAL] ghi diem {n}: {g:.1f} g = {mA:.4f} mA')
+        self._publish_cal_points()
+        res.success = True
+        res.message = f'diem {n}: {g:.1f} g = {mA:.4f} mA'
+        return res
+
+    def _srv_cal_clear(self, _req, res):
+        with self._lock:
+            self._cal_points.clear()
+        self._publish_cal_points()
+        self._pub_cal_st.publish(self._str('IDLE'))
+        res.success = True
+        res.message = 'da xoa diem can chinh'
+        return res
+
+    def _srv_cal_apply(self, _req, res):
+        """Khop duong thang qua cac diem roi ap dung.
+
+        mA = a*gam + b  =>  min_current_mA = b, max_current_mA = b + a*max_cap.
+        Can it nhat hai diem co khoi luong khac nhau.
+        """
+        with self._lock:
+            pts = list(self._cal_points)
+        if len(pts) < 2:
+            res.success = False
+            res.message = f'can it nhat 2 diem (dang co {len(pts)})'
+            return res
+
+        n = len(pts)
+        sx = sum(g for g, _ in pts)
+        sy = sum(m for _, m in pts)
+        sxx = sum(g * g for g, _ in pts)
+        sxy = sum(g * m for g, m in pts)
+        den = n * sxx - sx * sx
+        if abs(den) < 1e-9:
+            res.success = False
+            res.message = 'cac diem trung khoi luong — can hai muc tai khac nhau'
+            return res
+        a = (n * sxy - sx * sy) / den          # mA moi gam
+        b = (sy - a * sx) / n                  # mA tai 0 g
+        new_min, new_max = b, b + a * self._max_cap_g
+
+        if a <= 0:
+            res.success = False
+            res.message = 'do doc am — kiem cuc tinh tin hieu'
+            return res
+        if new_min < 3.2:
+            res.success = False
+            res.message = (f'diem zero {new_min:.3f} mA qua sat nguong mat tin '
+                           f'hieu 3.0 — van POT Zero len truoc')
+            return res
+
+        worst = max(abs((m - (a * g + b)) / a) for g, m in pts)
+
+        with self._lock:
+            self._min_mA, self._max_mA = new_min, new_max
+        self._save_state()
+        self._publish_cal_points()
+        self._pub_cal_st.publish(self._str('DONE'))
+        self.get_logger().info(
+            f'[CAL] ap dung: {new_min:.3f}-{new_max:.3f} mA '
+            f'({a * 1000:.3f} uA/gam), sai so lon nhat {worst:.1f} g')
+        res.success = True
+        res.message = (f'{new_min:.3f}-{new_max:.3f} mA | {a * 1000:.2f} uA/g | '
+                       f'sai so max {worst:.1f} g')
         return res
 
     # ── Helpers ───────────────────────────────────────────────────────

@@ -286,6 +286,17 @@ Item {
                             font.bold: true
                         }
                         Text {
+                            // Trang thai tru bi lay tu NODE (khong phai co cuc bo
+                            // cua GUI), kem so bi — so bi le hang tram gam la dau
+                            // hieu tru bi cu voi khay khac, nhin ra ngay.
+                            text: scaleController.tared
+                                  ? qsTr("● TARE: %1 g").arg(scaleController.tareBase.toFixed(1))
+                                  : qsTr("● TARE: OFF")
+                            color: scaleController.tared ? cSuccess : cWarning
+                            font.pixelSize: labelFont
+                            font.bold: true
+                        }
+                        Text {
                             text: qsTr("Scale node: ● %1").arg(
                                       scaleController.scaleNodeConnected
                                       ? qsTr("CONNECTED") : qsTr("DISCONNECTED"))
@@ -383,44 +394,6 @@ Item {
                         }
                     }
 
-                    // Trang thai tru bi — lay tu NODE (scaleController.tared),
-                    // khong phai co cuc bo cua GUI, nen neu node bo lenh thi o
-                    // day van bao CHUA TRU BI thay vi bao nham la da xong.
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 34
-                        radius: 6
-                        color: scaleController.tared ? "#1a3a2e" : "#2e2a18"
-                        border.width: 1
-                        border.color: scaleController.tared ? cSuccess : cWarning
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.leftMargin: 10
-                            anchors.rightMargin: 10
-                            spacing: 8
-
-                            Text {
-                                text: scaleController.tared ? "\u2713" : "\u26a0"
-                                color: scaleController.tared ? cSuccess : cWarning
-                                font.pixelSize: labelFont
-                                font.bold: true
-                            }
-                            Text {
-                                Layout.fillWidth: true
-                                fontSizeMode: Text.HorizontalFit
-                                minimumPixelSize: 9
-                                elide: Text.ElideRight
-                                text: scaleController.tared
-                                      ? qsTr("DA TRU BI — bi %1 g").arg(scaleController.tareBase.toFixed(1))
-                                      : qsTr("CHUA TRU BI — dat khay rong roi bam TRU BI")
-                                color: scaleController.tared ? cSuccess : cWarning
-                                font.pixelSize: labelFont
-                                font.bold: true
-                            }
-                        }
-                    }
-
                     Rectangle { Layout.fillWidth: true; height: 1; color: cBorder }
 
                     // ── MOVED: CALIBRATE SCALE ──
@@ -431,154 +404,190 @@ Item {
 	                        Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("Status: %1").arg(scaleController.calStatus); color: cWarning; font.pixelSize: labelFont; font.bold: true }
                     }
 
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 70
-                        color: cCard
-                        border.color: cFrameBorder
-                        radius: 6
-                        RowLayout {
-                            anchors.fill: parent; anchors.margins: 10
-                            ColumnLayout {
-	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("STEP 1 — Empty Scale"); color: "#ecc45a"; font.pixelSize: labelFont; font.bold: true }
-	                                Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight; text: qsTr("Ensure NOTHING is on the scale."); color: "#c7dcef"; font.pixelSize: helperFont }
-                            }
-                            Item { Layout.fillWidth: true }
-                            MotionButton {
-                                id: setZeroBtn
-                                opacity: down ? 0.8 : 1.0
-                                text: qsTr("SET ZERO")
-                                Layout.preferredWidth: 120; Layout.preferredHeight: 35
-	                                font.pixelSize: labelFont; font.bold: true
-                                onClicked: scaleController.startCalibration()
-                                background: Rectangle {
-                                    radius: 4
-                                    gradient: Gradient {
-                                        orientation: Gradient.Horizontal
-                                        GradientStop { position: 0.0; color: setZeroBtn.down ? cActionPressStart : (setZeroBtn.hovered ? cActionHoverStart : cActionStart) }
-                                        GradientStop { position: 1.0; color: setZeroBtn.down ? cActionPressEnd : (setZeroBtn.hovered ? cActionHoverEnd : cActionEnd) }
-                                    }
-                                }
-                                contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight;
-                                    text: setZeroBtn.text; font: setZeroBtn.font
-                                    color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
-                                }
-                                enabled: scaleController.calStatus === "IDLE" || scaleController.calStatus === "ERROR"
-                            }
-                        }
-                    }
-
-
-
+                    // ── CAN CHINH NHIEU DIEM ──────────────────────────────
+                    // Thay luong hai buoc (SET ZERO -> APPLY) bang dung phuong
+                    // phap da can chinh thanh cong bang scripts/loadcell_cal.py:
+                    // ghi nhieu diem tai, node khop duong thang bang binh phuong
+                    // toi thieu roi suy ra min/max_current_mA va TU LUU lai.
+                    //
+                    // Hai buoc cu chi giai duoc mot he so nen phai vua chinh vua
+                    // do lai nhieu vong; nhieu diem cho ket qua mot lan va con
+                    // bao duoc sai so tung diem — thu cho biet chuoi co tuyen
+                    // tinh khong.
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 130
                         color: cCard
-                        border.color: calActive ? cSuccess : cBorder
+                        border.color: cBorder
                         radius: 6
+
                         ColumnLayout {
-                            anchors.fill: parent; anchors.margins: 10; spacing: 4
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            spacing: 6
+
                             RowLayout {
                                 Layout.fillWidth: true
-                                ColumnLayout {
-                                    spacing: 2
-                                    Text {
-                                        text: {
-                                            if (scaleController.calStatus === "WAITING_WEIGHT") return qsTr("STEP 2 — Place Standard Weight (Point 1/4)");
-                                            if (scaleController.calStatus === "CONTINUE_CAL_2/5") return qsTr("STEP 3 — Place Next Weight (Point 2/4)");
-                                            if (scaleController.calStatus === "CONTINUE_CAL_3/5") return qsTr("STEP 4 — Place Next Weight (Point 3/4)");
-                                            if (scaleController.calStatus === "CONTINUE_CAL_4/5") return qsTr("STEP 5 — Place Final Weight (Point 4/4)");
-                                            return qsTr("STEP 2 — Place Standard Weight");
-                                        }
-                                        color: "#ecc45a"
-	                                        font.pixelSize: tableFont; font.bold: true
-                                    }
-                                    Text {
-                                        text: {
-                                            if (scaleController.calStatus === "WAITING_WEIGHT") return qsTr("Suggested: 100 g");
-                                            if (scaleController.calStatus === "CONTINUE_CAL_2/5") return qsTr("Suggested: 250 g");
-                                            if (scaleController.calStatus === "CONTINUE_CAL_3/5") return qsTr("Suggested: 500 g");
-                                            if (scaleController.calStatus === "CONTINUE_CAL_4/5") return qsTr("Suggested: 1000 g");
-                                            return qsTr("Enter the known weight below");
-                                        }
-	                                        color: cSubText; font.pixelSize: helperFont
-                                    }
-                                }
-                                Item { Layout.fillWidth: true }
-                                // Progress dots
-                                Row {
-                                    spacing: 5
-                                    Repeater {
-                                        model: 4
-                                        Rectangle {
-                                            width: 10; height: 10; radius: 5
-                                            color: {
-                                                var n = index + 1;
-                                                if (scaleController.calStatus === "DONE") return cSuccess;
-                                                if (scaleController.calStatus === "CONTINUE_CAL_2/5" && n <= 1) return cSuccess;
-                                                if (scaleController.calStatus === "CONTINUE_CAL_3/5" && n <= 2) return cSuccess;
-                                                if (scaleController.calStatus === "CONTINUE_CAL_4/5" && n <= 3) return cSuccess;
-                                                var activeIndex = 0;
-                                                var s = scaleController.calStatus;
-                                                if (s === "WAITING_WEIGHT") activeIndex = 1;
-                                                else if (s === "CONTINUE_CAL_2/5") activeIndex = 2;
-                                                else if (s === "CONTINUE_CAL_3/5") activeIndex = 3;
-                                                else if (s === "CONTINUE_CAL_4/5") activeIndex = 4;
+                                spacing: 8
 
-                                                if ((s === "WAITING_WEIGHT" || s.startsWith("CONTINUE_CAL")) && n === activeIndex) return cWarning;
-                                                return "#14263c";
+                                Text {
+                                    text: qsTr("Khoi luong chuan (g):")
+                                    color: "#c7dcef"
+                                    font.pixelSize: labelFont
+                                    font.bold: true
+                                    fontSizeMode: Text.HorizontalFit
+                                    minimumPixelSize: 9
+                                    elide: Text.ElideRight
+                                }
+                                Rectangle {
+                                    Layout.preferredWidth: 90
+                                    Layout.preferredHeight: 32
+                                    color: cField
+                                    border.color: cFieldBorder
+                                    border.width: 1
+                                    radius: 4
+                                    TextInput {
+                                        id: calPtWeight
+                                        anchors.fill: parent
+                                        anchors.margins: 2
+                                        text: "0"
+                                        color: cAccent
+                                        font.pixelSize: inputFont
+                                        font.bold: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                        readOnly: true
+                                        MotionMouseArea {
+                                            anchors.fill: parent
+                                            onClicked: {
+                                                inkTab.numpadTarget = calPtWeight
+                                                numpadPopup.currentValue = calPtWeight.text
+                                                numpadPopup.open()
                                             }
                                         }
                                     }
                                 }
-                            }
-                            RowLayout {
-                                Layout.fillWidth: true; spacing: 6
-                                TextField {
-                                    id: tfCalW
-                                    placeholderText: qsTr("Enter value (g)"); placeholderTextColor: cSubText
-                                    Layout.fillWidth: true; Layout.preferredHeight: 45
-	                                    font.pixelSize: valueFont; font.bold: true; color: cWarning
-                                    horizontalAlignment: TextInput.AlignHCenter
-                                    verticalAlignment: TextInput.AlignVCenter
-                                    validator: DoubleValidator{}
-                                    text: scaleController.lastKnownCalWeight.toString()
-                                    enabled: calActive
-                                    readOnly: true
-                                    background: Rectangle { color: cField; radius: 6; border.color: cFieldBorder; border.width: 1 }
-                                    MotionMouseArea {
-                                        anchors.fill: parent
-                                        onClicked: {
-                                            inkTab.numpadTarget = tfCalW;
-                                            numpadPopup.currentValue = tfCalW.text;
-                                            numpadPopup.open();
+                                MotionButton {
+                                    id: calAddBtn
+                                    text: qsTr("GHI DIEM")
+                                    Layout.preferredWidth: 110
+                                    Layout.preferredHeight: 32
+                                    font.pixelSize: labelFont
+                                    font.bold: true
+                                    onClicked: scaleController.calAddPoint(
+                                                   parseFloat(calPtWeight.text) || 0.0)
+                                    background: Rectangle {
+                                        radius: 4
+                                        gradient: Gradient {
+                                            orientation: Gradient.Horizontal
+                                            GradientStop { position: 0.0; color: calAddBtn.down ? cActionPressStart : (calAddBtn.hovered ? cActionHoverStart : cActionStart) }
+                                            GradientStop { position: 1.0; color: calAddBtn.down ? cActionPressEnd : (calAddBtn.hovered ? cActionHoverEnd : cActionEnd) }
                                         }
+                                    }
+                                    contentItem: Text {
+                                        fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight
+                                        text: calAddBtn.text; font: calAddBtn.font
+                                        color: "#ffffff"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                }
+                                Item { Layout.fillWidth: true }
+                                MotionButton {
+                                    id: calApplyBtn
+                                    text: qsTr("TINH & AP DUNG")
+                                    Layout.preferredWidth: 150
+                                    Layout.preferredHeight: 32
+                                    font.pixelSize: labelFont
+                                    font.bold: true
+                                    onClicked: scaleController.calApply()
+                                    background: Rectangle {
+                                        radius: 4
+                                        gradient: Gradient {
+                                            orientation: Gradient.Horizontal
+                                            GradientStop { position: 0.0; color: calApplyBtn.down ? cActionPressStart : (calApplyBtn.hovered ? cActionHoverStart : cActionStart) }
+                                            GradientStop { position: 1.0; color: calApplyBtn.down ? cActionPressEnd : (calApplyBtn.hovered ? cActionHoverEnd : cActionEnd) }
+                                        }
+                                    }
+                                    contentItem: Text {
+                                        fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight
+                                        text: calApplyBtn.text; font: calApplyBtn.font
+                                        color: "#ffffff"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
                                     }
                                 }
                                 MotionButton {
-                                    id: applyStep2Btn
-                                    opacity: down ? 0.8 : 1.0
-                                    text: scaleController.calStatus === "CONTINUE_CAL_4/5" ? qsTr("FINISH") : qsTr("APPLY")
-                                    Layout.preferredWidth: 120; Layout.preferredHeight: 45
-	                                    font.pixelSize: buttonFont; font.bold: true
-                                    onClicked: {
-                                        scaleController.setLastKnownCalWeight(parseFloat(tfCalW.text))
-                                        scaleController.setKnownCalibration(scaleController.lastKnownCalWeight)
-                                    }
+                                    id: calClearBtn
+                                    text: qsTr("XOA")
+                                    Layout.preferredWidth: 70
+                                    Layout.preferredHeight: 32
+                                    font.pixelSize: labelFont
+                                    font.bold: true
+                                    onClicked: scaleController.calClear()
                                     background: Rectangle {
-                                        radius: 6
+                                        radius: 4
                                         gradient: Gradient {
                                             orientation: Gradient.Horizontal
-                                            GradientStop { position: 0.0; color: calActive ? (applyStep2Btn.down ? cActionPressStart : (applyStep2Btn.hovered ? cActionHoverStart : cActionStart)) : cDisabled }
-                                            GradientStop { position: 1.0; color: calActive ? (applyStep2Btn.down ? cActionPressEnd : (applyStep2Btn.hovered ? cActionHoverEnd : cActionEnd)) : cDisabled }
+                                            GradientStop { position: 0.0; color: calClearBtn.down ? cPausePressStart : (calClearBtn.hovered ? cPauseHoverStart : cPauseStart) }
+                                            GradientStop { position: 1.0; color: calClearBtn.down ? cPausePressEnd : (calClearBtn.hovered ? cPauseHoverEnd : cPauseEnd) }
                                         }
                                     }
-                                    contentItem: Text { fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight;
-                                        text: applyStep2Btn.text; font: applyStep2Btn.font
-                                        color: "#ffffff"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                                    contentItem: Text {
+                                        fontSizeMode: Text.HorizontalFit; minimumPixelSize: 9; elide: Text.ElideRight
+                                        text: calClearBtn.text; font: calClearBtn.font
+                                        color: "#ffffff"
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
                                     }
-                                    enabled: calActive
                                 }
+                            }
+
+                            // Diem da ghi — doc thang tu JSON node phat ra, nen
+                            // luon la trang thai THAT cua node chu khong phai
+                            // thu GUI tu nho.
+                            Text {
+                                Layout.fillWidth: true
+                                fontSizeMode: Text.HorizontalFit
+                                minimumPixelSize: 9
+                                elide: Text.ElideRight
+                                font.pixelSize: helperFont
+                                color: "#c7dcef"
+                                text: {
+                                    var out = qsTr("Diem da ghi: (chua co)")
+                                    try {
+                                        var d = JSON.parse(scaleController.calPoints)
+                                        if (d.points && d.points.length > 0) {
+                                            var parts = []
+                                            for (var i = 0; i < d.points.length; ++i)
+                                                parts.push(d.points[i].g + "g=" + d.points[i].mA + "mA")
+                                            out = qsTr("Diem da ghi: ") + parts.join("  |  ")
+                                        }
+                                        if (d.min_mA !== undefined)
+                                            out += qsTr("     [dang dung %1-%2 mA]").arg(d.min_mA).arg(d.max_mA)
+                                    } catch (e) { }
+                                    return out
+                                }
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                fontSizeMode: Text.HorizontalFit
+                                minimumPixelSize: 9
+                                elide: Text.ElideRight
+                                font.pixelSize: helperFont
+                                font.bold: true
+                                color: cWarning
+                                text: scaleController.calMessage
+                                visible: scaleController.calMessage !== ""
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                font.pixelSize: helperFont
+                                color: cSubText
+                                text: qsTr("Can trong -> nhap 0 -> GHI DIEM. Dat tai chuan -> nhap so gam -> GHI DIEM. It nhat 2 diem, cang nhieu cang chinh xac. Xong bam TINH & AP DUNG.")
                             }
                         }
                     }

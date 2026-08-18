@@ -1,3 +1,4 @@
+#include <QTimer>
 #include "unified_control_gui/scale_controller.hpp"
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -238,6 +239,20 @@ ScaleController::ScaleController(rclcpp::Node::SharedPtr node, QObject *parent)
 
     // Services
     client_cal_start_ = node_->create_client<std_srvs::srv::Trigger>("/loadcell/cal_start");
+    client_cal_add_   = node_->create_client<std_srvs::srv::Trigger>("/loadcell/cal_add_point");
+    client_cal_apply_ = node_->create_client<std_srvs::srv::Trigger>("/loadcell/cal_apply");
+    client_cal_clear_ = node_->create_client<std_srvs::srv::Trigger>("/loadcell/cal_clear");
+
+    sub_cal_points_ = node_->create_subscription<std_msgs::msg::String>(
+        "/loadcell/cal_points", 10,
+        [this](const std_msgs::msg::String::SharedPtr msg) {
+            const QString s = QString::fromStdString(msg->data);
+            QMetaObject::invokeMethod(this, [this, s]() {
+                if (cal_points_ == s) return;
+                cal_points_ = s;
+                emit calPointsChanged();
+            }, Qt::QueuedConnection);
+        });
     client_cal_set_known_ = node_->create_client<std_srvs::srv::Trigger>("/loadcell/cal_set_known");
 }
 
@@ -557,3 +572,49 @@ bool ScaleController::deleteCartProfile(const QString& name)
     emit profilesChanged();
     return true;
 }
+
+// ── Can chinh nhieu diem ────────────────────────────────────────────────
+//
+// Ba ham nay chi day yeu cau sang node; node lo khop duong thang, kiem tra hop
+// le va luu lai. Ket qua tra ve duoc dua thang vao calMessage de operator thay
+// dieu gi vua xay ra — truoc day service goi xong khong co phan hoi nao tren
+// man hinh nen khong biet la thanh cong hay bi tu choi.
+void ScaleController::callCalService(
+    const rclcpp::Client<std_srvs::srv::Trigger>::SharedPtr &client,
+    const QString &label)
+{
+    if (!client || !client->wait_for_service(std::chrono::milliseconds(500))) {
+        cal_message_ = tr("%1: node khong phan hoi").arg(label);
+        emit calMessageChanged();
+        return;
+    }
+    auto req = std::make_shared<std_srvs::srv::Trigger::Request>();
+    client->async_send_request(
+        req,
+        [this, label](rclcpp::Client<std_srvs::srv::Trigger>::SharedFuture f) {
+            QString msg;
+            try {
+                auto r = f.get();
+                msg = QString("%1: %2").arg(label, QString::fromStdString(r->message));
+            } catch (const std::exception &e) {
+                msg = QString("%1: %2").arg(label, QString::fromUtf8(e.what()));
+            }
+            QMetaObject::invokeMethod(this, [this, msg]() {
+                cal_message_ = msg;
+                emit calMessageChanged();
+            }, Qt::QueuedConnection);
+        });
+}
+
+void ScaleController::calAddPoint(float knownWeight)
+{
+    // Node lay khoi luong tu /loadcell/cal_weight nen phai gui TRUOC khi goi
+    // service, va cho mot nhip de no toi noi.
+    setKnownCalibration(knownWeight);
+    QTimer::singleShot(150, this, [this]() {
+        callCalService(client_cal_add_, tr("Ghi diem"));
+    });
+}
+
+void ScaleController::calApply() { callCalService(client_cal_apply_, tr("Ap dung")); }
+void ScaleController::calClear() { callCalService(client_cal_clear_, tr("Xoa diem")); }
