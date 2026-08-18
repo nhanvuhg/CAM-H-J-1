@@ -243,8 +243,11 @@ ScaleController::ScaleController(rclcpp::Node::SharedPtr node, QObject *parent)
     client_cal_apply_ = node_->create_client<std_srvs::srv::Trigger>("/loadcell/cal_apply");
     client_cal_clear_ = node_->create_client<std_srvs::srv::Trigger>("/loadcell/cal_clear");
 
+    // Phai KHOP transient_local cua node, neu khong subscriber se khong nhan
+    // duoc ban da chot va danh sach diem trong tran cho toi lan bam nut ke tiep.
     sub_cal_points_ = node_->create_subscription<std_msgs::msg::String>(
-        "/loadcell/cal_points", 10,
+        "/loadcell/cal_points",
+        rclcpp::QoS(1).transient_local(),
         [this](const std_msgs::msg::String::SharedPtr msg) {
             const QString s = QString::fromStdString(msg->data);
             QMetaObject::invokeMethod(this, [this, s]() {

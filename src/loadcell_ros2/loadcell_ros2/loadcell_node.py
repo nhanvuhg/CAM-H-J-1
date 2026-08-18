@@ -21,7 +21,7 @@ import time
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, Float32, Int32, String
 from std_srvs.srv import Trigger
 
@@ -134,7 +134,13 @@ class LoadcellNode(Node):
         # ngay khi bam nut. Phat ra day de GUI hien trang thai THAT.
         self._pub_tared     = self.create_publisher(Bool,    '/loadcell/tared', qos)
         self._pub_tare_base = self.create_publisher(Float32, '/loadcell/tare_base', qos)
-        self._pub_cal_pts   = self.create_publisher(String,  '/loadcell/cal_points', qos)
+        # QoS LATCHED (transient_local): danh sach diem chi doi khi bam nut nen
+        # neu phat kieu volatile thi GUI mo sau se khong nhan duoc gi cho toi lan
+        # bam tiep theo — man hinh bao "chua co diem" du node dang giu day du.
+        # depth 1 vi chi can gia tri moi nhat.
+        self._pub_cal_pts   = self.create_publisher(
+            String, '/loadcell/cal_points',
+            QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL))
 
         # ── Subscribers ──────────────────────────────────────────────
         self.create_subscription(Float32, '/loadcell/target_weight', self._cb_target, qos)
@@ -649,6 +655,9 @@ class LoadcellNode(Node):
         with self._lock:
             self._cal_points.append((g, mA))
             n = len(self._cal_points)
+        # Luu ngay, khong doi toi luc ap dung: ghi vai diem roi node restart
+        # (mat dien, start_all.sh) thi cong do do lai tu dau.
+        self._save_state()
         self.get_logger().info(f'[CAL] ghi diem {n}: {g:.1f} g = {mA:.4f} mA')
         self._publish_cal_points()
         res.success = True
@@ -658,6 +667,7 @@ class LoadcellNode(Node):
     def _srv_cal_clear(self, _req, res):
         with self._lock:
             self._cal_points.clear()
+        self._save_state()
         self._publish_cal_points()
         self._pub_cal_st.publish(self._str('IDLE'))
         res.success = True
