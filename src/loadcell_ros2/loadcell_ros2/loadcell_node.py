@@ -118,6 +118,11 @@ class LoadcellNode(Node):
         # nay, xac dinh qua hai kenh RTD dang doc tot). Phat ra de theo doi
         # trang thai phan cung ma khong phai SSH vao RevPi. -1 = chua doc duoc.
         self._pub_in_status   = self.create_publisher(Int32,   '/loadcell/input_status', qos)
+        # Trang thai tru bi. Truoc day node giu rieng _tared/_tare_base nen GUI
+        # khong the biet lenh tru bi co an hay khong — no chi dat mot co cuc bo
+        # ngay khi bam nut. Phat ra day de GUI hien trang thai THAT.
+        self._pub_tared     = self.create_publisher(Bool,    '/loadcell/tared', qos)
+        self._pub_tare_base = self.create_publisher(Float32, '/loadcell/tare_base', qos)
 
         # ── Subscribers ──────────────────────────────────────────────
         self.create_subscription(Float32, '/loadcell/target_weight', self._cb_target, qos)
@@ -341,6 +346,10 @@ class LoadcellNode(Node):
 
         self._pub_weight.publish(Float32(data=float(gram)))
         self._pub_status.publish(self._str(self._status))
+        # Phat lien tuc thay vi chi khi doi: QoS volatile nen GUI khoi dong sau
+        # node se khong nhan duoc neu chi phat mot lan luc bam nut.
+        self._pub_tared.publish(Bool(data=bool(self._tared)))
+        self._pub_tare_base.publish(Float32(data=float(self._tare_base)))
 
         # Publish raw mA for debug
         if not self._use_sim:

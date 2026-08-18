@@ -33,6 +33,11 @@ class ScaleController : public QObject
     Q_PROPERTY(int consecFails READ consecFails NOTIFY consecFailsChanged)
     Q_PROPERTY(bool scaleNodeConnected READ scaleNodeConnected NOTIFY scaleNodeConnectedChanged)
     Q_PROPERTY(bool zeroDriftPending READ zeroDriftPending NOTIFY zeroDriftPendingChanged)
+    // Trang thai tru bi lay tu NODE, khong phai co cuc bo cua GUI. Truoc day
+    // GUI tu dat co ngay khi bam nut nen neu node bo lenh (mat ket noi, dang
+    // FAULT) thi man hinh van bao da tru bi.
+    Q_PROPERTY(bool tared READ tared NOTIFY tareChanged)
+    Q_PROPERTY(float tareBase READ tareBase NOTIFY tareChanged)
 
 public:
     explicit ScaleController(rclcpp::Node::SharedPtr node, QObject *parent = nullptr);
@@ -57,6 +62,8 @@ public:
     int failBatch() const { return fail_batch_; }
     int consecFails() const { return consec_fails_; }
     bool zeroDriftPending() const { return zero_drift_pending_; }
+    bool tared() const { return tared_; }
+    float tareBase() const { return tare_base_; }
 
 public slots:
     QVariantList getInkProfiles();
@@ -97,6 +104,7 @@ signals:
     
     // Alarms to trigger QML Popups
     void overloadAlarm();
+    void tareChanged();
     void zeroDriftAlarm();
     void calErrorAlarm();
     void calDoneAlarm();
@@ -106,6 +114,8 @@ private:
 
     // Values
     float current_weight_{0.0f};
+    bool  tared_{false};
+    float tare_base_{0.0f};
     QString monitor_status_{"NO_SIGNAL"};
     QString loadcell_status_{"UNKNOWN"};
     QString cal_status_{"IDLE"};
@@ -144,6 +154,8 @@ private:
     rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_weight_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_monitor_status_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_status_;
+    rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_tared_;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr sub_tare_base_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_cal_status_;
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr sub_batch_stats_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr sub_consec_fails_;

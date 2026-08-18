@@ -383,6 +383,44 @@ Item {
                         }
                     }
 
+                    // Trang thai tru bi — lay tu NODE (scaleController.tared),
+                    // khong phai co cuc bo cua GUI, nen neu node bo lenh thi o
+                    // day van bao CHUA TRU BI thay vi bao nham la da xong.
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 34
+                        radius: 6
+                        color: scaleController.tared ? "#1a3a2e" : "#2e2a18"
+                        border.width: 1
+                        border.color: scaleController.tared ? cSuccess : cWarning
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            spacing: 8
+
+                            Text {
+                                text: scaleController.tared ? "\u2713" : "\u26a0"
+                                color: scaleController.tared ? cSuccess : cWarning
+                                font.pixelSize: labelFont
+                                font.bold: true
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                fontSizeMode: Text.HorizontalFit
+                                minimumPixelSize: 9
+                                elide: Text.ElideRight
+                                text: scaleController.tared
+                                      ? qsTr("DA TRU BI — bi %1 g").arg(scaleController.tareBase.toFixed(1))
+                                      : qsTr("CHUA TRU BI — dat khay rong roi bam TRU BI")
+                                color: scaleController.tared ? cSuccess : cWarning
+                                font.pixelSize: labelFont
+                                font.bold: true
+                            }
+                        }
+                    }
+
                     Rectangle { Layout.fillWidth: true; height: 1; color: cBorder }
 
                     // ── MOVED: CALIBRATE SCALE ──

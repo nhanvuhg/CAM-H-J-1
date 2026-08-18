@@ -128,6 +128,30 @@ ScaleController::ScaleController(rclcpp::Node::SharedPtr node, QObject *parent)
             }, Qt::QueuedConnection);
         });
 
+    // Trang thai tru bi tu node. Gop hai topic vao mot signal tareChanged() vi
+    // QML luon hien ca hai cung luc.
+    sub_tared_ = node_->create_subscription<std_msgs::msg::Bool>(
+        "/loadcell/tared", 10,
+        [this](const std_msgs::msg::Bool::SharedPtr msg) {
+            const bool v = msg->data;
+            QMetaObject::invokeMethod(this, [this, v]() {
+                if (tared_ == v) return;      // 10Hz, chi bao khi DOI
+                tared_ = v;
+                emit tareChanged();
+            }, Qt::QueuedConnection);
+        });
+
+    sub_tare_base_ = node_->create_subscription<std_msgs::msg::Float32>(
+        "/loadcell/tare_base", 10,
+        [this](const std_msgs::msg::Float32::SharedPtr msg) {
+            const float v = msg->data;
+            QMetaObject::invokeMethod(this, [this, v]() {
+                if (qFuzzyCompare(tare_base_ + 1.0f, v + 1.0f)) return;
+                tare_base_ = v;
+                emit tareChanged();
+            }, Qt::QueuedConnection);
+        });
+
     sub_status_ = node_->create_subscription<std_msgs::msg::String>(
         "/loadcell/status", 10,
         [this](const std_msgs::msg::String::SharedPtr msg) {
