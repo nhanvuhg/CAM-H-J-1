@@ -185,6 +185,7 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr error_pub_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr  selected_slot_pub_;
     rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr  selected_row_pub_;
+    rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   stop_button_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   gripper_cmd_pub_;
     rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr   picker_cmd_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr camera_status_pub_;
@@ -294,6 +295,11 @@ private:
     rclcpp::Time feed_chamber_wait_start_;          // set on first wait, reset on pass/exit
     bool feed_chamber_wait_active_{false};          // true while measuring elapsed
     std::atomic<bool> skipped_buffer_load_{false};  // set on timeout, consumed in WAIT_RESUME_CHOICE
+    // WAIT_SCALE_CHOICE: can da hong nen khong the chay tiep. Operator chi con
+    // chon dat cartridge dang tren can vao OUTPUT hay FAIL, xong la roi han
+    // process. Co nay danh dau "dat xong thi dung ca he thong", de chuyen dong
+    // dat van chay tron ven roi moi dung — khac han bam STOP luc dang dat.
+    std::atomic<bool> exit_after_scale_place_{false};
     std::atomic<bool> s7_at_robot_{false};   // Cartridge S7 — khay đang ở vị trí Robot (parse từ /providesystem/sensors_state)
     std::atomic<bool> fill_done_{false};
     // Buffer needs another valid input row.  Chamber work always has priority:
@@ -537,6 +543,7 @@ private:
     void routeAfterOutputPlacement();
     static int64_t steadyNowNs();
     void softStopToManual(const std::string& source);
+    bool exitAfterScalePlaceRequested(const std::string& source);
     void forceScalePass(const std::string& source);
     bool checkConnection();
     bool validateRobotState();
@@ -641,7 +648,7 @@ RobotLogicNode::RobotLogicNode()
     uptime_timer_ = this->create_wall_timer(
         std::chrono::seconds(1),
         [this]() {
-            if (system_enabled_ && system_running_) {
+            if (system_enabled_ && system_running_ && !manual_mode_) {
                 const auto now = this->now();
                 // Tự phục hồi nếu clock ROS vừa reset hoặc một code path cũ bật
                 // running trước khi đặt start time.
@@ -1190,6 +1197,10 @@ void RobotLogicNode::initSubscriptions()
             if (msg->data) softStopToManual("/system/soft_stop");
         });
 
+    // Phat lai chinh topic cua nut STOP: sau khi dat cartridge tu can xong,
+    // node tu bam STOP thay operator de cartridge/VFD/GUI cung reset mot the.
+    stop_button_pub_ = create_publisher<std_msgs::msg::Bool>("/system/stop_button", 10);
+
     stop_button_sub_ = create_subscription<std_msgs::msg::Bool>(
         "/system/stop_button", 10,
         [this](const std_msgs::msg::Bool::SharedPtr msg) {
@@ -1406,6 +1417,19 @@ void RobotLogicNode::initServices()
         sub_options);
 }
 
+bool RobotLogicNode::exitAfterScalePlaceRequested(const std::string& source)
+{
+    if (!exit_after_scale_place_.exchange(false))
+        return false;
+    RCLCPP_WARN(get_logger(),
+        "[SCALE_CHOICE] %s xong — phat /system/stop_button, roi process va ve MANUAL",
+        source.c_str());
+    auto msg = std_msgs::msg::Bool();
+    msg.data = true;
+    stop_button_pub_->publish(msg);   // chinh node nay cung nhan -> softStopToManual
+    return true;
+}
+
 void RobotLogicNode::softStopToManual(const std::string& source)
 {
     // Soft STOP: cancel motion goals NGAY + chuyển MANUAL + reset state machine về IDLE.
@@ -1417,6 +1441,8 @@ void RobotLogicNode::softStopToManual(const std::string& source)
     if (motion_action_client_) {
         motion_action_client_->async_cancel_all_goals();
     }
+    exit_after_scale_place_ = false;
+    system_start_time_  = this->now();   // lan chay sau bat dau tu 0
     current_state_      = SystemState::IDLE;
     system_running_     = false;
     system_started_     = false;
@@ -1993,6 +2019,16 @@ void RobotLogicNode::gotoStateCallback(const std_msgs::msg::String::SharedPtr ms
         }
     }
 
+    // Can da bao su co: dat not cartridge dang tren can roi dung han, khong
+    // quay lai vong lap. Neu con chay tiep duoc thi operator da bam IGNORE
+    // SCALE va popup nay khong xuat hien.
+    if (current_state_ == SystemState::WAIT_SCALE_CHOICE &&
+        (target == SystemState::PLACE_TO_OUTPUT || target == SystemState::PLACE_TO_FAIL)) {
+        exit_after_scale_place_ = true;
+        RCLCPP_WARN(get_logger(),
+            "[SCALE_CHOICE] '%s' — dat xong se dung he thong va ve MANUAL", sn.c_str());
+    }
+
     // Scale choice: reset scale timer so PROCESSING_SCALE doesn't re-trigger immediately
     if (current_state_ == SystemState::WAIT_SCALE_CHOICE) {
         scale_wait_start_      = this->now();
@@ -2009,6 +2045,10 @@ void RobotLogicNode::gotoStateCallback(const std_msgs::msg::String::SharedPtr ms
     if (current_state_ == SystemState::IDLE && target != SystemState::IDLE) {
         system_running_ = true;
         system_enabled_ = true;
+        // Duong nay bat lai system_running_ ma khong qua callback START, nen
+        // truoc day moc thoi gian cu con nguyen va uptime cong don qua ca nhung
+        // lan da STOP. Coi day la mot lan chay moi.
+        system_start_time_ = this->now();
     }
 
     // Unblock stalled auto sequence without dropping to manual mode
@@ -4157,6 +4197,8 @@ void RobotLogicNode::stateErrorScaleTimeout()
 
 void RobotLogicNode::routeAfterOutputPlacement()
 {
+    if (exitAfterScalePlaceRequested("PLACE_TO_OUTPUT"))
+        return;
     // Skipped BUFFER→CHAMBER (feed_chamber timeout) → wait operator choice.
     if (skipped_buffer_load_.load()) {
         RCLCPP_WARN(get_logger(),
@@ -4601,6 +4643,9 @@ void RobotLogicNode::statePlaceToFail()
 
         scale_has_cartridge_ = false;
 
+        if (exitAfterScalePlaceRequested("PLACE_TO_FAIL"))
+            return;
+
         // Skipped BUFFER→CHAMBER (feed_chamber timeout) → wait operator choice.
         // Manual mode falls through to IDLE branch below.
         if (!manual_mode_ && skipped_buffer_load_) {
@@ -5000,15 +5045,29 @@ void RobotLogicNode::publishSystemStatus(const std::string& status)
 {
     static std::string last;
     static std::mutex  mtx;
+    static std::chrono::steady_clock::time_point last_pub{};
+
+    // Publisher khong latch, nen truoc day subscriber vao tre — dien hinh la
+    // restart GUI — khong nhan duoc gi cho toi khi robot doi state lan ke tiep,
+    // o "Trang thai robot" tren panel dung yen o gia tri cu hoac trong. Phat lai
+    // moi 1 s de no bat kip. Van chi ghi log khi gia tri that su doi, va phia
+    // GUI dedupe truoc khi emit nen heartbeat khong lam QML fire lai.
+    bool changed = false;
     {
         std::lock_guard<std::mutex> lk(mtx);
-        if (status == last) return;
-        last = status;
+        const auto now = std::chrono::steady_clock::now();
+        changed = (status != last);
+        if (!changed && now - last_pub < std::chrono::seconds(1))
+            return;
+        last     = status;
+        last_pub = now;
     }
+
     auto msg = std_msgs::msg::String();
     msg.data = status;
     system_status_pub_->publish(msg);
-    RCLCPP_INFO(get_logger(), "[STATUS] %s", status.c_str());
+    if (changed)
+        RCLCPP_INFO(get_logger(), "[STATUS] %s", status.c_str());
 }
 
 void RobotLogicNode::publishError(const std::string& error)
