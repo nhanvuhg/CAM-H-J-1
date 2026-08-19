@@ -223,7 +223,14 @@ cleanup_fastdds_shm() {
         fi
     done
 
-    ros2 daemon stop 2>/dev/null || true
+    # `ros2 daemon stop` co the treo VO HAN khi daemon da chet nhung con socket
+    # cu: lenh nam cho o wait_woken, khong bao gio tra ve. Ca start_all.sh dung
+    # o day, ma no lai dang giu flock /tmp/cartridge_system.lock — nen moi lan
+    # chay lai deu bi tu choi voi "already running" va he thong khong sao khoi
+    # dong duoc. Da gap 19/08/2026: treo 87s, phai kill tay moi go duoc.
+    # Daemon chi phuc vu cac lenh CLI (topic list/echo), khong dinh gi toi node
+    # dieu khien, nen bo qua duoc hoan toan neu no khong chiu dung.
+    timeout 5 ros2 daemon stop >/dev/null 2>&1 || true
     local removed=0
     local segment
     shopt -s nullglob
