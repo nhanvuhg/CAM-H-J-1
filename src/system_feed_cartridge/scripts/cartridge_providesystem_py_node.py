@@ -3163,6 +3163,16 @@ class CartridgeSystem(Node):
             f"[RECHECK] Operator xac nhan '{str(getattr(msg, 'data', '')).strip()}' "
             f"— quet lai toan bo dieu kien canh bao")
 
+        # Khay Output day khong con popup rieng: nut XAC NHAN tren bang canh bao
+        # chinh la lenh recheck S4 truoc day cua popup. Dat co one-shot y het
+        # duong S2_OUTPUT_FULL_ACCEPT cu — _s2a_wait_output_clear xac minh lai tu
+        # the hai truc roi moi doc S4, con ON thi phat lai canh bao va giu may o
+        # trang thai tam dung, OFF moi cho xet tiep dieu kien chay STATE 2.
+        if self.state_in == SystemState.S2A_WAIT_OUTPUT_CLEAR:
+            self._s2_output_full_accept = True
+            self.get_logger().info(
+                "[S2A] XAC NHAN tu bang canh bao -> recheck S4 mot lan")
+
     def _cb_gui_confirm(self, msg: String):
         """
         Nhận xác nhận từ operator qua GUI (topic /providesystem/gui_confirm).
@@ -5801,11 +5811,12 @@ class CartridgeSystem(Node):
             'warn',
             'OUTPUT TRAY FULL',
             prefix
-            + f'S4 đang ON tại vị trí check tray. InX được giữ tại '
+            + f'S4 đang ON tại vị trí check tray — khay Output đã đầy. '
+              f'Máy TẠM DỪNG tại STATE 2, vẫn giữ nguyên chu trình: InX giữ tại '
               f'{self.config.inx_safe:g} mm, InY giữ tại '
-              f'{self.config.iny_target2:g} mm; InX không di chuyển tới vị trí '
-              f'lấy khay {self.config.inx_target2:g} mm. Dọn khay Output rồi '
-              'nhấn ACCEPT để kiểm tra lại S4.',
+              f'{self.config.iny_target2:g} mm, không đi tới vị trí lấy khay '
+              f'{self.config.inx_target2:g} mm. Lấy khay Output ra rồi nhấn '
+              'XÁC NHẬN trên bảng cảnh báo để quét lại S4.',
             code='s2_output_full',
         )
 
