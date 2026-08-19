@@ -555,7 +555,7 @@ import QtGraphicalEffects 1.15
             // nen man hinh khong co dau hieu nao khac.
             property bool restartFlash: false
             color: "#cc0d1428"; z: 10
-            border.color: restartFlash ? Qt.lighter(root.cServoRunEnd, 1.5) : root.cBorder
+            border.color: restartFlash ? root.cAccent : root.cBorder
             border.width: restartFlash ? 3 : 1
             Behavior on border.color { ColorAnimation { duration: 160 } }
 

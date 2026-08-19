@@ -267,7 +267,7 @@ Item {
                 // khung header 3s la du bao "da nhan lenh", khong can bang thong
                 // bao che mat hinh camera.
                 property bool restartFlash: false
-                border.color: restartFlash ? Qt.lighter(cServoRunEnd, 1.5) : cBorder
+                border.color: restartFlash ? cAccent : cBorder
                 border.width: restartFlash ? 3 : 1
                 Behavior on border.color { ColorAnimation { duration: 160 } }
                 radius: 8
