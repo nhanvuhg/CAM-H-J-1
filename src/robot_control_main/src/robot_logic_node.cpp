@@ -4599,6 +4599,22 @@ void RobotLogicNode::statePlaceToOutput()
         }
     }
 
+    // Dat xong mot cartridge thi scale_has_cartridge_ da ve false ngay tai
+    // nhanh xu ly ket qua SCALE_OUTPUT. Nhung neu khay day ngay sau do, STATE 4
+    // bat dau doi khay va state nay KHONG thoat — no ket o chot
+    // waiting_for_new_output_ va return moi tick. Khi khay moi ve, cot chot mo
+    // ra va ham chay tiep xuong duoi, gui lai SCALE_OUTPUT lan hai trong khi
+    // can da trong: robot dien lai ca hanh trinh dat voi tay gap rong.
+    //
+    // Cac chot san co (slot hop le, waiting_for_new_output_, mutex pos2, tam
+    // nhin cam1) khong cai nao hoi "co gi tren can khong", nen them o day.
+    if (!scale_has_cartridge_) {
+        RCLCPP_WARN(get_logger(),
+            "[PLACE] Can trong — cartridge da duoc dat roi, bo qua lan dat lai");
+        routeAfterOutputPlacement();
+        return;
+    }
+
     if (slot == SLOT_UNSET || slot <= 0) {
         RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 3000,
             "[OUTPUT] Waiting for slot selection...");
