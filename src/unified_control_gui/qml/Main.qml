@@ -329,7 +329,7 @@ ApplicationWindow {
             }
             Text {
                 Layout.fillWidth: true
-                text: qsTr("The Fill machine has not sent feed_chamber for 10 minutes.\nNothing has been changed — the cartridge on the scale is untouched.\nChoose how to continue:")
+                text: qsTr("The Fill machine has not sent feed_chamber for 3 minutes.\nNothing has been changed — the cartridge on the scale is untouched.\nChoose how to continue:")
                 color: "#9fb3c8"
                 font.pixelSize: 16
                 wrapMode: Text.WordWrap

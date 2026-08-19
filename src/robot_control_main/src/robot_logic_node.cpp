@@ -284,13 +284,13 @@ private:
     // van de; he thong nay chi chay THEO topic cua Fill. Khi vang tin hieu robot
     // dung yen nhu dang PAUSE — khong bao loi, khong dong cham gi toi SCALE.
     //
-    // Sau 10 phut moi hoi operator, vi luc do nhieu kha nang su co da duoc khac
+    // Sau 3 phut moi hoi operator, vi luc do nhieu kha nang su co da duoc khac
     // phuc nhung robot van dang cho. Popup de ho chon: cho tiep, hay bo qua ma
     // sang xu ly can (khi ho da tu xu ly chamber).
     //
     // Truoc day 150s VA XA SCALE truoc khi hoi — hanh dong pha huy do mot su
     // cham tre binh thuong cua may Fill gay ra. Dat 0 de cho vo han khong hoi.
-    static constexpr double LOAD_BUFFER_FEED_TIMEOUT_S = 600.0;
+    static constexpr double LOAD_BUFFER_FEED_TIMEOUT_S = 180.0;
     static constexpr double SCALE_TOPIC_TIMEOUT_S      = 150.0;  // PROCESSING_SCALE: no loadcell msg → WAIT_SCALE_CHOICE
     rclcpp::Time feed_chamber_wait_start_;          // set on first wait, reset on pass/exit
     bool feed_chamber_wait_active_{false};          // true while measuring elapsed

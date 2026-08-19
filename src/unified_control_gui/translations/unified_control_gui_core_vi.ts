@@ -1859,9 +1859,9 @@ Nếu tiếp tục chạy, nhật ký sản xuất và tiêu thụ SẼ KHÔNG �
         <source>Enter password</source>
         <translation>Nhập mật khẩu</translation>
     </message>
-<message><source>The Fill machine has not sent feed_chamber for 10 minutes.
+<message><source>The Fill machine has not sent feed_chamber for 3 minutes.
 Nothing has been changed — the cartridge on the scale is untouched.
-Choose how to continue:</source><translation>Máy Fill đã 10 phút không gửi feed_chamber.
+Choose how to continue:</source><translation>Máy Fill đã 3 phút không gửi feed_chamber.
 Chưa có gì bị thay đổi — cartridge trên cân vẫn nguyên.
 Chọn cách chạy tiếp:</translation></message><message><source>⚖  PROCESS SCALE
 (chamber already handled)</source><translation>⚖  XỬ LÝ CÂN
