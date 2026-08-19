@@ -312,12 +312,20 @@ ApplicationWindow {
             anchors.margins: 22
             spacing: 14
 
-            Text {
+            RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                text: qsTr("⏸  RESUME REQUIRED")
-                color: "#f5a623"
-                font.pixelSize: 26
-                font.bold: true
+                spacing: 10
+                Image {
+                    source: "qrc:/qml/icons/circle_pause_lucide.svg"
+                    sourceSize.width: 28; sourceSize.height: 28
+                    fillMode: Image.PreserveAspectFit
+                }
+                Text {
+                    text: qsTr("RESUME REQUIRED")
+                    color: "#f5a623"
+                    font.pixelSize: 26
+                    font.bold: true
+                }
             }
             Text {
                 Layout.fillWidth: true
@@ -336,7 +344,7 @@ ApplicationWindow {
                 MotionButton {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1; Layout.preferredHeight: 64
-                    text: qsTr("🔁  LOAD CHAMBER\nFROM BUFFER")
+                    text: qsTr("LOAD CHAMBER\nFROM BUFFER")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
                         radius: 12
@@ -347,11 +355,20 @@ ApplicationWindow {
                             GradientStop { position: 1.0; color: "#102739" }
                         }
                     }
-                    contentItem: Text {
-                        text: parent.text; color: "#ffffff"
-                        font: parent.font
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    contentItem: Column {
+                        spacing: 6
+                        Image {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            source: "qrc:/qml/icons/fold_horizontal.svg"
+                            sourceSize.width: 26; sourceSize.height: 26
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: parent.parent.text; color: "#ffffff"
+                            font: parent.parent.font
+                            horizontalAlignment: Text.AlignHCenter
+                        }
                     }
                     onClicked: {
                         robotController.gotoState("LOAD_CHAMBER_FROM_BUFFER")
@@ -361,7 +378,7 @@ ApplicationWindow {
                 MotionButton {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1; Layout.preferredHeight: 64
-                    text: qsTr("🔂  LOAD CHAMBER\nFROM TRAY")
+                    text: qsTr("LOAD CHAMBER\nFROM TRAY")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
                         radius: 12
@@ -372,11 +389,20 @@ ApplicationWindow {
                             GradientStop { position: 1.0; color: "#E68457" }
                         }
                     }
-                    contentItem: Text {
-                        text: parent.text; color: "#ffffff"
-                        font: parent.font
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    contentItem: Column {
+                        spacing: 6
+                        Image {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            source: "qrc:/qml/icons/arrows_up_from_line.svg"
+                            sourceSize.width: 26; sourceSize.height: 26
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: parent.parent.text; color: "#ffffff"
+                            font: parent.parent.font
+                            horizontalAlignment: Text.AlignHCenter
+                        }
                     }
                     onClicked: confirmEmptyBufferPopup.open()
                 }
@@ -386,7 +412,7 @@ ApplicationWindow {
                 MotionButton {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1; Layout.preferredHeight: 64
-                    text: qsTr("⚖  PROCESS SCALE\n(chamber already handled)")
+                    text: qsTr("PROCESS SCALE")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
                         radius: 12
@@ -397,11 +423,20 @@ ApplicationWindow {
                             GradientStop { position: 1.0; color: "#163a52" }
                         }
                     }
-                    contentItem: Text {
-                        text: parent.text; color: "#ffffff"
-                        font: parent.font
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    contentItem: Column {
+                        spacing: 6
+                        Image {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            source: "qrc:/qml/icons/weight_tilde_lucide.svg"
+                            sourceSize.width: 26; sourceSize.height: 26
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: parent.parent.text; color: "#ffffff"
+                            font: parent.parent.font
+                            horizontalAlignment: Text.AlignHCenter
+                        }
                     }
                     onClicked: {
                         robotController.gotoState("PROCESSING_SCALE")
