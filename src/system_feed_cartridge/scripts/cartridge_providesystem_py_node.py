@@ -535,6 +535,7 @@ class CartridgeSystem(Node):
         self.create_subscription(Bool, '/robot/cyl_loadcell_cmd', self._cb_cyl_loadcell_cmd, 10)
 
         self.create_subscription(String, '/providesystem/gui_confirm',       self._cb_gui_confirm,        qos)
+        self.create_subscription(String, '/providesystem/gui_recheck',       self._cb_gui_recheck,        qos)
         self.create_subscription(String, '/providesystem/jog_cmd',           self._cb_jog,                qos)
         self.create_subscription(String, '/providesystem/set_operation_mode',self._cb_mode,               qos)
         self.create_subscription(Int32, '/robot/set_mode', self._cb_robot_mode, qos)
@@ -3138,6 +3139,46 @@ class CartridgeSystem(Node):
                 self.get_logger().warn(f"[CYL] unknown cmd: {msg.data}")
         except Exception as e:
             self.get_logger().error(f"[CYL] exception cid={cid} act={act}: {e}")
+
+    def _cb_gui_recheck(self, msg: String):
+        """Operator bam xac nhan tren bang canh bao he thong.
+
+        Xac nhan o day KHONG co nghia "toi khai bao la da co khay". No la lenh
+        QUET LAI cam bien: thoa dieu kien thi xoa canh bao, chua thoa thi giu
+        nguyen canh bao. Truoc day GUI chi danh dau da-xac-nhan trong bo nho cua
+        no va khong hoi phan cung cau nao, nen mo khoa START duoc ca khi khay van
+        chua co tren Platform.
+
+        Canh bao S17 mang id feeder_servo_s17 o phia GUI (regex servo bat "S17"
+        trong title). Ca hai nhanh duoi day deu giu nguyen title/step nen tin tra
+        loi roi dung vao id do.
+        """
+        alert_id = str(getattr(msg, 'data', '')).strip().lower()
+        if alert_id and 's17' not in alert_id:
+            return
+
+        label = self._sensor_label(S17_PLATFORM)
+        # Doc truc tiep tai thoi diem bam, khong dung gia tri cache cua guide.
+        if self.sensor(S17_PLATFORM):
+            self._guide_logged.discard("S3_IDLE_S17_OFF")
+            self.get_logger().info(f'[RECHECK] {label} ON — xoa canh bao Platform')
+            # detail phai ket thuc bang " OK": do la dieu kien phia GUI dung de
+            # goi clearAlert cho canh bao servo/sensor.
+            self._notify_step(
+                'ok', 'STATE 3', 'S17 Platform',
+                f'{label} ON — da co khay tren Platform OK')
+        else:
+            stamp = time.strftime('%H:%M:%S')
+            self.get_logger().warn(
+                f'[RECHECK] {label} van OFF — giu nguyen canh bao Platform')
+            # Chen gio quet de noi dung khac lan truoc: upsertAlert dedupe theo
+            # (level, message), trung y nguyen thi no return som va canh bao se
+            # nam lai o trang thai da-xac-nhan — dung cai ta muon tranh.
+            self._notify_step(
+                'warn', 'STATE 3', 'S17 Platform',
+                f'{label} van OFF luc {stamp} — chua co khay tren Platform',
+                check=['khay tren Platform Servo3', label],
+                action=['Cap khay len Platform', 'Bam xac nhan lai de quet lai'])
 
     def _cb_gui_confirm(self, msg: String):
         """

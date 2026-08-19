@@ -60,6 +60,9 @@ SystemAlertController::SystemAlertController(
     rclcpp::Node::SharedPtr node, QObject *parent)
     : QObject(parent), node_(std::move(node))
 {
+    recheck_pub_ = node_->create_publisher<std_msgs::msg::String>(
+        "/providesystem/gui_recheck", 10);
+
     const auto qos = rclcpp::QoS(10);
     const auto transientQos = rclcpp::QoS(1).reliable().transient_local();
 
@@ -267,11 +270,27 @@ bool SystemAlertController::prepareStart(const QString &mode)
     return false;
 }
 
+void SystemAlertController::requestFeederRecheck(const QString &id)
+{
+    if (!recheck_pub_)
+        return;
+    std_msgs::msg::String msg;
+    msg.data = id.toStdString();
+    recheck_pub_->publish(msg);
+}
+
 bool SystemAlertController::acknowledgeWarning(const QString &id)
 {
     auto it = alerts_.find(id);
     if (it == alerts_.end() || it->level != "WARNING" || it->acknowledged)
         return false;
+    // Canh bao cua cum cartridge dua tren cam bien, nen xac nhan la mot buoc
+    // QUET LAI chu khong phai loi khai bao "dieu kien da thoa". Node se tra loi:
+    // thoa thi phat tin xoa canh bao, chua thoa thi phat lai canh bao voi gio
+    // quet moi — upsertAlert thay noi dung doi nen dat lai acknowledged = false,
+    // canh bao giu nguyen va van chan START.
+    if (it->area == "FEEDER")
+        requestFeederRecheck(id);
     it->acknowledged = true;
     emit alertsChanged();
     return true;
@@ -282,6 +301,8 @@ int SystemAlertController::acknowledgeAllWarnings()
     int changed = 0;
     for (Alert &alert : alerts_) {
         if (alert.level == "WARNING" && !alert.acknowledged) {
+            if (alert.area == "FEEDER")
+                requestFeederRecheck(alert.id);
             alert.acknowledged = true;
             ++changed;
         }

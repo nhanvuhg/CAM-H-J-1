@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/string.hpp"
 
 class SystemAlertController : public QObject
 {
@@ -67,6 +68,9 @@ private:
     };
 
     rclcpp::Node::SharedPtr node_;
+    // Bam xac nhan tren bang canh bao = YEU CAU QUET LAI cam bien, khong phai
+    // loi khai bao cua operator rang dieu kien da thoa.
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr recheck_pub_;
     std::vector<rclcpp::SubscriptionBase::SharedPtr> subscriptions_;
     QMap<QString, Alert> alerts_;
     QString operation_mode_{"manual"};
@@ -100,6 +104,8 @@ private:
     QString actionForArea(const QString &area) const;
     QString localizedAlertText(const QString &text) const;
     static QString stableCameraMessage(const QString &source, const QString &value);
+    void requestFeederRecheck(const QString &id);
+
     static QString normalized(const QString &value);
     static bool isHealthy(const QString &value);
     static bool hasCriticalToken(const QString &value);
