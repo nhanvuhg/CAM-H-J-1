@@ -543,6 +543,7 @@ private:
     void routeAfterOutputPlacement();
     static int64_t steadyNowNs();
     void softStopToManual(const std::string& source);
+    void clearPipelineInventory(const char* source);
     bool exitAfterScalePlaceRequested(const std::string& source);
     void forceScalePass(const std::string& source);
     bool checkConnection();
@@ -1417,6 +1418,43 @@ void RobotLogicNode::initServices()
         sub_options);
 }
 
+void RobotLogicNode::clearPipelineInventory(const char* source)
+{
+    // STOP dua he thong ve MANUAL, va theo thiet ke van hanh thi luc do nguoi
+    // van hanh don may bang tay. Nen START lai phai bat dau tu gia dinh TRONG
+    // HET — buffer, chamber, can. Truoc day chi setModeCallback(MANUAL) dat
+    // moi buffer_is_empty_ = true, con chamber/can/hang doi ket qua giu nguyen:
+    // sang MANUAL roi quay lai AUTO la he thong tin buffer trong trong khi
+    // cartridge van nam do, bo quen no va con co the nap chong len.
+    //
+    // Danh sach nay lay nguyen tu resetStateCallback — noi duy nhat truoc gio
+    // reset day du — de ba duong (Reset service, STOP, chon MANUAL) khong bao
+    // gio lech nhau nua.
+    is_first_batch_        = true;
+    buffer_is_empty_       = true;
+    chamber_is_empty_      = true;
+    chamber_has_cartridge_ = false;
+    scale_has_cartridge_   = false;
+
+    stored_scale_result_.store(false);
+    scale_result_received_ = false;
+    {
+        std::lock_guard<std::mutex> lock(scale_result_mutex_);
+        pending_scale_results_.clear();
+    }
+
+    feed_chamber_signal_       = false;
+    feed_chamber_wait_active_  = false;
+    skipped_buffer_load_       = false;
+    fill_done_                 = false;
+    refill_pending_            = false;
+    cartridge_drain_confirmed_ = false;
+    exit_after_scale_place_    = false;
+
+    RCLCPP_INFO(get_logger(),
+        "[INVENTORY] %s -> buffer/chamber/scale deu coi nhu TRONG", source);
+}
+
 bool RobotLogicNode::exitAfterScalePlaceRequested(const std::string& source)
 {
     if (!exit_after_scale_place_.exchange(false))
@@ -1441,7 +1479,7 @@ void RobotLogicNode::softStopToManual(const std::string& source)
     if (motion_action_client_) {
         motion_action_client_->async_cancel_all_goals();
     }
-    exit_after_scale_place_ = false;
+    clearPipelineInventory(source.c_str());
     system_start_time_  = this->now();   // lan chay sau bat dau tu 0
     current_state_      = SystemState::IDLE;
     system_running_     = false;
@@ -2401,7 +2439,7 @@ void RobotLogicNode::resetStateCallback(
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
     current_state_  = SystemState::IDLE;
-    is_first_batch_ = true;
+    clearPipelineInventory("RESET");
 
     // STOP is a new row-selection boundary.  The GUI already clears its local
     // highlight, so clear the authoritative backend state as well; otherwise
@@ -2421,29 +2459,11 @@ void RobotLogicNode::resetStateCallback(
 
     // Output slot tracking is also preserved so it doesn't overwrite completed slots.
 
-    // Robot state
-    buffer_is_empty_       = true;
-    chamber_is_empty_      = true;
-    chamber_has_cartridge_ = false;
-    scale_has_cartridge_   = false;
-
-    // Scale
-    stored_scale_result_.store(false);
-    scale_result_received_ = false;
-    {
-        std::lock_guard<std::mutex> lock(scale_result_mutex_);
-        pending_scale_results_.clear();
-    }
+    // Robot state / Scale / cac co tien trinh: xem clearPipelineInventory()
 
     // System flags
     system_started_          = false;
     system_running_          = false;
-    feed_chamber_signal_     = false;
-    feed_chamber_wait_active_ = false;
-    skipped_buffer_load_     = false;
-    fill_done_               = false;
-    refill_pending_          = false;
-    cartridge_drain_confirmed_ = false;
     emergency_stop_          = false;
     system_paused_           = false;
     dobot_motion_paused_     = false;
@@ -2698,7 +2718,12 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
                 RCLCPP_INFO(get_logger(), "[MODE] AI camera");
             break;
         }
-        case 3:
+        case 3: {
+            // Node cartridge phat lai mode moi giay ("restart-safe convergence")
+            // va callback nay khong loc trung, nen chi duoc reset ton kho o
+            // SUON vao MANUAL. Reset moi lan nhan se xoa sach giua chu ky neu
+            // hai ben tam thoi bat dong ve mode.
+            const bool entering_manual = !manual_mode_;
             manual_mode_ = true;
             use_ai_for_control_ = false;
             RCLCPP_INFO(get_logger(), "[MODE] MANUAL");
@@ -2708,7 +2733,8 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
                 input_tray_empty_ = false;
                 selected_input_row_ = ROW_UNSET;
             }
-            buffer_is_empty_ = true;
+            if (entering_manual)
+                clearPipelineInventory("MODE=MANUAL");
             {
                 std::lock_guard<std::mutex> lock(output_slot_selection_mutex_);
                 selected_output_slot_ = 1;
@@ -2724,6 +2750,7 @@ void RobotLogicNode::setModeCallback(const std_msgs::msg::Int32::SharedPtr msg)
             startup_home_required_ = false;
             setOutputScanAllowed(false);
             break;
+        }
         default:
             RCLCPP_ERROR(get_logger(), "[MODE] Invalid: %d", msg->data);
             return;
