@@ -13,9 +13,21 @@ def test_desktop_launcher_marks_gui_as_managed():
     launcher = read("scripts/start_all.sh")
 
     assert 'UNIFIED_GUI_MANAGED_RESTART=1 "$QML_BIN"' in launcher
+    assert ': > "$LOG_QML"' in launcher
+    assert '"$QML_BIN" >> "$LOG_QML" 2>&1 &' in launcher
     assert 'GUI_RESTART_FLAG="/tmp/unified_gui_restart_requested"' in launcher
     assert 'if wait "$PID_QML_GUI"' in launcher
     assert 'if [ "$GUI_EXIT" -eq 42 ] || [ -f "$GUI_RESTART_FLAG" ]' in launcher
+
+
+def test_desktop_launcher_waits_for_qml_before_starting_cuda_camera():
+    launcher = read("scripts/start_all.sh")
+
+    gui_ready_wait = 'grep -q "GUI_READY"'
+    camera_start = 'camera_stack_supervisor >> "$LOG_CAMERA" 2>&1 &'
+    assert gui_ready_wait in launcher
+    assert launcher.index(gui_ready_wait) < launcher.index(camera_start)
+    assert 'if ! start_qml_gui; then' in launcher
 
 
 def test_legacy_launcher_survives_deliberate_gui_exit_with_set_e():

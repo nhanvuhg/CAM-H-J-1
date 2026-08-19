@@ -21,7 +21,9 @@ import QtGraphicalEffects 1.15
     // ────────────────────────────────────────────────────────────────────────────
     Item {
         id: root
-        anchors.fill: parent
+        // StackView owns the geometry of pushed pages. Anchoring the root page
+        // at the same time conflicts with StackView transitions and produces a
+        // runtime QML warning whenever this page is opened.
         focus: true
         activeFocusOnTab: true
 

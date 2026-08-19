@@ -502,6 +502,66 @@ LOG_GRIPPER="$LOG_DIR/gripper_festo_node.log"
 # echo "$PID_GRIPPER" >> "$PIDFILE"
 echo "  [5] ⏭️  Gripper Node OFF (tích hợp trong Cartridge Node)"
 
+# ── [8] QML GUI (native, HDMI) ──
+# Start and fully initialize Qt before the CUDA/TensorRT camera stack. Starting
+# both render/inference stacks at once can leave QGuiApplication blocked before
+# its first log line, while every ROS node appears to have started normally.
+LOG_QML="$LOG_DIR/unified_gui.log"
+QML_BIN="$WS/install/unified_control_gui/lib/unified_control_gui/unified_control_gui"
+GUI_RESTART_FLAG="/tmp/unified_gui_restart_requested"
+GUI_STARTUP_TIMEOUT_SEC="${GUI_STARTUP_TIMEOUT_SEC:-20}"
+
+# Xoa log mot lan cho moi phien Start All. Moi lan bam Restart GUI ben trong
+# phien nay se append tiep, de loi cua process cu khong bi lenh `>` xoa mat.
+: > "$LOG_QML"
+
+start_qml_gui() {
+    if [ -z "${DISPLAY:-}" ]; then
+        echo "  [8] ⚠️  DISPLAY not set — skipping QML GUI"
+        PID_QML_GUI=""
+        return 0
+    fi
+
+    echo "  [8] 🖥️  QML GUI (DISPLAY=$DISPLAY)..."
+    printf '\n===== GUI START %s =====\n' "$(date --iso-8601=seconds)" >> "$LOG_QML"
+    local log_offset
+    log_offset=$(stat -c %s "$LOG_QML")
+    UNIFIED_GUI_MANAGED_RESTART=1 "$QML_BIN" >> "$LOG_QML" 2>&1 &
+    PID_QML_GUI=$!
+    echo "        PID=$PID_QML_GUI  Log: $LOG_QML"
+    echo "$PID_QML_GUI" >> "$PIDFILE"
+
+    local startup_wait=0
+    while [ "$startup_wait" -lt "$GUI_STARTUP_TIMEOUT_SEC" ]; do
+        if ! kill -0 "$PID_QML_GUI" 2>/dev/null; then
+            wait "$PID_QML_GUI" 2>/dev/null || true
+            echo "❌ QML GUI exited during startup. Last log lines:"
+            tail -n 30 "$LOG_QML" || true
+            PID_QML_GUI=""
+            return 1
+        fi
+        if tail -c "+$((log_offset + 1))" "$LOG_QML" 2>/dev/null | grep -q "GUI_READY"; then
+            echo "        ✅ QML GUI ready"
+            return 0
+        fi
+        sleep 1
+        startup_wait=$((startup_wait + 1))
+    done
+
+    echo "❌ QML GUI did not become ready after ${GUI_STARTUP_TIMEOUT_SEC}s. Last log lines:"
+    tail -n 30 "$LOG_QML" || true
+    kill -TERM "$PID_QML_GUI" 2>/dev/null || true
+    wait "$PID_QML_GUI" 2>/dev/null || true
+    PID_QML_GUI=""
+    return 1
+}
+
+rm -f "$GUI_RESTART_FLAG"
+if ! start_qml_gui; then
+    echo "❌ Start All aborted before camera startup because the HDMI GUI failed"
+    exit 1
+fi
+
 # ── [6] Dual Jetson CSI Camera + TensorRT YOLO System ──
 LOG_CAMERA="$LOG_DIR/dual_camera_system.log"
 echo "  [6] 📷 Dual CSI + TensorRT YOLO (input/output models)..."
@@ -620,7 +680,8 @@ echo "$PID_CAMERA" >> "$PIDFILE"
 sleep 2
 
 # ══════════════════════════════════════════
-# WAVE 2 — GUIs (start in parallel after WAVE 1 settle).
+# WAVE 2 — Optional Web GUI.
+# The native QML GUI was deliberately initialized before CUDA/TensorRT above.
 # ══════════════════════════════════════════
 
 # ── [7] Web GUI (cartridge_gui.py — port 8080) ──
@@ -638,27 +699,6 @@ if $WEB_GUI_ENABLED && [ -f "$WEB_GUI" ]; then
 else
     echo "  [7] ⏭️  Web GUI skipped (--no-web)"
 fi
-
-# ── [8] QML GUI (native, HDMI) ──
-LOG_QML="$LOG_DIR/unified_gui.log"
-QML_BIN="$WS/install/unified_control_gui/lib/unified_control_gui/unified_control_gui"
-GUI_RESTART_FLAG="/tmp/unified_gui_restart_requested"
-
-start_qml_gui() {
-  if [ -n "${DISPLAY:-}" ]; then
-    echo "  [8] 🖥️  QML GUI (DISPLAY=$DISPLAY)..."
-    UNIFIED_GUI_MANAGED_RESTART=1 "$QML_BIN" > "$LOG_QML" 2>&1 &
-    PID_QML_GUI=$!
-    echo "        PID=$PID_QML_GUI  Log: $LOG_QML"
-    echo "$PID_QML_GUI" >> "$PIDFILE"
-  else
-    echo "  [8] ⚠️  DISPLAY not set — skipping QML GUI"
-    PID_QML_GUI=""
-  fi
-}
-
-rm -f "$GUI_RESTART_FLAG"
-start_qml_gui
 
 # ══════════════════════════════════════════
 # [9] RS485 BUS NODE — RevPi A (Loadcell + VFD)
@@ -739,7 +779,10 @@ while true; do
         if [ "$GUI_EXIT" -eq 42 ] || [ -f "$GUI_RESTART_FLAG" ]; then
             echo "[GUI] 🔄 Restart requested (code=$GUI_EXIT)"
             rm -f "$GUI_RESTART_FLAG"
-            start_qml_gui
+            if ! start_qml_gui; then
+                echo "[GUI] 🔴 Restart failed — dừng hệ thống"
+                break
+            fi
             continue
         fi
         echo "[GUI] 🔴 Exited (code=$GUI_EXIT) — dừng hệ thống"

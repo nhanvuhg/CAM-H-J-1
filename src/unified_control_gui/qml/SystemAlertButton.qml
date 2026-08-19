@@ -385,7 +385,11 @@ Item {
 
                     delegate: Rectangle {
                         id: alertCard
-                        width: alertList.width - (alertList.contentHeight > alertList.height ? 12 : 0)
+                        // Luon chua san cho scrollbar. Truoc day width phu thuoc
+                        // contentHeight; width lai doi wrap text -> doi height
+                        // delegate -> doi contentHeight, tao binding loop va lam
+                        // popup canh bao giat/khung khi danh sach vua tran.
+                        width: Math.max(0, alertList.width - alertScrollBar.width - 4)
                         height: alertColumn.implicitHeight + 28
                         radius: 8
                         color: modelData.level === "ERROR" ? "#171824" : "#171b25"

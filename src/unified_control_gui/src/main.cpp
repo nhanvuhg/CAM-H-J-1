@@ -90,6 +90,12 @@ int main(int argc, char *argv[])
     if (engine.rootObjects().isEmpty())
         return -1;
 
+    // start_all.sh waits for this line before it starts the CUDA/TensorRT
+    // camera stack.  Creating both at the same time can starve Qt during its
+    // first scene-graph/OpenGL initialization and leave the HDMI GUI blank
+    // without even reaching the normal ROS logs.
+    qInfo() << "GUI_READY";
+
     std::thread rosThread([=]() {
         rclcpp::spin(camNode);
     });

@@ -53,6 +53,8 @@
     <file alias="icons/list_restart.svg">qml/icons/list_restart.svg</file>
     <file alias="icons/user_cog.svg">qml/icons/user_cog.svg</file>
     <file alias="icons/user.svg">qml/icons/user.svg</file>
+    <file alias="icons/schedule.svg">qml/icons/schedule.svg</file>
+    <file alias="icons/droplet.svg">qml/icons/droplet.svg</file>
     <file alias="icons/schedule_white.svg">qml/icons/schedule_white.svg</file>
     <file alias="icons/lock.svg">qml/icons/lock.svg</file>
     <file alias="icons/eye.svg">qml/icons/eye.svg</file>

@@ -1619,8 +1619,8 @@ CARTRIDGE</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="+1"/>
-        <source>RESUME REQUIRED</source>
-        <translation>CẦN TIẾP TỤC</translation>
+        <source>FILL SIGNAL NOT RECEIVED</source>
+        <translation>CẢNH BÁO KHÔNG NHẬN ĐƯỢC TÍN HIỆU TỪ MÁY FILL</translation>
     </message>
     <message>
         <location filename="../qml/Main.qml" line="+1"/>

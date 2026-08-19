@@ -316,14 +316,16 @@ ApplicationWindow {
                 Layout.alignment: Qt.AlignHCenter
                 spacing: 10
                 Image {
-                    source: "qrc:/qml/icons/circle_pause_lucide.svg"
+                    // Dùng cùng biểu tượng cảnh báo SVG với popup scale_choice
+                    // để hai lỗi chờ tín hiệu đều có cùng ngữ nghĩa trực quan.
+                    source: "qrc:/qml/icons/triangle_alert.svg"
                     sourceSize.width: 28; sourceSize.height: 28
                     fillMode: Image.PreserveAspectFit
                 }
                 Text {
-                    text: qsTr("RESUME REQUIRED")
+                    text: qsTr("FILL SIGNAL NOT RECEIVED")
                     color: "#f5a623"
-                    font.pixelSize: 26
+                    font.pixelSize: 22
                     font.bold: true
                 }
             }
@@ -1011,10 +1013,13 @@ ApplicationWindow {
         readonly property int contentSideInset: 30
         readonly property int contentBottomInset: 30
 
-        // Tự co theo nội dung: fix cứng height 430 làm nút LOGIN tràn khỏi khung
-        // (Popup mặc định còn có padding 12 mỗi cạnh)
-        height: loginColumn.implicitHeight + contentTopInset + contentBottomInset
-                + topPadding + bottomPadding
+        // Khung cu 430 px lam nut LOGIN tran ra ngoai. Khong lay height tu
+        // loginColumn.implicitHeight: ColumnLayout nam trong contentItem cua
+        // chinh Popup nen phep do do tao vong binding height <-> contentItem.
+        // 600 px du cho ca ban dich VI/EN tren man 1080p va hoan toan doc lap
+        // voi implicitHeight cua noi dung.
+        padding: 0
+        height: 600
         modal: true
         focus: true
         closePolicy: Popup.NoAutoClose
