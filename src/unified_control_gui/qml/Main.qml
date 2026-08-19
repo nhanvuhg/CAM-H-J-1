@@ -284,7 +284,7 @@ ApplicationWindow {
         anchors.centerIn: parent
         modal: true
         closePolicy: Popup.NoAutoClose
-        width: 900; height: 384
+        width: 820; height: 430
         background: Rectangle {
             radius: 22
             // Cung ngon ngu voi popup dang nhap: KHONG vanh. Do noi den tu lop
@@ -337,14 +337,19 @@ ApplicationWindow {
             }
             Item { Layout.fillHeight: true }
 
-            RowLayout {
+            // 2 tren 2 duoi: bon nut cung kich thuoc, nhan du cho de khong
+            // phai xuong dong. GridLayout thay RowLayout de khong phai chia be
+            // ngang cho bon cot hep.
+            GridLayout {
                 Layout.fillWidth: true
-                spacing: 16
+                columns: 2
+                columnSpacing: 14
+                rowSpacing: 14
 
                 MotionButton {
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 1; Layout.preferredHeight: 64
-                    text: qsTr("LOAD CHAMBER\nFROM BUFFER")
+                    Layout.preferredWidth: 1; Layout.preferredHeight: 88
+                    text: qsTr("LOAD CHAMBER FROM BUFFER")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
                         radius: 12
@@ -380,8 +385,8 @@ ApplicationWindow {
                 }
                 MotionButton {
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 1; Layout.preferredHeight: 64
-                    text: qsTr("LOAD CHAMBER\nFROM TRAY")
+                    Layout.preferredWidth: 1; Layout.preferredHeight: 88
+                    text: qsTr("LOAD CHAMBER FROM TRAY")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
                         radius: 12
@@ -417,7 +422,7 @@ ApplicationWindow {
                 // lua chon cua nguoi van hanh chu khong phai quyet dinh cua may.
                 MotionButton {
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 1; Layout.preferredHeight: 64
+                    Layout.preferredWidth: 1; Layout.preferredHeight: 88
                     text: qsTr("PROCESS SCALE")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
@@ -452,37 +457,46 @@ ApplicationWindow {
                         resumeChoicePopup.close()
                     }
                 }
-            }
-
-            MotionButton {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 52
-                text: qsTr("⏹  STOP — Stop the system and hold the current position")
-                font.pixelSize: 15; font.bold: true
-                // Giong het nut DUNG trong DIEU KHIEN HE THONG: radius 10,
-                // gradient DOC ba chang #E05454 -> #E05454 -> #7a2424, vien
-                // cBtnDangerEnd 1px. Cung mot lenh thi phai cung mot hinh dang.
-                background: Rectangle {
-                    radius: 10
-                    border.color: "#7a2424"; border.width: 1
-                    gradient: Gradient {
-                        orientation: Gradient.Vertical
-                        GradientStop { position: 0.0; color: "#E05454" }
-                        GradientStop { position: 0.5; color: "#E05454" }
-                        GradientStop { position: 1.0; color: "#7a2424" }
+                MotionButton {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1; Layout.preferredHeight: 88
+                    text: qsTr("STOP")
+                    font.pixelSize: 14; font.bold: true
+                    background: Rectangle {
+                        radius: 12
+                        border.color: "#7a2424"; border.width: 1
+                        gradient: Gradient {
+                            orientation: Gradient.Vertical
+                            GradientStop { position: 0.0; color: "#E05454" }
+                            GradientStop { position: 0.5; color: "#E05454" }
+                            GradientStop { position: 1.0; color: "#7a2424" }
+                        }
+                    }
+                    contentItem: Item {
+                      Column {
+                        anchors.centerIn: parent
+                        spacing: 6
+                        Image {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            source: "qrc:/qml/icons/octagon_x_lucide.svg"
+                            sourceSize.width: 26; sourceSize.height: 26
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: parent.parent.parent.text; color: "#ffffff"
+                            font: parent.parent.parent.font
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                      }
+                    }
+                    onClicked: {
+                        mainWindow.stopSynchronizedSystems()
+                        resumeChoicePopup.close()
                     }
                 }
-                contentItem: Text {
-                    text: parent.text; color: "#ffffff"
-                    font: parent.font
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-                onClicked: {
-                    mainWindow.stopSynchronizedSystems()
-                    resumeChoicePopup.close()
-                }
             }
+
         }
     }
 
@@ -734,39 +748,46 @@ ApplicationWindow {
                         scaleChoicePopup.close()
                     }
                 }
-            }
-
-            MotionButton {
-                Layout.alignment: Qt.AlignHCenter
-                Layout.fillWidth: true
-                Layout.preferredHeight: 52
-                text: qsTr("⏹  STOP — Stop the system and hold the current position")
-                font.pixelSize: 15; font.bold: true
-                // Giong het nut DUNG trong DIEU KHIEN HE THONG: radius 10,
-                // gradient DOC ba chang #E05454 -> #E05454 -> #7a2424, vien
-                // cBtnDangerEnd 1px. Cung mot lenh thi phai cung mot hinh dang.
-                background: Rectangle {
-                    radius: 10
-                    border.color: "#7a2424"; border.width: 1
-                    gradient: Gradient {
-                        orientation: Gradient.Vertical
-                        GradientStop { position: 0.0; color: "#E05454" }
-                        GradientStop { position: 0.5; color: "#E05454" }
-                        GradientStop { position: 1.0; color: "#7a2424" }
+                MotionButton {
+                    Layout.fillWidth: true
+                    Layout.preferredWidth: 1; Layout.preferredHeight: 88
+                    text: qsTr("STOP")
+                    font.pixelSize: 14; font.bold: true
+                    background: Rectangle {
+                        radius: 12
+                        border.color: "#7a2424"; border.width: 1
+                        gradient: Gradient {
+                            orientation: Gradient.Vertical
+                            GradientStop { position: 0.0; color: "#E05454" }
+                            GradientStop { position: 0.5; color: "#E05454" }
+                            GradientStop { position: 1.0; color: "#7a2424" }
+                        }
+                    }
+                    contentItem: Item {
+                      Column {
+                        anchors.centerIn: parent
+                        spacing: 6
+                        Image {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            source: "qrc:/qml/icons/octagon_x_lucide.svg"
+                            sourceSize.width: 26; sourceSize.height: 26
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: parent.parent.parent.text; color: "#ffffff"
+                            font: parent.parent.parent.font
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                      }
+                    }
+                    onClicked: {
+                        mainWindow.stopSynchronizedSystems()
+                        scaleChoicePopup.close()
                     }
                 }
-                contentItem: Text {
-                    text: parent.text; color: "#ffffff"
-                    font: parent.font
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
-                onClicked: {
-                    mainWindow.stopSynchronizedSystems()
-                    mainWindow.scaleIssueWarning = true
-                    scaleChoicePopup.close()
-                }
             }
+
         }
     }
 

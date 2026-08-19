@@ -1589,6 +1589,36 @@ CARTRIDGE</translation>
     <name>Main</name>
     <message>
         <location filename="../qml/Main.qml" line="+1"/>
+        <source>LOAD CHAMBER FROM BUFFER</source>
+        <translation>NẠP BUỒNG TỪ BUFFER</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="+1"/>
+        <source>LOAD CHAMBER FROM TRAY</source>
+        <translation>NẠP BUỒNG TỪ KHAY</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="+1"/>
+        <source>STOP</source>
+        <translation>DỪNG</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="+1"/>
+        <source>LOAD CHAMBER FROM BUFFER</source>
+        <translation>NẠP BUỒNG TỪ BUFFER</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="+1"/>
+        <source>LOAD CHAMBER FROM TRAY</source>
+        <translation>NẠP BUỒNG TỪ KHAY</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="+1"/>
+        <source>STOP</source>
+        <translation>DỪNG</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="+1"/>
         <source>RESUME REQUIRED</source>
         <translation>CẦN TIẾP TỤC</translation>
     </message>
