@@ -595,10 +595,18 @@ void SystemAlertController::observeFeederNotification(const QString &value)
         // goi clearAlert cho no. Muc info cua mot servo chi phat ra khi drive
         // da sach, nen bat them tu FAULT o day la an toan — nhanh error/warn
         // di duong khac ben duoi.
+        // code ket thuc "_clear" la tin bao dieu kien da het. Neu tin do co
+        // nhac Sxx thi canh bao goc cung mang id feeder_servo_s<xx> (regex servo
+        // bat so hieu trong title/detail), khong phai id theo code — vi vay
+        // clearPrefix("feeder_notify_...") ben duoi khong cham toi no.
+        // Truong hop that: OUTPUT TRAY FULL vao danh sach voi id feeder_servo_s4,
+        // roi tin OUTPUT TRAY CLEAR (code s2_output_clear) khong xoa duoc no —
+        // canh bao nam lai du khay da duoc don, phai xac nhan tay.
         if (!servoId.isEmpty() && (normalized(title).contains("KET NOI")
                 || normalized(title).contains("CONNECTED")
                 || normalized(detail).endsWith(" OK")
-                || normalizedNotification.contains("FAULT")))
+                || normalizedNotification.contains("FAULT")
+                || code.endsWith("_clear")))
             clearAlert(id);
         if (code.endsWith("_clear"))
             clearPrefix("feeder_notify_" + code.left(code.size() - 6));
