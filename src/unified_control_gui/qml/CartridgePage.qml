@@ -550,7 +550,24 @@ import QtGraphicalEffects 1.15
             id: header
             anchors { top: parent.top; left: parent.left; right: parent.right }
             height: root.headerH
-            color: "#cc0d1428"; border.color: root.cBorder; z: 10
+            // Giong CameraPage: bam Restart Node thi to sang vien header 5s de
+            // operator biet lenh da duoc nhan — script chay roi tach tien trinh
+            // nen man hinh khong co dau hieu nao khac.
+            property bool restartFlash: false
+            color: "#cc0d1428"; z: 10
+            border.color: restartFlash ? Qt.lighter(root.cServoRunEnd, 1.5) : root.cBorder
+            border.width: restartFlash ? 3 : 1
+            Behavior on border.color { ColorAnimation { duration: 160 } }
+
+            function flashRestart() {
+                header.restartFlash = true
+                headerFlashTimer.restart()
+            }
+            Timer {
+                id: headerFlashTimer
+                interval: 5000
+                onTriggered: header.restartFlash = false
+            }
 
             // Top specular line
             Rectangle {
@@ -627,7 +644,12 @@ import QtGraphicalEffects 1.15
                     Layout.preferredWidth: 50; Layout.preferredHeight: 50
                     hoverScale: 1.012
                     pressScale: 0.99
-                    onClicked: robotController.restartSystemNodes()
+                    onClicked: {
+                        // Chuoi rong = khong tim thay script hoac khong start
+                        // duoc tien trinh -> khong to vien, im lang bao hong.
+                        if (robotController.restartSystemNodes() !== "")
+                            header.flashRestart()
+                    }
                     background: Rectangle {
                         radius: 6
                         color: "transparent"
