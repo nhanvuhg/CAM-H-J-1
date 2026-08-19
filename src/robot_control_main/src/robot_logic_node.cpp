@@ -1474,10 +1474,18 @@ void RobotLogicNode::forceScalePass(const std::string& source)
     r.timestamp    = this->now();
     r.cartridge_id = cartridge_counter_.load();
 
+    // KHONG day ket qua vao hang doi. Ca 4 noi goi forceScalePass (toggle
+    // ignore_scale, PROCESSING_SCALE, ERROR_SCALE_TIMEOUT, WAIT_SCALE_CHOICE)
+    // deu di thang sang PLACE_TO_OUTPUT, ma consumer duy nhat cua hang doi la
+    // processNextScaleResult() nam trong nhanh THUONG cua PROCESSING_SCALE —
+    // khong bao gio chay o cac duong nay. Ket qua day vao se nam lai vinh vien,
+    // roi WAIT_FILLING thay hasPendingScaleResults() == true va chan chuyen
+    // chamber sang can: "fill_done latched but scale not ready (occupied=0
+    // result_pending=1)" — ket cung, chi START lai hoac dat khay moi moi go duoc.
+    // Quyet dinh PASS di theo stored_scale_result_, khong can hang doi.
     {
         std::lock_guard<std::mutex> lock(scale_result_mutex_);
         pending_scale_results_.clear();
-        pending_scale_results_.push_back(r);
     }
 
     stored_scale_result_.store(true);
