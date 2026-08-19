@@ -285,10 +285,25 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
         width: 900; height: 360
         background: Rectangle {
-            color: "#081627"
-            border.color: "#f5a623"
-            border.width: 2
-            radius: 10
+            radius: 22
+            // Cung ngon ngu voi popup dang nhap: KHONG vanh. Do noi den tu lop
+            // kinh mo ben duoi cong dai sheen o mep tren. Muc do khan giu bang
+            // mau tieu de va mau nut, khong bang khung vien.
+            gradient: Gradient {
+                orientation: Gradient.Vertical
+                GradientStop { position: 0.0;  color: "#d90f2236" }
+                GradientStop { position: 0.55; color: "#d9081627" }
+                GradientStop { position: 1.0;  color: "#d9050d18" }
+            }
+
+            FrostedBackdrop {
+                contentSource: stackView
+                captureRect: Qt.rect(resumeChoicePopup.x, resumeChoicePopup.y,
+                                     resumeChoicePopup.width, resumeChoicePopup.height)
+                cornerRadius: 22
+            }
+
+            GlassHighlight {}
         }
 
         ColumnLayout {
@@ -306,8 +321,8 @@ ApplicationWindow {
             Text {
                 Layout.fillWidth: true
                 text: qsTr("The Fill machine has not sent feed_chamber for 10 minutes.\nNothing has been changed — the cartridge on the scale is untouched.\nChoose how to continue:")
-                color: "#c7dcef"
-                font.pixelSize: 17
+                color: "#9fb3c8"
+                font.pixelSize: 16
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
             }
@@ -323,12 +338,12 @@ ApplicationWindow {
                     text: qsTr("🔁  LOAD CHAMBER\nFROM BUFFER")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
-                        radius: 6
-                        border.color: "#9b7bff"; border.width: 2
+                        radius: 12
+                        border.color: "#102739"; border.width: 1
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: "#6f4be0" }
-                            GradientStop { position: 1.0; color: "#452e91" }
+                            GradientStop { position: 0.0; color: "#234C6A" }
+                            GradientStop { position: 1.0; color: "#102739" }
                         }
                     }
                     contentItem: Text {
@@ -348,12 +363,12 @@ ApplicationWindow {
                     text: qsTr("🔂  LOAD CHAMBER\nFROM TRAY")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
-                        radius: 6
-                        border.color: "#f5a623"; border.width: 2
+                        radius: 12
+                        border.color: "#8a4210"; border.width: 1
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: "#e2761b" }
-                            GradientStop { position: 1.0; color: "#8a4210" }
+                            GradientStop { position: 0.0; color: "#8a4210" }
+                            GradientStop { position: 1.0; color: "#E68457" }
                         }
                     }
                     contentItem: Text {
@@ -373,12 +388,12 @@ ApplicationWindow {
                     text: qsTr("⚖  PROCESS SCALE\n(chamber already handled)")
                     font.pixelSize: 15; font.bold: true
                     background: Rectangle {
-                        radius: 6
-                        border.color: "#3ed0b4"; border.width: 2
+                        radius: 12
+                        border.color: "#163a52"; border.width: 1
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
                             GradientStop { position: 0.0; color: "#1f9e86" }
-                            GradientStop { position: 1.0; color: "#10473c" }
+                            GradientStop { position: 1.0; color: "#163a52" }
                         }
                     }
                     contentItem: Text {
@@ -399,9 +414,17 @@ ApplicationWindow {
                 Layout.preferredHeight: 52
                 text: qsTr("⏹  STOP — Stop the system and hold the current position")
                 font.pixelSize: 15; font.bold: true
-                background: Rectangle { color: "#3a1614"; border.color: "#f0735c"; border.width: 2; radius: 6 }
+                background: Rectangle {
+                    radius: 12
+                    border.color: "#7a2424"; border.width: 1
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "#E05454" }
+                        GradientStop { position: 1.0; color: "#7a2424" }
+                    }
+                }
                 contentItem: Text {
-                    text: parent.text; color: "#f0735c"
+                    text: parent.text; color: "#ffffff"
                     font: parent.font
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -422,10 +445,25 @@ ApplicationWindow {
         closePolicy: Popup.NoAutoClose
         width: 580; height: 320
         background: Rectangle {
-            color: "#081627"
-            border.color: "#f0735c"
-            border.width: 2
-            radius: 10
+            radius: 22
+            // Cung ngon ngu voi popup dang nhap: KHONG vanh. Do noi den tu lop
+            // kinh mo ben duoi cong dai sheen o mep tren. Muc do khan giu bang
+            // mau tieu de va mau nut, khong bang khung vien.
+            gradient: Gradient {
+                orientation: Gradient.Vertical
+                GradientStop { position: 0.0;  color: "#d90f2236" }
+                GradientStop { position: 0.55; color: "#d9081627" }
+                GradientStop { position: 1.0;  color: "#d9050d18" }
+            }
+
+            FrostedBackdrop {
+                contentSource: stackView
+                captureRect: Qt.rect(confirmEmptyBufferPopup.x, confirmEmptyBufferPopup.y,
+                                     confirmEmptyBufferPopup.width, confirmEmptyBufferPopup.height)
+                cornerRadius: 22
+            }
+
+            GlassHighlight {}
         }
         ColumnLayout {
             anchors.fill: parent
@@ -436,7 +474,7 @@ ApplicationWindow {
                 Layout.alignment: Qt.AlignHCenter
                 text: qsTr("⚠  CONFIRM EMPTY BUFFER")
                 color: "#f0735c"
-                font.pixelSize: 24
+                font.pixelSize: 26
                 font.bold: true
             }
             Text {
@@ -444,7 +482,7 @@ ApplicationWindow {
                 text: qsTr("LOAD CHAMBER FROM TRAY will restart like a fresh boot:\n" +
                            "  INIT_LOAD → INIT_REFILL_BUFFER → cycle.\n\n" +
                            "Have you manually removed all cartridges from the BUFFER?")
-                color: "#c7dcef"
+                color: "#9fb3c8"
                 font.pixelSize: 16
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
@@ -459,7 +497,7 @@ ApplicationWindow {
                     Layout.preferredWidth: 240; Layout.preferredHeight: 56
                     text: qsTr("✓  Buffer is empty — CONFIRM")
                     font.pixelSize: 15; font.bold: true
-                    background: Rectangle { color: "#3ed0b4"; radius: 6 }
+                    background: Rectangle { color: "#3ed0b4"; radius: 12 }
                     contentItem: Text {
                         text: parent.text; color: "#04140d"
                         font: parent.font
@@ -476,9 +514,9 @@ ApplicationWindow {
                     Layout.preferredWidth: 240; Layout.preferredHeight: 56
                     text: qsTr("✗  Cancel / Back")
                     font.pixelSize: 15; font.bold: true
-                    background: Rectangle { color: "#14263c"; border.color: "#1a4a6e"; border.width: 1; radius: 6 }
+                    background: Rectangle { color: "#14263c"; border.color: "#1a4a6e"; border.width: 1; radius: 12 }
                     contentItem: Text {
-                        text: parent.text; color: "#c7dcef"
+                        text: parent.text; color: "#9fb3c8"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -499,12 +537,24 @@ ApplicationWindow {
         anchors.centerIn: parent
         modal: true
         closePolicy: Popup.NoAutoClose
-        width: 720; height: 360
+        width: 840; height: 350
         background: Rectangle {
-            color: "#081627"
-            border.color: "#f0735c"
-            border.width: 2
-            radius: 10
+            radius: 22
+            gradient: Gradient {
+                orientation: Gradient.Vertical
+                GradientStop { position: 0.0;  color: "#d90f2236" }
+                GradientStop { position: 0.55; color: "#d9081627" }
+                GradientStop { position: 1.0;  color: "#d9050d18" }
+            }
+
+            FrostedBackdrop {
+                contentSource: stackView
+                captureRect: Qt.rect(scaleChoicePopup.x, scaleChoicePopup.y,
+                                     scaleChoicePopup.width, scaleChoicePopup.height)
+                cornerRadius: 22
+            }
+
+            GlassHighlight {}
         }
 
         ColumnLayout {
@@ -522,7 +572,7 @@ ApplicationWindow {
             Text {
                 Layout.fillWidth: true
                 text: qsTr("No loadcell topic was received for 150 seconds in PROCESSING_SCALE.\nPlace this cartridge, then the system stops and returns to MANUAL — press START to run again.")
-                color: "#c7dcef"
+                color: "#9fb3c8"
                 font.pixelSize: 16
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignHCenter
@@ -538,9 +588,17 @@ ApplicationWindow {
                     Layout.preferredWidth: 1; Layout.preferredHeight: 72
                     text: qsTr("✓  PLACE TO\nOUTPUT\n(force PASS)")
                     font.pixelSize: 13; font.bold: true
-                    background: Rectangle { color: "#0a2418"; border.color: "#3ed0b4"; border.width: 2; radius: 6 }
+                    background: Rectangle {
+                        radius: 12
+                        border.color: "#163a52"; border.width: 1
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: "#1f9e86" }
+                            GradientStop { position: 1.0; color: "#163a52" }
+                        }
+                    }
                     contentItem: Text {
-                        text: parent.text; color: "#3ed0b4"
+                        text: parent.text; color: "#ffffff"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -561,9 +619,17 @@ ApplicationWindow {
                     Layout.preferredWidth: 1; Layout.preferredHeight: 72
                     text: qsTr("✗  PLACE TO\nFAIL\n(force FAIL)")
                     font.pixelSize: 13; font.bold: true
-                    background: Rectangle { color: "#220c0b"; border.color: "#f0735c"; border.width: 2; radius: 6 }
+                    background: Rectangle {
+                        radius: 12
+                        border.color: "#8a4210"; border.width: 1
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: "#8a4210" }
+                            GradientStop { position: 1.0; color: "#E68457" }
+                        }
+                    }
                     contentItem: Text {
-                        text: parent.text; color: "#f5a394"
+                        text: parent.text; color: "#ffffff"
                         font: parent.font
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -587,9 +653,17 @@ ApplicationWindow {
                 Layout.preferredHeight: 52
                 text: qsTr("⏹  STOP — Stop the system and hold the current position")
                 font.pixelSize: 15; font.bold: true
-                background: Rectangle { color: "#160a09"; border.color: "#f0735c"; border.width: 2; radius: 6 }
+                background: Rectangle {
+                    radius: 12
+                    border.color: "#7a2424"; border.width: 1
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0.0; color: "#E05454" }
+                        GradientStop { position: 1.0; color: "#7a2424" }
+                    }
+                }
                 contentItem: Text {
-                    text: parent.text; color: "#f0735c"
+                    text: parent.text; color: "#ffffff"
                     font: parent.font
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
