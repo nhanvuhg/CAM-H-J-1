@@ -282,9 +282,13 @@ private:
     QVariantList cartesian_pose_;
     int speed_ratio_{100};
     int hw_speed_ratio_{0};
+    int pending_speed_ratio_{100};
+    bool speed_sync_in_flight_{false};
+    int speed_sync_failures_{0};
     QString error_log_;
     QString roi_error_;
     QTimer *poll_timer_;
+    QTimer *speed_sync_timer_{nullptr};
     
     // JOG state
     bool jog_continuous_{true};    // true=continuous, false=step
@@ -319,6 +323,7 @@ private:
 
     void callServiceAsync(rclcpp::Client<std_srvs::srv::SetBool>::SharedPtr client, bool value);
     void pollRobotState();
+    void requestSpeedRatioSync();
     void sendMoveJog(const QString& axisId);  // native MoveJog for continuous
     void stopManualJogMotion();
     void sendHoldStep();

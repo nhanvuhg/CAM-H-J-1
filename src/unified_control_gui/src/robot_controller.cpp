@@ -285,6 +285,15 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
                 if (hw_speed_ratio_ != msg->data) {
                     hw_speed_ratio_ = msg->data;
                     emit hwSpeedRatioChanged();
+
+                    // Dobot can return to its default SpeedFactor after the
+                    // driver/controller reconnects. Re-apply the persisted
+                    // GUI setting instead of requiring another slider move.
+                    if (hw_speed_ratio_ != pending_speed_ratio_) {
+                        if (speed_sync_timer_ && !speed_sync_timer_->isActive())
+                            speed_sync_timer_->start();
+                        requestSpeedRatioSync();
+                    }
                 }
             }, Qt::QueuedConnection);
         });
@@ -360,41 +369,25 @@ RobotController::RobotController(rclcpp::Node::SharedPtr node, QObject *parent)
     QSettings settings("RobotControl", "ManualMode");
     int savedSpeed = settings.value("speedRatio", 100).toInt();
     speed_ratio_ = qBound(1, savedSpeed, 100);
+    pending_speed_ratio_ = speed_ratio_;
     qDebug() << "Loaded speed ratio:" << speed_ratio_;
 
-    // Publish initial speed ratio so motion_executor AND Dobot hardware get it on startup
-    // Use a single-shot timer to ensure services/publishers are ready before sending
+    // SpeedFactor service discovery can finish before the dashboard socket is
+    // ready. Retry until Dobot itself acknowledges res=0, and re-arm this
+    // synchronization when hardware feedback changes after a reconnect.
+    speed_sync_timer_ = new QTimer(this);
+    speed_sync_timer_->setInterval(1000);
+    connect(speed_sync_timer_, &QTimer::timeout,
+            this, &RobotController::requestSpeedRatioSync);
+    speed_sync_timer_->start();
+    requestSpeedRatioSync();
+
+    // Sync the independent ignore-scale setting after the ROS graph settles.
     QTimer::singleShot(3000, this, [this]() {
-        // 1. Sync to motion_executor (for SpeedJ/SpeedL before each move)
-        std_msgs::msg::Int32 msg;
-        msg.data = speed_ratio_;
-        speed_ratio_pub_->publish(msg);
-        qDebug() << "[STARTUP] Published initial speed ratio:" << speed_ratio_;
-
-        // Sync ignore_scale default (false) to robot_logic on GUI start
-        {
-            auto is_msg = std_msgs::msg::Bool();
-            is_msg.data = ignore_scale_;  // default false
-            if (ignore_scale_pub_) ignore_scale_pub_->publish(is_msg);
-            qDebug() << "[STARTUP] Published initial ignore_scale:" << ignore_scale_;
-        }
-
-        // 2. Sync to Dobot hardware (SpeedFactor — persists until power cycle)
-        if (speed_factor_client_ && speed_factor_client_->service_is_ready()) {
-            auto req = std::make_shared<dobot_msgs_v3::srv::SpeedFactor::Request>();
-            req->ratio = speed_ratio_;
-            speed_factor_client_->async_send_request(req,
-                [this](rclcpp::Client<dobot_msgs_v3::srv::SpeedFactor>::SharedFuture f) {
-                    try {
-                        auto r = f.get();
-                        qDebug() << "[STARTUP] SpeedFactor synced to hardware:" << speed_ratio_ << "% (res:" << r->res << ")";
-                    } catch (...) {
-                        qWarning() << "[STARTUP] SpeedFactor sync failed — hardware may use default speed";
-                    }
-                });
-        } else {
-            qWarning() << "[STARTUP] SpeedFactor service not ready — hardware speed may differ from GUI";
-        }
+        auto is_msg = std_msgs::msg::Bool();
+        is_msg.data = ignore_scale_;  // default false
+        if (ignore_scale_pub_) ignore_scale_pub_->publish(is_msg);
+        qDebug() << "[STARTUP] Published initial ignore_scale:" << ignore_scale_;
     });
 
     // Position/pose stream in at ~100Hz via joint_state_sub_ + tool_vector_sub_.
@@ -1850,40 +1843,96 @@ void RobotController::clearError()
 // SPEED FACTOR
 // ═══════════════════════════════════════════════════════════════
 
-void RobotController::setSpeedRatio(int ratio)
+void RobotController::requestSpeedRatioSync()
 {
-    qDebug() << "SetSpeedRatio:" << ratio;
-    if (!speed_factor_client_->service_is_ready()) {
-        qWarning() << "[SPEED] SpeedFactor service offline — request dropped";
+    if (speed_sync_in_flight_) return;
+
+    if (!speed_factor_client_ || !speed_factor_client_->service_is_ready()) {
+        ++speed_sync_failures_;
+        if (speed_sync_failures_ == 1 || speed_sync_failures_ % 5 == 0) {
+            qWarning() << "[SPEED] Waiting for SpeedFactor service; will retry"
+                       << "(requested:" << pending_speed_ratio_ << "%)";
+        }
         return;
     }
+
+    const int requested_ratio = qBound(1, pending_speed_ratio_, 100);
     auto request = std::make_shared<dobot_msgs_v3::srv::SpeedFactor::Request>();
-    request->ratio = ratio;
+    request->ratio = requested_ratio;
+    speed_sync_in_flight_ = true;
+
     speed_factor_client_->async_send_request(request,
-        [this, ratio](rclcpp::Client<dobot_msgs_v3::srv::SpeedFactor>::SharedFuture future) {
-            int res = -1;
+        [this, requested_ratio](
+            rclcpp::Client<dobot_msgs_v3::srv::SpeedFactor>::SharedFuture future) {
+            int result = -1;
+            QString exception_message;
             try {
-                auto r = future.get();
-                res = r->res;
-                qDebug() << "SpeedFactor result:" << res;
+                const auto response = future.get();
+                if (response) result = response->res;
             } catch (const std::exception& e) {
-                qWarning() << "SpeedFactor failed:" << e.what();
-                return;
+                exception_message = QString::fromUtf8(e.what());
+            } catch (...) {
+                exception_message = QStringLiteral("unknown exception");
             }
-            if (res != 0) return;
-            // QSettings + publisher đụng tới Qt object → marshal về GUI thread.
-            QMetaObject::invokeMethod(this, [this, ratio]() {
-                speed_ratio_ = ratio;
-                emit speedRatioChanged();
-                QSettings settings("RobotControl", "ManualMode");
-                settings.setValue("speedRatio", ratio);
-                settings.sync();
-                std_msgs::msg::Int32 smsg;
-                smsg.data = ratio;
-                speed_ratio_pub_->publish(smsg);
-                qDebug() << "[SPEED] Published speed_ratio to motion_executor:" << ratio;
-            }, Qt::QueuedConnection);
+
+            // ROS callbacks can run outside the Qt GUI thread.
+            QMetaObject::invokeMethod(this,
+                [this, requested_ratio, result, exception_message]() {
+                    speed_sync_in_flight_ = false;
+
+                    if (result != 0) {
+                        ++speed_sync_failures_;
+                        if (speed_sync_failures_ == 1 || speed_sync_failures_ % 5 == 0) {
+                            qWarning() << "[SPEED] SpeedFactor rejected; will retry"
+                                       << "ratio=" << requested_ratio
+                                       << "res=" << result
+                                       << exception_message;
+                        }
+                        if (speed_sync_timer_ && !speed_sync_timer_->isActive())
+                            speed_sync_timer_->start();
+                        return;
+                    }
+
+                    // The slider may have changed while this request was in
+                    // flight. Apply the newest value before declaring success.
+                    if (requested_ratio != pending_speed_ratio_) {
+                        requestSpeedRatioSync();
+                        return;
+                    }
+
+                    speed_sync_failures_ = 0;
+                    if (speed_sync_timer_) speed_sync_timer_->stop();
+
+                    std_msgs::msg::Int32 msg;
+                    msg.data = requested_ratio;
+                    speed_ratio_pub_->publish(msg);
+                    qDebug() << "[SPEED] SpeedFactor synchronized:"
+                             << requested_ratio << "% (res: 0)";
+                }, Qt::QueuedConnection);
         });
+}
+
+void RobotController::setSpeedRatio(int ratio)
+{
+    ratio = qBound(1, ratio, 100);
+    qDebug() << "SetSpeedRatio requested:" << ratio;
+
+    pending_speed_ratio_ = ratio;
+    if (speed_ratio_ != ratio) {
+        speed_ratio_ = ratio;
+        emit speedRatioChanged();
+    }
+
+    // Persist the operator's intent even when the driver is temporarily down.
+    // The retry loop will apply it when Dobot becomes ready.
+    QSettings settings("RobotControl", "ManualMode");
+    settings.setValue("speedRatio", ratio);
+    settings.sync();
+
+    speed_sync_failures_ = 0;
+    if (speed_sync_timer_ && !speed_sync_timer_->isActive())
+        speed_sync_timer_->start();
+    requestSpeedRatioSync();
 }
 
 // ═══════════════════════════════════════════════════════════════
