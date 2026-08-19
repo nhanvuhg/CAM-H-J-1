@@ -258,11 +258,29 @@ Item {
             height: 80
 
             Rectangle {
+                id: headerFrame
                 anchors.fill: parent
                 color: cPanel
-                border.color: cBorder
-                border.width: 1
+                // Nut Restart Node chay script roi tach tien trinh, man hinh
+                // khong doi gi nen operator tuong nut hong va bam lai nhieu lan
+                // (log co day dong "Restart already in progress"). To sang vien
+                // khung header 3s la du bao "da nhan lenh", khong can bang thong
+                // bao che mat hinh camera.
+                property bool restartFlash: false
+                border.color: restartFlash ? cServoRunEnd : cBorder
+                border.width: restartFlash ? 2 : 1
+                Behavior on border.color { ColorAnimation { duration: 160 } }
                 radius: 8
+
+                function flashRestart() {
+                    headerFrame.restartFlash = true
+                    headerFlashTimer.restart()
+                }
+                Timer {
+                    id: headerFlashTimer
+                    interval: 3000
+                    onTriggered: headerFrame.restartFlash = false
+                }
 
                 // specular highlight — top edge
                 Rectangle {
@@ -303,7 +321,13 @@ Item {
                         Layout.preferredWidth: 50; Layout.preferredHeight: 50
                         hoverScale: 1.012
                         pressScale: 0.99
-                        onClicked: robotController.restartSystemNodes()
+                        onClicked: {
+                            // Chi to vien khi script thuc su chay: ham tra ve
+                            // chuoi rong neu khong tim thay script hoac khong
+                            // start duoc tien trinh.
+                            if (robotController.restartSystemNodes() !== "")
+                                headerFrame.flashRestart()
+                        }
                         background: Rectangle {
                             radius: 6
                             color: "transparent"
