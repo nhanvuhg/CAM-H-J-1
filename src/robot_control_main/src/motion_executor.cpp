@@ -46,11 +46,6 @@
 #include "dobot_msgs_v3/srv/rel_mov_l_user.hpp"
 #include "dobot_msgs_v3/srv/do.hpp"
 #include "dobot_msgs_v3/srv/robot_mode.hpp"
-#include "dobot_msgs_v3/srv/speed_l.hpp"
-#include "dobot_msgs_v3/srv/speed_factor.hpp"
-#include "dobot_msgs_v3/srv/acc_l.hpp"
-#include "dobot_msgs_v3/srv/speed_j.hpp"
-#include "dobot_msgs_v3/srv/acc_j.hpp"
 #include "dobot_msgs_v3/srv/sync.hpp"
 #include "dobot_msgs_v3/srv/clear_error.hpp"
 #include "dobot_msgs_v3/srv/get_error_id.hpp"
@@ -83,11 +78,6 @@ using RelMovL = dobot_msgs_v3::srv::RelMovL;
 using RelMovLUser = dobot_msgs_v3::srv::RelMovLUser;
 using DO = dobot_msgs_v3::srv::DO;
 using RobotMode = dobot_msgs_v3::srv::RobotMode;
-using SpeedL = dobot_msgs_v3::srv::SpeedL;
-using SpeedFactor = dobot_msgs_v3::srv::SpeedFactor;
-using AccL = dobot_msgs_v3::srv::AccL;
-using SpeedJ = dobot_msgs_v3::srv::SpeedJ;
-using AccJ = dobot_msgs_v3::srv::AccJ;
 using SyncSrv = dobot_msgs_v3::srv::Sync;
 using ClearError = dobot_msgs_v3::srv::ClearError;
 using GetErrorID = dobot_msgs_v3::srv::GetErrorID;
@@ -194,8 +184,10 @@ public:
         speed_ratio_sub_ = create_subscription<std_msgs::msg::Int32>(
             "/robot/speed_ratio", rclcpp::QoS(10).reliable().transient_local(),
             [this](const std_msgs::msg::Int32::SharedPtr msg) {
-                current_speed_ratio_ = std::clamp(msg->data, 1, 100);
-                RCLCPP_INFO(get_logger(), "[SPEED] Speed ratio updated: %d%% (GUI already sent SpeedFactor to hardware)", current_speed_ratio_);
+                current_speed_ratio_.store(std::clamp(msg->data, 1, 100));
+                RCLCPP_INFO(get_logger(),
+                    "[SPEED] Global SpeedFactor synchronized by GUI: %d%%",
+                    current_speed_ratio_.load());
             });
 
         soft_stop_sub_ = create_subscription<std_msgs::msg::Bool>(
@@ -310,8 +302,9 @@ private:
 
     int current_fail_slot_{1};
 
-    // Speed ratio from GUI (set via /robot/speed_ratio topic)
-    int current_speed_ratio_{14};  // default matches GUI saved value
+    // Acknowledged global Dobot SpeedFactor from the GUI. Motion commands use
+    // local v/a=100 by default so this factor is applied exactly once.
+    std::atomic<int> current_speed_ratio_{100};
 
     // ========================================================================
     // ROS INTERFACES
@@ -366,11 +359,6 @@ private:
     rclcpp::Client<RelMovLUser>::SharedPtr relmovluser_client_;
     rclcpp::Client<DO>::SharedPtr do_client_;
     rclcpp::Client<RobotMode>::SharedPtr robot_mode_client_;
-    rclcpp::Client<SpeedL>::SharedPtr speedl_client_;
-    rclcpp::Client<SpeedFactor>::SharedPtr speedfactor_client_;
-    rclcpp::Client<AccL>::SharedPtr accl_client_;
-    rclcpp::Client<SpeedJ>::SharedPtr speedj_client_;
-    rclcpp::Client<AccJ>::SharedPtr accj_client_;
     rclcpp::Client<SyncSrv>::SharedPtr sync_client_;
     rclcpp::Client<GetErrorID>::SharedPtr error_client_;
     rclcpp::Client<Pause>::SharedPtr pause_client_;
@@ -397,11 +385,6 @@ private:
         relmovluser_client_ = create_client<RelMovLUser>("/nova5/dobot_bringup/RelMovLUser", qos);
         do_client_ = create_client<DO>("/nova5/dobot_bringup/DO", qos);
         robot_mode_client_ = create_client<RobotMode>("/nova5/dobot_bringup/RobotMode", qos);
-        speedl_client_ = create_client<SpeedL>("/nova5/dobot_bringup/SpeedL", qos);
-        speedfactor_client_ = create_client<SpeedFactor>("/nova5/dobot_bringup/SpeedFactor", qos);
-        accl_client_ = create_client<AccL>("/nova5/dobot_bringup/AccL", qos);
-        speedj_client_ = create_client<SpeedJ>("/nova5/dobot_bringup/SpeedJ", qos);
-        accj_client_ = create_client<AccJ>("/nova5/dobot_bringup/AccJ", qos);
         sync_client_ = create_client<SyncSrv>("/nova5/dobot_bringup/Sync", qos);
         error_client_ = create_client<GetErrorID>("/nova5/dobot_bringup/GetErrorID", qos);
         pause_client_ = create_client<Pause>("/nova5/dobot_bringup/Pause", qos);
@@ -545,6 +528,26 @@ private:
     // ========================================================================
     // MOTION PRIMITIVES
     // ========================================================================
+    std::vector<std::string> motionParameters(
+        int speed_override, const char* motion_kind) const
+    {
+        // SpeedFactor is the operator's global speed setting. Per-command v/a
+        // stay at 100 unless a sequence intentionally requests a slower local
+        // profile (the existing 4-9% overrides). This avoids applying the GUI
+        // percentage twice while preserving every deliberate slow move.
+        const int local_ratio = std::clamp(
+            speed_override > 0 ? speed_override : 100, 1, 100);
+        const int global_ratio = current_speed_ratio_.load();
+        RCLCPP_INFO(get_logger(),
+            "[SPEED][%s] global SpeedFactor=%d%%, local v/a=%d%%, effective~%.1f%%",
+            motion_kind, global_ratio, local_ratio,
+            static_cast<double>(global_ratio * local_ratio) / 100.0);
+        return {
+            "v=" + std::to_string(local_ratio),
+            "a=" + std::to_string(local_ratio)
+        };
+    }
+
     bool moveToIndex(size_t index, int speed_override = -1) {
         if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveToIndex] aborted"); return false; }
         if (!waitWhilePaused("moveToIndex")) return false;
@@ -552,10 +555,6 @@ private:
             RCLCPP_ERROR(get_logger(), "[MOTION] Invalid index: %zu (max: %zu)", 
                          index, joint_sequences_.size() - 1);
             return false;
-        }
-
-        if (!prepareJointMotion(speed_override)) {
-            RCLCPP_WARN(get_logger(), "[MOTION] Failed to prepare Joint Motion (Speed/Acc)");
         }
 
         auto req = std::make_shared<JointMovJ::Request>();
@@ -566,6 +565,7 @@ private:
         req->j4 = joints[3];
         req->j5 = joints[4];
         req->j6 = joints[5];
+        req->param_value = motionParameters(speed_override, "JointMovJ");
 
         RCLCPP_INFO(get_logger(), "[MOTION] JointMovJ -> Index %zu", index);
 
@@ -582,11 +582,6 @@ private:
     bool moveR(double dx, double dy, double dz, int speed_override = -1) {
         if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveR] aborted"); return false; }
         if (!waitWhilePaused("moveR")) return false;
-        if (!prepareLinearMotion(speed_override)) {
-            RCLCPP_ERROR(get_logger(), "[moveR] Prepare failed");
-            return false;
-        }
-
         auto current_pose = getCurrentPose();
         if (current_pose.size() < 6) {
             RCLCPP_ERROR(get_logger(), "[moveR] No current pose");
@@ -606,7 +601,7 @@ private:
         req->rx = current_pose[3];
         req->ry = current_pose[4];
         req->rz = current_pose[5];
-        req->param_value.clear();
+        req->param_value = motionParameters(speed_override, "MovL-relative");
 
         RCLCPP_INFO(get_logger(),
             "[moveR] Target:  X=%.2f Y=%.2f Z=%.2f Rx=%.2f Ry=%.2f Rz=%.2f",
@@ -631,10 +626,6 @@ private:
         if (!waitWhilePaused("moveJ_Absolute")) return false;
         if (pose.size() < 6) return false;
         
-        if (!prepareJointMotion()) {
-            RCLCPP_WARN(get_logger(), "[MOTION] Failed to prepare Joint Motion (Speed/Acc)");
-        }
-
         auto req = std::make_shared<MovJ::Request>();
         req->x = pose[0];
         req->y = pose[1];
@@ -642,7 +633,7 @@ private:
         req->rx = pose[3];
         req->ry = pose[4];
         req->rz = pose[5];
-        req->param_value.clear();
+        req->param_value = motionParameters(-1, "MovJ-absolute");
         
         auto res = callService<MovJ>(movj_client_, req, "MovJ");
         if (!res) return false;
@@ -659,10 +650,6 @@ private:
         if (!waitWhilePaused("moveL_Absolute")) return false;
         if (pose.size() < 6) return false;
         
-        if (!prepareLinearMotion()) {
-            RCLCPP_WARN(get_logger(), "[MOTION] Failed to prepare Linear Motion (Speed/Acc)");
-        }
-
         auto req = std::make_shared<MovL::Request>();
         req->x = pose[0];
         req->y = pose[1];
@@ -670,7 +657,7 @@ private:
         req->rx = pose[3];
         req->ry = pose[4];
         req->rz = pose[5];
-        req->param_value.clear();
+        req->param_value = motionParameters(-1, "MovL-absolute");
         
         auto res = callService<MovL>(movl_client_, req, "MovL");
         if (!res) return false;
@@ -873,38 +860,6 @@ private:
         return true;
     }
 
-
-    bool prepareLinearMotion(int speed_override = -1) {
-        int spd = (speed_override > 0) ? speed_override : current_speed_ratio_;  // Use system or override speed
-        RCLCPP_INFO(get_logger(), "[MOTION] prepareLinearMotion speed=%d%%", spd);
-        // Set SpeedL
-        auto speed_req = std::make_shared<SpeedL::Request>();
-        speed_req->r = spd;
-        if (!callService<SpeedL>(speedl_client_, speed_req, "SpeedL")) return false;
-
-        // Set AccL
-        auto acc_req = std::make_shared<AccL::Request>();
-        acc_req->r = spd;
-        if (!callService<AccL>(accl_client_, acc_req, "AccL")) return false;
-        
-        return true;
-    }
-
-    bool prepareJointMotion(int speed_override = -1) {
-        int spd = (speed_override > 0) ? speed_override : current_speed_ratio_;  // Use system or override speed
-        RCLCPP_INFO(get_logger(), "[MOTION] prepareJointMotion speed=%d%%", spd);
-        // Set SpeedJ
-        auto speed_req = std::make_shared<SpeedJ::Request>();
-        speed_req->r = spd;
-        if (!callService<SpeedJ>(speedj_client_, speed_req, "SpeedJ")) return false;
-
-        // Set AccJ
-        auto acc_req = std::make_shared<AccJ::Request>();
-        acc_req->r = spd;
-        if (!callService<AccJ>(accj_client_, acc_req, "AccJ")) return false;
-        
-        return true;
-    }
 
     // RAII Guard for motion_busy
     struct MotionBusyGuard {
@@ -1399,7 +1354,6 @@ private:
     bool moveBase(double dx, double dy, double dz) {
         if (shouldAbort()) { RCLCPP_WARN(get_logger(), "[moveBase] aborted"); return false; }
         if (!waitWhilePaused("moveBase")) return false;
-        if (!prepareLinearMotion()) return false;
         auto current_pose = getCurrentPose();
         if (current_pose.size() < 6) return false;
         
@@ -1410,7 +1364,7 @@ private:
         req->rx = current_pose[3];
         req->ry = current_pose[4];
         req->rz = current_pose[5];
-        req->param_value.clear();
+        req->param_value = motionParameters(-1, "MovL-base");
 
         auto res = callService<MovL>(movl_client_, req, "MovL");
         if (!res || res->res != 0) return false;
