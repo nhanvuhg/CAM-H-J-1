@@ -284,7 +284,7 @@ ApplicationWindow {
         anchors.centerIn: parent
         modal: true
         closePolicy: Popup.NoAutoClose
-        width: 900; height: 360
+        width: 900; height: 384
         background: Rectangle {
             radius: 22
             // Cung ngon ngu voi popup dang nhap: KHONG vanh. Do noi den tu lop
@@ -355,7 +355,9 @@ ApplicationWindow {
                             GradientStop { position: 1.0; color: "#102739" }
                         }
                     }
-                    contentItem: Column {
+                    contentItem: Item {
+                      Column {
+                        anchors.centerIn: parent
                         spacing: 6
                         Image {
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -365,10 +367,11 @@ ApplicationWindow {
                         }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: parent.parent.text; color: "#ffffff"
-                            font: parent.parent.font
+                            text: parent.parent.parent.text; color: "#ffffff"
+                            font: parent.parent.parent.font
                             horizontalAlignment: Text.AlignHCenter
                         }
+                      }
                     }
                     onClicked: {
                         robotController.gotoState("LOAD_CHAMBER_FROM_BUFFER")
@@ -389,7 +392,9 @@ ApplicationWindow {
                             GradientStop { position: 1.0; color: "#E68457" }
                         }
                     }
-                    contentItem: Column {
+                    contentItem: Item {
+                      Column {
+                        anchors.centerIn: parent
                         spacing: 6
                         Image {
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -399,10 +404,11 @@ ApplicationWindow {
                         }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: parent.parent.text; color: "#ffffff"
-                            font: parent.parent.font
+                            text: parent.parent.parent.text; color: "#ffffff"
+                            font: parent.parent.parent.font
                             horizontalAlignment: Text.AlignHCenter
                         }
+                      }
                     }
                     onClicked: confirmEmptyBufferPopup.open()
                 }
@@ -423,7 +429,9 @@ ApplicationWindow {
                             GradientStop { position: 1.0; color: "#163a52" }
                         }
                     }
-                    contentItem: Column {
+                    contentItem: Item {
+                      Column {
+                        anchors.centerIn: parent
                         spacing: 6
                         Image {
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -433,10 +441,11 @@ ApplicationWindow {
                         }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: parent.parent.text; color: "#ffffff"
-                            font: parent.parent.font
+                            text: parent.parent.parent.text; color: "#ffffff"
+                            font: parent.parent.parent.font
                             horizontalAlignment: Text.AlignHCenter
                         }
+                      }
                     }
                     onClicked: {
                         robotController.gotoState("PROCESSING_SCALE")
@@ -577,7 +586,7 @@ ApplicationWindow {
         anchors.centerIn: parent
         modal: true
         closePolicy: Popup.NoAutoClose
-        width: 840; height: 350
+        width: 840; height: 372
         background: Rectangle {
             radius: 22
             gradient: Gradient {
@@ -635,7 +644,7 @@ ApplicationWindow {
 
                 MotionButton {
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 1; Layout.preferredHeight: 72
+                    Layout.preferredWidth: 1; Layout.preferredHeight: 88
                     text: qsTr("PLACE OUTPUT")
                     font.pixelSize: 14; font.bold: true
                     background: Rectangle {
@@ -650,7 +659,9 @@ ApplicationWindow {
                     // Icon tren, nhan duoi — dung bo cuc va dung icon voi hai nut
                     // cung ten trong LENH TRANG THAI, de operator nhan ra ngay do
                     // la cung mot hanh dong.
-                    contentItem: Column {
+                    contentItem: Item {
+                      Column {
+                        anchors.centerIn: parent
                         spacing: 6
                         Image {
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -660,10 +671,11 @@ ApplicationWindow {
                         }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: parent.parent.text; color: "#ffffff"
-                            font: parent.parent.font
+                            text: parent.parent.parent.text; color: "#ffffff"
+                            font: parent.parent.parent.font
                             horizontalAlignment: Text.AlignHCenter
                         }
+                      }
                     }
                     onClicked: {
                         robotController.gotoState("PLACE_TO_OUTPUT")
@@ -678,7 +690,7 @@ ApplicationWindow {
                 }
                 MotionButton {
                     Layout.fillWidth: true
-                    Layout.preferredWidth: 1; Layout.preferredHeight: 72
+                    Layout.preferredWidth: 1; Layout.preferredHeight: 88
                     text: qsTr("PLACE FAILED")
                     font.pixelSize: 14; font.bold: true
                     background: Rectangle {
@@ -693,7 +705,9 @@ ApplicationWindow {
                     // Icon tren, nhan duoi — dung bo cuc va dung icon voi hai nut
                     // cung ten trong LENH TRANG THAI, de operator nhan ra ngay do
                     // la cung mot hanh dong.
-                    contentItem: Column {
+                    contentItem: Item {
+                      Column {
+                        anchors.centerIn: parent
                         spacing: 6
                         Image {
                             anchors.horizontalCenter: parent.horizontalCenter
@@ -703,10 +717,11 @@ ApplicationWindow {
                         }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: parent.parent.text; color: "#ffffff"
-                            font: parent.parent.font
+                            text: parent.parent.parent.text; color: "#ffffff"
+                            font: parent.parent.parent.font
                             horizontalAlignment: Text.AlignHCenter
                         }
+                      }
                     }
                     onClicked: {
                         robotController.gotoState("PLACE_TO_FAIL")
