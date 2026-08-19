@@ -104,7 +104,14 @@ def generate_launch_description():
             'detections_topic': '/cam1HP/yolo/bounding_boxes',
             'health_topic': '/camera/cam1/ai_health',
             'class_names': ['tray', 'cartridge', 'cartridgefall'],
-            'confidence_threshold': 0.30,
+            # Khay thanh pham: loai thang detection duoi 0.60 cho cartridge va
+            # cartridgefall. vision_decision_node von da bo qua chung o nguong
+            # DETECTION_SCORE_THRESH = 0.60, nhung nguong 0.30 o day van cho
+            # chung duoc publish va ve len overlay cam1 — operator thay bbox ma
+            # he thong khong tinh. Nang len 0.60 cho khop cam0 va khop dung logic
+            # quyet dinh. Lop tray khong anh huong: no can >= 0.86
+            # (OUTPUT_TRAY_SCORE_THRESH) nen van qua duoc cong 0.60 nay.
+            'confidence_threshold': 0.60,
             'nms_threshold': 0.45,
             'max_inference_fps': ParameterValue(max_inference_fps, value_type=float),
         }],
