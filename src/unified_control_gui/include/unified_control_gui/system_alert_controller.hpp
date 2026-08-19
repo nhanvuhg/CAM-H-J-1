@@ -105,6 +105,13 @@ private:
     QString localizedAlertText(const QString &text) const;
     static QString stableCameraMessage(const QString &source, const QString &value);
     void requestFeederRecheck(const QString &id);
+    void expirePendingRechecks();
+
+    // id -> thoi diem operator bam xac nhan. Trong cua so nay, canh bao tai
+    // phat se bi thu hoi trang thai da-xac-nhan; het cua so ma khong tai phat
+    // nghia la dieu kien da duoc xu ly -> xoa canh bao.
+    QHash<QString, qint64> pending_recheck_;
+    static constexpr qint64 kRecheckWindowMs = 2500;
 
     static QString normalized(const QString &value);
     static bool isHealthy(const QString &value);

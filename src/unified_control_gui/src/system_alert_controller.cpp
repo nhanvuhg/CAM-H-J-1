@@ -289,8 +289,10 @@ bool SystemAlertController::acknowledgeWarning(const QString &id)
     // thoa thi phat tin xoa canh bao, chua thoa thi phat lai canh bao voi gio
     // quet moi — upsertAlert thay noi dung doi nen dat lai acknowledged = false,
     // canh bao giu nguyen va van chan START.
-    if (it->area == "FEEDER")
+    if (it->area == "FEEDER") {
+        pending_recheck_.insert(id, QDateTime::currentMSecsSinceEpoch());
         requestFeederRecheck(id);
+    }
     it->acknowledged = true;
     emit alertsChanged();
     return true;
@@ -301,8 +303,10 @@ int SystemAlertController::acknowledgeAllWarnings()
     int changed = 0;
     for (Alert &alert : alerts_) {
         if (alert.level == "WARNING" && !alert.acknowledged) {
-            if (alert.area == "FEEDER")
+            if (alert.area == "FEEDER") {
+                pending_recheck_.insert(alert.id, QDateTime::currentMSecsSinceEpoch());
                 requestFeederRecheck(alert.id);
+            }
             alert.acknowledged = true;
             ++changed;
         }
@@ -622,6 +626,17 @@ void SystemAlertController::upsertAlert(
         return;
     const QString level = effectiveLevel(baseLevel, connectionIssue);
     auto it = alerts_.find(id);
+    const auto pending = pending_recheck_.constFind(id);
+    if (pending != pending_recheck_.constEnd()) {
+        // Quet lai van thay vi pham -> xac nhan cua operator khong con gia tri.
+        // Kiem tra o day chu khong sau dedupe, vi guide thuong phat lai dung
+        // nguyen van cu va dedupe se return som truoc khi kip thu hoi.
+        pending_recheck_.remove(id);
+        if (it != alerts_.end() && it->acknowledged) {
+            it->acknowledged = false;
+            emit alertsChanged();
+        }
+    }
     if (it != alerts_.end() && it->level == level && it->message == message)
         return;
 
@@ -721,8 +736,29 @@ void SystemAlertController::markHeartbeat(const QString &source)
     clearAlert("watchdog_" + source);
 }
 
+void SystemAlertController::expirePendingRechecks()
+{
+    if (pending_recheck_.isEmpty())
+        return;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    bool changed = false;
+    for (auto it = pending_recheck_.begin(); it != pending_recheck_.end();) {
+        if (now - it.value() < kRecheckWindowMs) { ++it; continue; }
+        const QString id = it.key();
+        it = pending_recheck_.erase(it);
+        // Node da xoa bo nho guide va danh gia lai; khong co gi phat lai trong
+        // cua so nghia la dieu kien khong con vi pham.
+        if (alerts_.remove(id) > 0)
+            changed = true;
+    }
+    if (changed)
+        emit alertsChanged();
+}
+
 void SystemAlertController::checkHeartbeats()
 {
+    expirePendingRechecks();
+
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
 
     struct Watch {
