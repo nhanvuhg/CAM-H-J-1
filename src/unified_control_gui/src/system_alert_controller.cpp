@@ -562,9 +562,18 @@ void SystemAlertController::observeFeederNotification(const QString &value)
         // any coded/current feeder alert here.
         if (code == "legacy_safety_stop_clear")
             clearAlert("feeder_gui_alert");
+        // Ba dieu kien duoi day duoc viet cho tin BAO NOI LAI KET NOI. Tin
+        // bao XOA FAULT cua drive khong khop cai nao: node gui title "S5 (ten)"
+        // va detail "Fault da duoc xoa - truc san sang nhan lenh" o muc info.
+        // Hau qua: operator clear fault tren FAS, truc chay lai binh thuong,
+        // nhung canh bao feeder_servo_s5 nam mai trong danh sach vi khong ai
+        // goi clearAlert cho no. Muc info cua mot servo chi phat ra khi drive
+        // da sach, nen bat them tu FAULT o day la an toan — nhanh error/warn
+        // di duong khac ben duoi.
         if (!servoId.isEmpty() && (normalized(title).contains("KET NOI")
                 || normalized(title).contains("CONNECTED")
-                || normalized(detail).endsWith(" OK")))
+                || normalized(detail).endsWith(" OK")
+                || normalizedNotification.contains("FAULT")))
             clearAlert(id);
         if (code.endsWith("_clear"))
             clearPrefix("feeder_notify_" + code.left(code.size() - 6));
