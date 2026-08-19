@@ -1588,6 +1588,21 @@ CARTRIDGE</translation>
 <context>
     <name>Main</name>
     <message>
+        <location filename="../qml/Main.qml" line="+1"/>
+        <source>SCALE ISSUE DETECTED</source>
+        <translation>PHÁT HIỆN SỰ CỐ CÂN</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="+1"/>
+        <source>PLACE OUTPUT</source>
+        <translation>ĐẶT ĐẦU RA</translation>
+    </message>
+    <message>
+        <location filename="../qml/Main.qml" line="+1"/>
+        <source>PLACE FAILED</source>
+        <translation>ĐẶT KHAY LỖI</translation>
+    </message>
+    <message>
         <location filename="../qml/Main.qml" line="+12" />
         <source>ROS2 - Unified Control System</source>
         <translation>ROS2 - Hệ thống điều khiển hợp nhất</translation>

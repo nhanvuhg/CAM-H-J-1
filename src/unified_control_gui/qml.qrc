@@ -30,6 +30,7 @@
     <file alias="icons/send.svg">qml/icons/send.svg</file>
     <file alias="icons/hard_drive_download.svg">qml/icons/hard_drive_download.svg</file>
     <file alias="icons/database_search.svg">qml/icons/database_search.svg</file>
+    <file alias="icons/triangle_alert.svg">qml/icons/triangle_alert.svg</file>
     <file alias="icons/package.svg">qml/icons/package.svg</file>
     <file alias="icons/package_x.svg">qml/icons/package_x.svg</file>
     <file alias="icons/arrows_up_from_line.svg">qml/icons/arrows_up_from_line.svg</file>

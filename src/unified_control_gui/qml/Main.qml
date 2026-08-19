@@ -1,5 +1,6 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
+import QtGraphicalEffects 1.15
 import QtQuick.Layouts 1.15
 import QtQuick.Controls.Material 2.15
 import QtQuick.Window 2.15
@@ -414,12 +415,16 @@ ApplicationWindow {
                 Layout.preferredHeight: 52
                 text: qsTr("⏹  STOP — Stop the system and hold the current position")
                 font.pixelSize: 15; font.bold: true
+                // Giong het nut DUNG trong DIEU KHIEN HE THONG: radius 10,
+                // gradient DOC ba chang #E05454 -> #E05454 -> #7a2424, vien
+                // cBtnDangerEnd 1px. Cung mot lenh thi phai cung mot hinh dang.
                 background: Rectangle {
-                    radius: 12
+                    radius: 10
                     border.color: "#7a2424"; border.width: 1
                     gradient: Gradient {
-                        orientation: Gradient.Horizontal
+                        orientation: Gradient.Vertical
                         GradientStop { position: 0.0; color: "#E05454" }
+                        GradientStop { position: 0.5; color: "#E05454" }
                         GradientStop { position: 1.0; color: "#7a2424" }
                     }
                 }
@@ -562,12 +567,22 @@ ApplicationWindow {
             anchors.margins: 22
             spacing: 14
 
-            Text {
+            RowLayout {
                 Layout.alignment: Qt.AlignHCenter
-                text: qsTr("⚠  SCALE ISSUE DETECTED")
-                color: "#f0735c"
-                font.pixelSize: 26
-                font.bold: true
+                spacing: 10
+                Image {
+                    source: "qrc:/qml/icons/triangle_alert.svg"
+                    sourceSize.width: 28; sourceSize.height: 28
+                    // SVG da to san #f0735c: ColorOverlay tren Image co source
+                    // qrc doi khi khong ap duoc va icon bien mat han.
+                    fillMode: Image.PreserveAspectFit
+                }
+                Text {
+                    text: qsTr("SCALE ISSUE DETECTED")
+                    color: "#f0735c"
+                    font.pixelSize: 26
+                    font.bold: true
+                }
             }
             Text {
                 Layout.fillWidth: true
@@ -586,22 +601,34 @@ ApplicationWindow {
                 MotionButton {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1; Layout.preferredHeight: 72
-                    text: qsTr("✓  PLACE TO\nOUTPUT\n(force PASS)")
-                    font.pixelSize: 13; font.bold: true
+                    text: qsTr("PLACE OUTPUT")
+                    font.pixelSize: 14; font.bold: true
                     background: Rectangle {
                         radius: 12
-                        border.color: "#163a52"; border.width: 1
+                        border.color: "#0c1726"; border.width: 1
                         gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: "#1f9e86" }
-                            GradientStop { position: 1.0; color: "#163a52" }
+                            orientation: Gradient.Vertical
+                            GradientStop { position: 0.0; color: "#1C4D8D" }
+                            GradientStop { position: 1.0; color: "#0c1726" }
                         }
                     }
-                    contentItem: Text {
-                        text: parent.text; color: "#ffffff"
-                        font: parent.font
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    // Icon tren, nhan duoi — dung bo cuc va dung icon voi hai nut
+                    // cung ten trong LENH TRANG THAI, de operator nhan ra ngay do
+                    // la cung mot hanh dong.
+                    contentItem: Column {
+                        spacing: 6
+                        Image {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            source: "qrc:/qml/icons/package.svg"
+                            sourceSize.width: 26; sourceSize.height: 26
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: parent.parent.text; color: "#ffffff"
+                            font: parent.parent.font
+                            horizontalAlignment: Text.AlignHCenter
+                        }
                     }
                     onClicked: {
                         robotController.gotoState("PLACE_TO_OUTPUT")
@@ -617,22 +644,34 @@ ApplicationWindow {
                 MotionButton {
                     Layout.fillWidth: true
                     Layout.preferredWidth: 1; Layout.preferredHeight: 72
-                    text: qsTr("✗  PLACE TO\nFAIL\n(force FAIL)")
-                    font.pixelSize: 13; font.bold: true
+                    text: qsTr("PLACE FAILED")
+                    font.pixelSize: 14; font.bold: true
                     background: Rectangle {
                         radius: 12
                         border.color: "#8a4210"; border.width: 1
                         gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: "#8a4210" }
-                            GradientStop { position: 1.0; color: "#E68457" }
+                            orientation: Gradient.Vertical
+                            GradientStop { position: 0.0; color: "#E68457" }
+                            GradientStop { position: 1.0; color: "#8a4210" }
                         }
                     }
-                    contentItem: Text {
-                        text: parent.text; color: "#ffffff"
-                        font: parent.font
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    // Icon tren, nhan duoi — dung bo cuc va dung icon voi hai nut
+                    // cung ten trong LENH TRANG THAI, de operator nhan ra ngay do
+                    // la cung mot hanh dong.
+                    contentItem: Column {
+                        spacing: 6
+                        Image {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            source: "qrc:/qml/icons/package_x.svg"
+                            sourceSize.width: 26; sourceSize.height: 26
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: parent.parent.text; color: "#ffffff"
+                            font: parent.parent.font
+                            horizontalAlignment: Text.AlignHCenter
+                        }
                     }
                     onClicked: {
                         robotController.gotoState("PLACE_TO_FAIL")
@@ -653,12 +692,16 @@ ApplicationWindow {
                 Layout.preferredHeight: 52
                 text: qsTr("⏹  STOP — Stop the system and hold the current position")
                 font.pixelSize: 15; font.bold: true
+                // Giong het nut DUNG trong DIEU KHIEN HE THONG: radius 10,
+                // gradient DOC ba chang #E05454 -> #E05454 -> #7a2424, vien
+                // cBtnDangerEnd 1px. Cung mot lenh thi phai cung mot hinh dang.
                 background: Rectangle {
-                    radius: 12
+                    radius: 10
                     border.color: "#7a2424"; border.width: 1
                     gradient: Gradient {
-                        orientation: Gradient.Horizontal
+                        orientation: Gradient.Vertical
                         GradientStop { position: 0.0; color: "#E05454" }
+                        GradientStop { position: 0.5; color: "#E05454" }
                         GradientStop { position: 1.0; color: "#7a2424" }
                     }
                 }
