@@ -5805,18 +5805,21 @@ class CartridgeSystem(Node):
                 self._enter_in(SystemState.S2A_WAIT_CYL_EXT)
 
     def _notify_s2_output_full(self, recheck: bool = False):
-        """Hiện popup chuyên biệt; GUI chỉ gửi yêu cầu recheck S4."""
-        prefix = "Kiểm tra lại: S4 vẫn ON. " if recheck else ""
+        """Canh bao khay Output day, hien trong bang CANH BAO HE THONG.
+
+        Khong con popup rieng. Noi dung giu ngan gon theo dung yeu cau van hanh:
+        noi cai gi day va can lam gi, khong liet ke toa do truc.
+
+        `recheck` chi de phan biet trong log; noi dung gui len GUI giu nguyen mot
+        cau. Text trung nhau khong lam hong luong xac nhan: phia GUI thu hoi
+        trang thai da-xac-nhan TRUOC khi dedupe theo (level, message), nen canh
+        bao phat lai van keo alert ve lai muc chua xac nhan.
+        """
         self._notify(
             'warn',
             'OUTPUT TRAY FULL',
-            prefix
-            + f'S4 đang ON tại vị trí check tray — khay Output đã đầy. '
-              f'Máy TẠM DỪNG tại STATE 2, vẫn giữ nguyên chu trình: InX giữ tại '
-              f'{self.config.inx_safe:g} mm, InY giữ tại '
-              f'{self.config.iny_target2:g} mm, không đi tới vị trí lấy khay '
-              f'{self.config.inx_target2:g} mm. Lấy khay Output ra rồi nhấn '
-              'XÁC NHẬN trên bảng cảnh báo để quét lại S4.',
+            'Khay đầu ra của hệ thống cấp cartridge rỗng bị đầy (10 khay). '
+            'Vui lòng lấy khay đầu ra và nhấn xác nhận để hệ thống tiếp tục.',
             code='s2_output_full',
         )
 
