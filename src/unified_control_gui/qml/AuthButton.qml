@@ -33,6 +33,14 @@ MotionButton {
     property int iconSize: 34
 
     readonly property bool signedIn: authController.authenticated
+    readonly property string operatorName: (authController.username || "").toString()
+    readonly property bool showName: signedIn && operatorName.length > 0
+
+    // Ten nguoi van hanh truoc day chi nam trong HoverHint — tren man cam ung
+    // khong co "re chuot" nen thuc te khong ai doc duoc. Nut tu no rong ra vua
+    // du chua ten; luc chua dang nhap giu nguyen o vuong 50px nhu cu.
+    implicitWidth: showName ? 50 + nameLabel.implicitWidth + 20 : 50
+    implicitHeight: 50
 
     hoverScale: 1.012
     pressScale: 0.99

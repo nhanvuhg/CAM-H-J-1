@@ -301,7 +301,8 @@ Item {
                     spacing: 10
 
                     AuthButton {
-                        Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                        // Be rong bam theo implicitWidth: nut tu no ra khi hien ten
+                        Layout.preferredWidth: implicitWidth; Layout.preferredHeight: 50
                         borderColor: cServoRunEnd
                         gradientStart: cServoRunStart
                         gradientEnd: cServoRunEnd

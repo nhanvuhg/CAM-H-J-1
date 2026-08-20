@@ -627,7 +627,8 @@ import QtGraphicalEffects 1.15
                     }
                 }
                 AuthButton {
-                    Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                    // Be rong bam theo implicitWidth: nut tu no ra khi hien ten
+                    Layout.preferredWidth: implicitWidth; Layout.preferredHeight: 50
                     borderColor: root.cServoRunEnd
                     gradientStart: root.cToolBtnStart
                     gradientEnd: root.cServoRunEnd
