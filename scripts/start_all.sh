@@ -26,8 +26,11 @@ export FILL_HP_USERS_FILE="${FILL_HP_USERS_FILE:-$WS/src/unified_control_gui/fil
 # Phai khop default cam0_model trong dual_camera_system.launch.py.
 CAM0_AI_MODEL="${CAM0_AI_MODEL:-$HOME/models/data_input_hp_final_2_fp16.engine}"
 CAM1_AI_MODEL="${CAM1_AI_MODEL:-$HOME/models/data_output_hp_final_fp16.engine}"
-CAMERA_CAPTURE_FPS="${CAMERA_CAPTURE_FPS:-25}"
-AI_MAX_FPS="${AI_MAX_FPS:-20}"
+# Keep the default camera/AI rate conservative on Jetson so the scheduler
+# does not spend the whole 25 W budget on image processing.  Operators can
+# still override both values from the environment for commissioning.
+CAMERA_CAPTURE_FPS="${CAMERA_CAPTURE_FPS:-15}"
+AI_MAX_FPS="${AI_MAX_FPS:-8}"
 CAMERA_DRIVER_SETTLE_SEC="${CAMERA_DRIVER_SETTLE_SEC:-10}"
 CAMERA_WEDGED_FAILURES="${CAMERA_WEDGED_FAILURES:-5}"
 CAMERA_DRIVER_PATCH_VERSION="${CAMERA_DRIVER_PATCH_VERSION:-2.0.6-camhj1-cleanup1}"
