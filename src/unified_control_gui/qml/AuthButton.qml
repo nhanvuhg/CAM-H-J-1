@@ -33,6 +33,25 @@ MotionButton {
     property int iconSize: 34
 
     readonly property bool signedIn: authController.authenticated
+    readonly property string operatorName:
+        (authController.username || "").toString().toUpperCase()
+    readonly property bool showName: signedIn && operatorName.length > 0
+
+    // Do be rong ten o CAP GOC. Khong tham chieu id nam trong contentItem: id
+    // ben trong do khong nhin thay tu day, bieu thuc se hong va tra ve 0.
+    TextMetrics {
+        id: nameMetrics
+        font.pixelSize: 15
+        font.bold: true
+        text: control.operatorName
+    }
+    readonly property int desiredWidth:
+        showName ? 14 + iconSize + 8 + Math.ceil(nameMetrics.width) + 14 : 50
+
+    // Control co padding mac dinh, lam vung noi dung hep hon nut nen phan chu bi
+    // day ra ngoai va nam duoi nut ben canh. Nen background phu tron ca icon lan
+    // ten thi noi dung phai duoc dung tron be rong nut.
+    padding: 0
 
     // Ten nguoi van hanh truoc day chi nam trong HoverHint — tren man cam ung
     // khong co "re chuot" nen thuc te khong ai doc duoc. Nut tu no rong ra vua

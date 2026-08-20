@@ -301,28 +301,12 @@ Item {
                     spacing: 10
 
                     AuthButton {
-                        Layout.preferredWidth: 50; Layout.preferredHeight: 50
+                        Layout.preferredWidth: desiredWidth; Layout.preferredHeight: 50
                         borderColor: cServoRunEnd
                         gradientStart: cServoRunStart
                         gradientEnd: cServoRunEnd
                         hintTextColor: cBtnBaseText
                         onAccountRequested: mainWindow.openAccountDialog()
-                    }
-                    // Ten nguoi van hanh dat NGOAI nut: ba lan thu nhet chu vao
-                    // trong contentItem cua Control deu that bai (id trong
-                    // contentItem khong nhin thay tu pham vi goc; Row canh giua
-                    // tran khoi vung noi dung nen chu bi cat). Mot Text rieng
-                    // trong RowLayout thi khong co cai bay nao ca.
-                    Text {
-                        visible: authController.authenticated
-                                 && (authController.username || "").length > 0
-                        text: (authController.username || "").toString().toUpperCase()
-                        color: "#eaf6ff"
-                        font.pixelSize: 15
-                        font.bold: true
-                        Layout.alignment: Qt.AlignVCenter
-                        Layout.leftMargin: 2
-                        Layout.rightMargin: 4
                     }
 
                     ScreenshotButton {
