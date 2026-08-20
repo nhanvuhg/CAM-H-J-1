@@ -243,6 +243,40 @@ Item {
 
                 }
 
+                // Bang canh bao la modal nen moi cham ra ngoai deu bi nuot —
+                // nut chup man hinh o header khong bam duoc, va operator khong
+                // luu duoc anh canh bao lam tai lieu. Dat nut chup NGAY TRONG
+                // bang, canh nut dong.
+                MotionButton {
+                    id: shotAlertButton
+                    anchors.right: closeAlertButton.left
+                    anchors.rightMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 44
+                    height: 44
+                    z: 2
+                    onClicked: {
+                        if (robotController.captureScreenshot() !== "")
+                            shotFlashTimer.restart()
+                    }
+                    background: Rectangle {
+                        radius: 8
+                        color: shotAlertButton.pressed ? "#123b52" : "#163a52"
+                        // Sang len 2.5s khi anh da ghi xong: bang modal khong co
+                        // cho hien thong bao, va im lang la dau hieu chup hong.
+                        border.color: shotFlashTimer.running ? "#7fcdf5" : root.errorColor
+                        border.width: shotFlashTimer.running ? 2 : 1
+                        Behavior on border.color { ColorAnimation { duration: 140 } }
+                    }
+                    contentItem: Image {
+                        source: "qrc:/qml/icons/camera.svg"
+                        sourceSize.width: 24; sourceSize.height: 24
+                        fillMode: Image.PreserveAspectFit
+                        anchors.centerIn: parent
+                    }
+                    Timer { id: shotFlashTimer; interval: 2500 }
+                }
+
                 MotionButton {
                     id: closeAlertButton
                     anchors.right: parent.right
