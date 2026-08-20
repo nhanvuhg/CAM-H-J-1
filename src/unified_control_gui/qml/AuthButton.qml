@@ -82,17 +82,31 @@ MotionButton {
     }
 
     contentItem: Item {
-        Image {
+        Row {
             anchors.centerIn: parent
-            // Duong dan TUONG DOI co chu y: GUI nap QML thang tu cay nguon
-            // (main.cpp:82), nen icon moi chay duoc ngay sau khi restart GUI.
-            // Neu ghi "qrc:/qml/icons/user.svg" thi phai build lai moi co.
-            // Van khai bao trong qml.qrc de nhanh du phong qrc cung chay.
-            source: "icons/user.svg"
-            width: control.iconSize
-            height: control.iconSize
-            fillMode: Image.PreserveAspectFit
-            smooth: true
+            spacing: control.showName ? 8 : 0
+
+            Image {
+                anchors.verticalCenter: parent.verticalCenter
+                // Duong dan TUONG DOI co chu y: GUI nap QML thang tu cay nguon
+                // (main.cpp:82), nen icon moi chay duoc ngay sau khi restart GUI.
+                // Neu ghi "qrc:/qml/icons/user.svg" thi phai build lai moi co.
+                // Van khai bao trong qml.qrc de nhanh du phong qrc cung chay.
+                source: "icons/user.svg"
+                width: control.iconSize
+                height: control.iconSize
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: control.showName
+                text: control.operatorName
+                color: "#eaf6ff"
+                font.pixelSize: 15
+                font.bold: true
+            }
         }
         HoverHint {
             visible: control.hovered
