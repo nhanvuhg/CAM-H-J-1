@@ -39,8 +39,11 @@ MotionButton {
     // Ten nguoi van hanh truoc day chi nam trong HoverHint — tren man cam ung
     // khong co "re chuot" nen thuc te khong ai doc duoc. Nut tu no rong ra vua
     // du chua ten; luc chua dang nhap giu nguyen o vuong 50px nhu cu.
-    implicitWidth: showName ? 50 + nameLabel.implicitWidth + 20 : 50
-    implicitHeight: 50
+    //
+    // KHONG dat implicitWidth roi cho layout bam theo no: implicitWidth cua mot
+    // Control lai chiu anh huong nguoc tu layout, tao vong lap rang buoc va be
+    // rong ra sai — nut de len nut ben canh. Dung mot thuoc tinh rieng.
+    readonly property int desiredWidth: showName ? 50 + nameLabel.implicitWidth + 20 : 50
 
     hoverScale: 1.012
     pressScale: 0.99
