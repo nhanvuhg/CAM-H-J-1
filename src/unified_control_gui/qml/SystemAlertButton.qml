@@ -92,8 +92,12 @@ Item {
                 source: "icons/message_circle_warning.svg"
                 width: 34
                 height: 34
-                sourceSize.width: 72
-                sourceSize.height: 72
+                // Bo dung SVG cua Qt (SVG Tiny) rasterize net cong khong deu o
+                // kich thuoc nho: vien bong bong bi meo, day mong khong dong nhat.
+                // Dung o 4x kich thuoc hien thi roi thu nho — sai so cua bo dung
+                // bi trung binh hoa nen vien tro lai lien mach.
+                sourceSize.width: 136
+                sourceSize.height: 136
                 fillMode: Image.PreserveAspectFit
                 smooth: true
             }
@@ -188,9 +192,10 @@ Item {
                         source: "icons/message_circle_warning.svg"
                         Layout.preferredWidth: 38
                         Layout.preferredHeight: 38
-                        sourceSize.width: 76
-                        sourceSize.height: 76
+                        sourceSize.width: 152
+                        sourceSize.height: 152
                         fillMode: Image.PreserveAspectFit
+                        smooth: true
                     }
 
                     ColumnLayout {
