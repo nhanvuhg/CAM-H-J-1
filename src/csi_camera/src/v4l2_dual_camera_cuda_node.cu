@@ -37,6 +37,7 @@ public:
           cam0_clarity_(declare_parameter<double>("cam0_clarity", 0.45)),
           cam1_clarity_(declare_parameter<double>("cam1_clarity", 0.60)),
           capture_fps_(declare_parameter<int>("capture_fps", 30)),
+          publish_fps_(declare_parameter<int>("publish_fps", 10)),
           exposure_(declare_parameter<int>("exposure", 43000)),
           health_grace_sec_(declare_parameter<double>("health_grace_sec", 20.0)),
           min_healthy_fps_(declare_parameter<double>("min_healthy_fps", 5.0)),
@@ -56,6 +57,10 @@ public:
 
         if (capture_fps_ < 1 || capture_fps_ > 60) {
             throw std::runtime_error("capture_fps must be in range 1..60");
+        }
+        if (publish_fps_ < 1 || publish_fps_ > capture_fps_) {
+            throw std::runtime_error(
+                "publish_fps must be in range 1..capture_fps");
         }
         if (exposure_ < 13 || exposure_ > 683710) {
             throw std::runtime_error("exposure is outside IMX477 range");
@@ -78,9 +83,10 @@ public:
         RCLCPP_INFO(
             get_logger(),
             "CUDA V4L2 starting: CAM0=/dev/video%d CAM1=/dev/video%d, "
-            "raw=1920x1080 RG10, publish=640x360 BGR8, request=%d fps, "
+            "raw=1920x1080 RG10, publish=640x360 BGR8, "
+            "capture=%d fps process/publish=%d fps, "
             "exposure=%d gain=66, clarity={%.2f,%.2f}",
-            cam0_device_, cam1_device_, capture_fps_, exposure_,
+            cam0_device_, cam1_device_, capture_fps_, publish_fps_, exposure_,
             cam0_clarity_, cam1_clarity_);
     }
 
@@ -136,7 +142,19 @@ private:
                     auto next_capture_due =
                         std::chrono::steady_clock::now();
                     auto window_start = std::chrono::steady_clock::now();
+                    // Keep draining both V4L2 channels at capture_fps_, but
+                    // run the expensive CUDA debayer/tone and DDS publish path
+                    // only at publish_fps_. This follows the proven Pi 5
+                    // design without adding a stale-frame queue.
+                    int publish_phase = capture_fps_ - publish_fps_;
                     while (rclcpp::ok() && !stopping_.load()) {
+                        // Phase accumulation supports non-integer ratios such
+                        // as 15 Hz capture -> 8 Hz publish.
+                        publish_phase += publish_fps_;
+                        const bool process_cycle =
+                            publish_phase >= capture_fps_;
+                        if (process_cycle) publish_phase -= capture_fps_;
+
                         V4L2Camera* cameras[2] = {&cam0, &cam1};
                         const float clarity[2] = {
                             static_cast<float>(cam0_clarity_),
@@ -159,6 +177,10 @@ private:
                             }
                             last_sequences[camera_id] = frame.sequence;
                             have_sequence[camera_id] = true;
+                            if (!process_cycle) {
+                                cameras[camera_id]->release();
+                                continue;
+                            }
                             cv::Mat image;
                             try {
                                 image = processor.process(
@@ -325,7 +347,8 @@ private:
                  << kOutputHeight << " fps=" << std::fixed
                  << std::setprecision(1) << fps[id] << " age="
                  << std::setprecision(2) << age << "s gpu_ms=" << gpu_ms
-                 << " target_fps=" << capture_fps_
+                 << " capture_fps=" << capture_fps_
+                 << " publish_fps=" << publish_fps_
                  << " sequence_gaps=" << sequence_gaps_[id].load()
                  << " reconnects=" << reconnects_.load()
                  << " published=" << published_[id].load();
@@ -377,6 +400,7 @@ private:
     double cam0_clarity_;
     double cam1_clarity_;
     int capture_fps_;
+    int publish_fps_;
     int exposure_;
     double health_grace_sec_;
     double min_healthy_fps_;

@@ -14,6 +14,7 @@ def generate_launch_description():
     enable_inference = LaunchConfiguration('enable_inference')
     use_cuda_camera = LaunchConfiguration('use_cuda_camera')
     capture_fps = LaunchConfiguration('capture_fps')
+    publish_fps = LaunchConfiguration('publish_fps')
     max_inference_fps = LaunchConfiguration('max_inference_fps')
     cam0_device = LaunchConfiguration('cam0_device')
     cam1_device = LaunchConfiguration('cam1_device')
@@ -42,6 +43,7 @@ def generate_launch_description():
         parameters=[{
             **camera_topic_parameters,
             'capture_fps': ParameterValue(capture_fps, value_type=int),
+            'publish_fps': ParameterValue(publish_fps, value_type=int),
             'exposure': 43000,
         }],
         condition=IfCondition(use_cuda_camera),
@@ -185,17 +187,21 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'max_inference_fps',
             # Khay cartridge gan nhu tinh, 20 luot suy luan/giay/camera la thua
-            # xa nhu cau: do 19/08/2026 cho thay GPU dinh 99% va YOLO khong dat
-            # noi tran cua chinh no (16.9/18.7 Hz). Ha xuong 10 tra lai mot nua
-            # GPU. Overlay phat theo MOI khung anh vao va dung latest_boxes_ da
+            # xa nhu cau. Gioi han 8 Hz de giu GPU headroom cho CUDA camera/GUI.
+            # Overlay phat theo MOI khung anh vao va dung latest_boxes_ da
             # luu, nen FPS hien thi KHONG giam theo — chi bbox cap nhat thua hon.
-            default_value='10.0',
+            default_value='8.0',
             description='Maximum TensorRT inference rate per camera; 0 disables limiting',
         ),
         DeclareLaunchArgument(
             'capture_fps',
-            default_value='25',
-            description='Sensor capture rate; inference is capped separately for GPU headroom',
+            default_value='15',
+            description='Rate used to drain both V4L2 camera channels',
+        ),
+        DeclareLaunchArgument(
+            'publish_fps',
+            default_value='8',
+            description='CUDA process/publish rate per camera; must be <= capture_fps',
         ),
         DeclareLaunchArgument(
             'cam0_device',

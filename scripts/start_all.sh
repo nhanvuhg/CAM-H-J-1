@@ -30,6 +30,7 @@ CAM1_AI_MODEL="${CAM1_AI_MODEL:-$HOME/models/data_output_hp_final_fp16.engine}"
 # does not spend the whole 25 W budget on image processing.  Operators can
 # still override both values from the environment for commissioning.
 CAMERA_CAPTURE_FPS="${CAMERA_CAPTURE_FPS:-15}"
+CAMERA_PUBLISH_FPS="${CAMERA_PUBLISH_FPS:-8}"
 AI_MAX_FPS="${AI_MAX_FPS:-8}"
 CAMERA_DRIVER_SETTLE_SEC="${CAMERA_DRIVER_SETTLE_SEC:-10}"
 CAMERA_WEDGED_FAILURES="${CAMERA_WEDGED_FAILURES:-5}"
@@ -630,6 +631,7 @@ camera_stack_supervisor() {
             cam0_model:="$CAM0_AI_MODEL" \
             cam1_model:="$CAM1_AI_MODEL" \
             capture_fps:="$CAMERA_CAPTURE_FPS" \
+            publish_fps:="$CAMERA_PUBLISH_FPS" \
             max_inference_fps:="$AI_MAX_FPS" &
         camera_launch_pid=$!
         echo "RUNNING launch_pid=$camera_launch_pid failures=$consecutive_failures" \
