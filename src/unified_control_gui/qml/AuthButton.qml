@@ -33,27 +33,11 @@ MotionButton {
     property int iconSize: 34
 
     readonly property bool signedIn: authController.authenticated
-    readonly property string operatorName: (authController.username || "").toString()
-    readonly property bool showName: signedIn && operatorName.length > 0
 
     // Ten nguoi van hanh truoc day chi nam trong HoverHint — tren man cam ung
     // khong co "re chuot" nen thuc te khong ai doc duoc. Nut tu no rong ra vua
     // du chua ten; luc chua dang nhap giu nguyen o vuong 50px nhu cu.
     //
-    // Do be rong ten bang TextMetrics dat o CAP GOC, khong tham chieu id nam
-    // trong contentItem: id ben trong contentItem khong nhin thay tu pham vi goc
-    // ("ReferenceError: nameLabel is not defined"), lam ca bieu thuc hong va tra
-    // ve 0 — nut co lai gan bang khong va bi nut ben canh de len.
-    TextMetrics {
-        id: nameMetrics
-        font.pixelSize: 14
-        font.bold: true
-        text: control.operatorName.toUpperCase()
-    }
-    // Cong thuc bam sat noi dung: le trai 12 + icon + khoang 8 + ten + le phai 12.
-    // Truoc do dung 50 + ten + 20 nen nut phinh ra qua co so voi cac nut khac.
-    readonly property int desiredWidth:
-        showName ? 12 + iconSize + 8 + Math.ceil(nameMetrics.width) + 12 : 50
 
     hoverScale: 1.012
     pressScale: 0.99
