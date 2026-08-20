@@ -29,7 +29,7 @@ CamNode::CamNode(QQmlApplicationEngine &engine)
     // Match the production camera rate so the GUI no longer discards most of
     // the available frames. This only affects display conversion/upload; it
     // does not change CSI capture, CUDA processing or TensorRT inference rates.
-    displayFps_ = declare_parameter<int>("display_fps", 25);
+    displayFps_ = declare_parameter<int>("display_fps", 20);
     if (displayFps_ < 1 || displayFps_ > 30) {
         throw std::invalid_argument("display_fps must be in range 1..30");
     }

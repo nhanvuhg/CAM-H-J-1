@@ -184,7 +184,12 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'max_inference_fps',
-            default_value='20.0',
+            # Khay cartridge gan nhu tinh, 20 luot suy luan/giay/camera la thua
+            # xa nhu cau: do 19/08/2026 cho thay GPU dinh 99% va YOLO khong dat
+            # noi tran cua chinh no (16.9/18.7 Hz). Ha xuong 10 tra lai mot nua
+            # GPU. Overlay phat theo MOI khung anh vao va dung latest_boxes_ da
+            # luu, nen FPS hien thi KHONG giam theo — chi bbox cap nhat thua hon.
+            default_value='10.0',
             description='Maximum TensorRT inference rate per camera; 0 disables limiting',
         ),
         DeclareLaunchArgument(
