@@ -40,10 +40,20 @@ MotionButton {
     // khong co "re chuot" nen thuc te khong ai doc duoc. Nut tu no rong ra vua
     // du chua ten; luc chua dang nhap giu nguyen o vuong 50px nhu cu.
     //
-    // KHONG dat implicitWidth roi cho layout bam theo no: implicitWidth cua mot
-    // Control lai chiu anh huong nguoc tu layout, tao vong lap rang buoc va be
-    // rong ra sai — nut de len nut ben canh. Dung mot thuoc tinh rieng.
-    readonly property int desiredWidth: showName ? 50 + nameLabel.implicitWidth + 20 : 50
+    // Do be rong ten bang TextMetrics dat o CAP GOC, khong tham chieu id nam
+    // trong contentItem: id ben trong contentItem khong nhin thay tu pham vi goc
+    // ("ReferenceError: nameLabel is not defined"), lam ca bieu thuc hong va tra
+    // ve 0 — nut co lai gan bang khong va bi nut ben canh de len.
+    TextMetrics {
+        id: nameMetrics
+        font.pixelSize: 14
+        font.bold: true
+        text: control.operatorName.toUpperCase()
+    }
+    // Cong thuc bam sat noi dung: le trai 12 + icon + khoang 8 + ten + le phai 12.
+    // Truoc do dung 50 + ten + 20 nen nut phinh ra qua co so voi cac nut khac.
+    readonly property int desiredWidth:
+        showName ? 12 + iconSize + 8 + Math.ceil(nameMetrics.width) + 12 : 50
 
     hoverScale: 1.012
     pressScale: 0.99
